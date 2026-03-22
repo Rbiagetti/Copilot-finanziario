@@ -1,11 +1,8 @@
-.PHONY: install dev backend frontend migrate
+.PHONY: install backend frontend seed
 
 install:
 	pip install -r requirements.txt
 	cd frontend && npm install
-
-migrate:
-	python -m backend.migrate_old_db
 
 backend:
 	uvicorn backend.main:app --reload --port 8000
@@ -13,7 +10,5 @@ backend:
 frontend:
 	cd frontend && npm run dev
 
-dev:
-	@echo "Avvia in 2 terminali separati:"
-	@echo "  make backend"
-	@echo "  make frontend"
+seed:
+	python backend/seed_test_data.py
