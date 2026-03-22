@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getTransactions, deleteTransaction, Transaction } from "../../api/client";
+import { getTransactions, deleteTransaction } from "../../api/client";
+import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";

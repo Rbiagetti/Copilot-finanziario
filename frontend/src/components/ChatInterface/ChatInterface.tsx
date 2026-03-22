@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { sendChat, ChatResponse } from "../../api/client";
+import { sendChat } from "../../api/client";
+import type { ChatResponse } from "../../api/client";
 import { Send, Bot, User, Sparkles } from "lucide-react";
 
 interface Message {
@@ -73,9 +74,9 @@ export default function ChatInterface() {
             <div className="suggestions">
               {[
                 "Quanto ho speso questo mese?",
-                "Qual e' la mia categoria di spesa piu' alta?",
-                "Confronta le spese per categoria",
-                "Ci sono pattern nelle mie spese?",
+                "Qual è la mia categoria di spesa più alta?",
+                "Confronta le spese di questo mese vs il precedente",
+                "In quali giorni ho speso di più?",
               ].map((s) => (
                 <button key={s} className="suggestion-btn" onClick={() => handleSend(s)}>
                   {s}

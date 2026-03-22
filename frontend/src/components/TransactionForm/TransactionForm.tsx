@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { createTransaction } from "../../api/client";
-import { PlusCircle } from "lucide-react";
+import { useState, useRef } from "react";
+import { createTransaction, parseNatural } from "../../api/client";
+import { PlusCircle, Mic, MicOff, MessageSquare, Keyboard } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CATEGORIES = [
@@ -21,20 +21,25 @@ interface Props {
 }
 
 export default function TransactionForm({ onAdded }: Props) {
+  const [mode, setMode] = useState<"manual" | "smart">("smart");
+  // Manual mode
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("cibo");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // Smart mode (NL + voice)
+  const [nlText, setNlText] = useState("");
+  const [recording, setRecording] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       toast.error("Inserisci un importo valido");
       return;
     }
-
     setSubmitting(true);
     try {
       await createTransaction({
@@ -54,64 +59,170 @@ export default function TransactionForm({ onAdded }: Props) {
     }
   };
 
+  const handleSmartSubmit = async () => {
+    if (!nlText.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await parseNatural(nlText.trim());
+      const tx = res.data;
+      toast.success(`€${tx.amount.toFixed(2)} salvato in ${tx.category} — "${tx.description}"`);
+      setNlText("");
+      onAdded?.();
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || "Non riesco a capire, riprova";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const toggleVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Il tuo browser non supporta il riconoscimento vocale");
+      return;
+    }
+
+    if (recording) {
+      recognitionRef.current?.stop();
+      setRecording(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "it-IT";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setNlText(transcript);
+      setRecording(false);
+      toast.success(`Trascritto: "${transcript}"`);
+    };
+
+    recognition.onerror = () => {
+      setRecording(false);
+      toast.error("Errore nel riconoscimento vocale");
+    };
+
+    recognition.onend = () => setRecording(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setRecording(true);
+  };
+
   return (
-    <form className="transaction-form" onSubmit={handleSubmit}>
-      <h3>Nuova spesa</h3>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label>Importo (&euro;)</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label>Data</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
+    <div className="transaction-form">
+      <div className="form-tabs">
+        <button
+          type="button"
+          className={`form-tab ${mode === "smart" ? "active" : ""}`}
+          onClick={() => setMode("smart")}
+        >
+          <MessageSquare size={16} /> Voce / Testo
+        </button>
+        <button
+          type="button"
+          className={`form-tab ${mode === "manual" ? "active" : ""}`}
+          onClick={() => setMode("manual")}
+        >
+          <Keyboard size={16} /> Manuale
+        </button>
       </div>
 
-      <div className="form-group">
-        <label>Categoria</label>
-        <div className="category-grid">
-          {CATEGORIES.map((c) => (
+      {mode === "smart" ? (
+        <div className="smart-input">
+          <p className="smart-hint">
+            Scrivi o detta la spesa in linguaggio naturale, es: "caffè 3 euro" o "benzina 50€"
+          </p>
+          <div className="smart-row">
+            <input
+              type="text"
+              value={nlText}
+              onChange={(e) => setNlText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSmartSubmit()}
+              placeholder="es. pranzo 12 euro al bar"
+              disabled={submitting}
+            />
             <button
-              key={c.value}
               type="button"
-              className={`cat-btn ${category === c.value ? "active" : ""}`}
-              onClick={() => setCategory(c.value)}
+              className={`btn-voice ${recording ? "recording" : ""}`}
+              onClick={toggleVoice}
+              title={recording ? "Stop" : "Parla"}
             >
-              <span>{c.emoji}</span>
-              <span>{c.label}</span>
+              {recording ? <MicOff size={20} /> : <Mic size={20} />}
             </button>
-          ))}
+            <button
+              type="button"
+              className="btn-primary btn-smart-send"
+              onClick={handleSmartSubmit}
+              disabled={submitting || !nlText.trim()}
+            >
+              <PlusCircle size={18} />
+              {submitting ? "..." : "Salva"}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <form onSubmit={handleManualSubmit}>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Importo (&euro;)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Data</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+          </div>
 
-      <div className="form-group">
-        <label>Nota (opzionale)</label>
-        <input
-          type="text"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="es. cena con amici"
-        />
-      </div>
+          <div className="form-group">
+            <label>Categoria</label>
+            <div className="category-grid">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  className={`cat-btn ${category === c.value ? "active" : ""}`}
+                  onClick={() => setCategory(c.value)}
+                >
+                  <span>{c.emoji}</span>
+                  <span>{c.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-      <button type="submit" className="btn-primary" disabled={submitting}>
-        <PlusCircle size={18} />
-        {submitting ? "Salvataggio..." : "Aggiungi spesa"}
-      </button>
-    </form>
+          <div className="form-group">
+            <label>Nota (opzionale)</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="es. cena con amici"
+            />
+          </div>
+
+          <button type="submit" className="btn-primary" disabled={submitting}>
+            <PlusCircle size={18} />
+            {submitting ? "Salvataggio..." : "Aggiungi spesa"}
+          </button>
+        </form>
+      )}
+    </div>
   );
 }

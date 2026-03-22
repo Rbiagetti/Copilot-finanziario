@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import date, datetime
 
+from pydantic import BaseModel
+
 from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import (
     TransactionCreate, TransactionResponse, TransactionUpdate, CATEGORIES
@@ -90,3 +92,61 @@ async def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
 async def categories_list():
     """Ritorna le categorie disponibili."""
     return {"categories": CATEGORIES}
+
+
+class NLParseRequest(BaseModel):
+    text: str
+
+
+@router.post("/parse-natural")
+async def parse_natural_language(data: NLParseRequest, db: Session = Depends(get_db)):
+    """Parsa testo in linguaggio naturale e crea una transazione."""
+    import os, json
+    from openai import OpenAI
+
+    client = OpenAI(
+        api_key=os.getenv("GROQ_API_KEY", ""),
+        base_url="https://api.groq.com/openai/v1",
+    )
+
+    system_prompt = (
+        "Sei un parser di spese personali. "
+        "Estrai da testo libero in italiano: importo, categoria e nota. "
+        "Rispondi SOLO con JSON valido, nessun testo extra. "
+        f'Formato: {{"amount": float, "category": str, "note": str}} '
+        f"Categorie disponibili: {', '.join(CATEGORIES)} "
+        "Se la categoria non è chiara, usa 'altro'. "
+        "Se manca l'importo, usa 0.0."
+    )
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": data.text},
+        ],
+        temperature=0,
+        max_tokens=100,
+    )
+
+    raw = response.choices[0].message.content.strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Impossibile interpretare il testo")
+
+    if parsed.get("amount", 0) <= 0:
+        raise HTTPException(400, "Importo non trovato nel testo")
+
+    tx = Transaction(
+        amount=parsed["amount"],
+        category=parsed.get("category", "altro"),
+        description=parsed.get("note", ""),
+        date=date.today().isoformat(),
+        time=datetime.now().strftime("%H:%M"),
+        source="natural",
+    )
+    db.add(tx)
+    db.commit()
+    db.refresh(tx)
+    return tx

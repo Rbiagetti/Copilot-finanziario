@@ -60,6 +60,9 @@ export const getDashboard = () =>
 export const sendChat = (message: string, history: { role: string; content: string }[] = []) =>
   api.post<ChatResponse>("/chat/", { message, history });
 
+export const parseNatural = (text: string) =>
+  api.post<Transaction>("/transactions/parse-natural", { text });
+
 export const getBudgets = () => api.get("/budgets/");
 export const createBudget = (data: { category: string; amount: number }) =>
   api.post("/budgets/", data);

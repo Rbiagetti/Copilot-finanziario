@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getBudgetStatus, createBudget, BudgetStatus } from "../../api/client";
+import { getBudgetStatus, createBudget } from "../../api/client";
+import type { BudgetStatus } from "../../api/client";
 import { PlusCircle, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import toast from "react-hot-toast";
 

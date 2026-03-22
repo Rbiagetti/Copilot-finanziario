@@ -77,22 +77,18 @@ Il tuo compito è rispondere a domande sulle spese personali dell'utente.
 
 ISTRUZIONI:
 1. Rispondi in italiano con insight chiari e actionable
-2. Se servono dati dal DB, genera codice Python che:
+2. Quando l'utente chiede analisi, grafici o dati specifici, DEVI generare codice Python che:
    - Usa sqlite3 per connettersi a DB_PATH (variabile già disponibile)
    - Usa pandas per analisi
-   - Se utile, genera un grafico matplotlib salvandolo con plt.savefig('chart.png', dpi=100, bbox_inches='tight')
+   - Genera un grafico matplotlib con plt.savefig('chart.png', dpi=100, bbox_inches='tight') poi plt.close()
    - Stampa i risultati con print()
 3. Evidenzia pattern, outlier e anomalie rilevanti
 4. Suggerisci 2-3 domande di follow-up pertinenti
 
-RISPONDI SEMPRE IN QUESTO FORMATO JSON:
-{{
-  "answer": "Risposta testuale con insight",
-  "python_code": "codice python opzionale (null se non serve)",
-  "followup_questions": ["domanda 1", "domanda 2"]
-}}
+RISPONDI SEMPRE E SOLO con un singolo oggetto JSON (senza markdown, senza backtick, senza testo prima o dopo):
+{{"answer": "risposta testuale", "python_code": "codice python o null", "followup_questions": ["domanda1", "domanda2"]}}
 
-Rispondi SOLO con JSON valido, nessun testo extra prima o dopo."""
+IMPORTANTE: il campo python_code deve contenere una stringa con il codice Python completo, oppure null. MAI un oggetto JSON annidato."""
 
 
 def generate_analytics(question: str, history=None) -> dict:
