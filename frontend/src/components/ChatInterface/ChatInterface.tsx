@@ -4,7 +4,7 @@ import type { ChatResponse } from "../../api/client";
 import { Send, Bot, User, Sparkles } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Cell, PieChart, Pie,
+  LineChart, Line, Cell, PieChart, Pie, Legend,
 } from "recharts";
 
 interface Message {
@@ -21,27 +21,41 @@ const COLORS = [
 
 function ChatChart({ chartData }: { chartData: { type: string; data: { name: string; value: number }[]; title: string } }) {
   const tooltipStyle = { background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 };
+  const legendStyle = { fontSize: 12, color: "#aaa" };
+  // BUG-3: con molte categorie ruota le label per evitare overlap
+  const manyItems = chartData.data.length > 6;
 
   if (chartData.type === "pie") {
+    // BUG-4: usa Legend invece di label inline per evitare overlap sulle fette
     return (
       <div className="msg-chart-container">
         <h4 className="msg-chart-title">{chartData.title}</h4>
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={chartData.data}
               dataKey="value"
               nameKey="name"
               cx="50%"
-              cy="50%"
-              outerRadius={90}
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              cy="45%"
+              outerRadius={95}
+              label={false}
             >
               {chartData.data.map((_, i) => (
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              formatter={(v: number, _: string, props: any) => [
+                `€${v.toFixed(2)} (${((props.payload.percent || 0) * 100).toFixed(0)}%)`,
+                props.payload.name,
+              ]}
+            />
+            <Legend
+              wrapperStyle={legendStyle}
+              formatter={(value) => <span style={{ color: "#ccc", fontSize: 12 }}>{value}</span>}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -53,27 +67,39 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
       <div className="msg-chart-container">
         <h4 className="msg-chart-title">{chartData.title}</h4>
         <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={chartData.data}>
+          <LineChart data={chartData.data} margin={{ bottom: manyItems ? 40 : 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
-            <XAxis dataKey="name" tick={{ fill: "#888", fontSize: 11 }} />
-            <YAxis tick={{ fill: "#888" }} />
+            <XAxis
+              dataKey="name"
+              tick={{ fill: "#888", fontSize: 10 }}
+              angle={manyItems ? -45 : 0}
+              textAnchor={manyItems ? "end" : "middle"}
+              interval={manyItems ? Math.floor(chartData.data.length / 8) : 0}
+            />
+            <YAxis tick={{ fill: "#888", fontSize: 11 }} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]} />
-            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ fill: "#6366f1", r: 3 }} />
+            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={chartData.data.length > 20 ? false : { fill: "#6366f1", r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
     );
   }
 
-  // Default: bar chart
+  // Default: bar chart — BUG-3: ruota label se molte categorie
   return (
     <div className="msg-chart-container">
       <h4 className="msg-chart-title">{chartData.title}</h4>
-      <ResponsiveContainer width="100%" height={250}>
-        <BarChart data={chartData.data}>
+      <ResponsiveContainer width="100%" height={manyItems ? 280 : 250}>
+        <BarChart data={chartData.data} margin={{ bottom: manyItems ? 50 : 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
-          <XAxis dataKey="name" tick={{ fill: "#888", fontSize: 11 }} />
-          <YAxis tick={{ fill: "#888" }} />
+          <XAxis
+            dataKey="name"
+            tick={{ fill: "#888", fontSize: manyItems ? 10 : 11 }}
+            angle={manyItems ? -40 : 0}
+            textAnchor={manyItems ? "end" : "middle"}
+            interval={0}
+          />
+          <YAxis tick={{ fill: "#888", fontSize: 11 }} />
           <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.data.map((_, i) => (

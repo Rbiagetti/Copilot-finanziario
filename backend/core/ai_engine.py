@@ -240,11 +240,22 @@ def execute_analysis_code(code: str) -> dict:
             for line in captured.split("\n"):
                 if line.startswith("CHART_DATA:"):
                     try:
-                        chart_data = json.loads(line[len("CHART_DATA:"):])
+                        raw_chart = json.loads(line[len("CHART_DATA:"):])
+                        # BUG-1: filtra items con name None/null/vuoto
+                        raw_chart["data"] = [
+                            item for item in raw_chart.get("data", [])
+                            if item.get("name") and str(item["name"]).lower() not in ("none", "null", "nan", "")
+                            and item.get("value") is not None and item["value"] > 0
+                        ]
+                        if raw_chart["data"]:
+                            chart_data = raw_chart
                     except json.JSONDecodeError:
                         pass
                 else:
-                    output_lines.append(line)
+                    # BUG-2: filtra righe con "None:" nell'output
+                    cleaned_line = line.strip()
+                    if cleaned_line and not cleaned_line.startswith("None:") and "None:" not in cleaned_line[:10]:
+                        output_lines.append(cleaned_line)
 
     except Exception as e:
         output_lines = [f"Errore: {str(e)}"]
@@ -252,6 +263,13 @@ def execute_analysis_code(code: str) -> dict:
     # Fallback: se non c'e' CHART_DATA ma ci sono dati, prova a costruire un bar chart
     if not chart_data and output_lines:
         chart_data = _auto_chart_from_output(output_lines)
+
+    # BUG-5: se c'e' un grafico, nascondi l'output testuale grezzo (ridondante)
+    if chart_data and output_lines:
+        # Tieni solo righe informative (totali, medie), non dump di dati
+        output_lines = [l for l in output_lines if not any(
+            sep in l for sep in [":", "€"]
+        ) or len(output_lines) <= 2]
 
     return {
         "output": "\n".join(output_lines),
