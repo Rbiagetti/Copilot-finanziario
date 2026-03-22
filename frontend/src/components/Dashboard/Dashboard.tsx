@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Cell, PieChart, Pie,
+  LineChart, Line, Cell, PieChart, Pie, Legend,
 } from "recharts";
 import { getDashboard } from "../../api/client";
 import type { DashboardData } from "../../api/client";
@@ -81,18 +81,24 @@ export default function Dashboard() {
       <div className="charts-grid">
         <div className="chart-card">
           <h3>Spese per categoria</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.by_category}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis dataKey="category" tick={{ fill: "#aaa", fontSize: 12 }} />
-              <YAxis tick={{ fill: "#aaa" }} />
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={sortedCats} margin={{ bottom: 55, left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
+              <XAxis
+                dataKey="category"
+                tick={{ fill: "#aaa", fontSize: 11 }}
+                angle={-40}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis tick={{ fill: "#aaa", fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
               <Tooltip
-                contentStyle={{ background: "#1e1e2e", border: "1px solid #333", borderRadius: 8 }}
-                labelStyle={{ color: "#fff" }}
+                contentStyle={{ background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 }}
+                labelStyle={{ color: "#fff", textTransform: "capitalize" }}
                 formatter={(value: number) => [`€${value.toFixed(2)}`, "Totale"]}
               />
               <Bar dataKey="total" radius={[6, 6, 0, 0]}>
-                {data.by_category.map((_, i) => (
+                {sortedCats.map((_, i) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Bar>
@@ -102,26 +108,35 @@ export default function Dashboard() {
 
         <div className="chart-card">
           <h3>Distribuzione spese</h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={320}>
             <PieChart>
               <Pie
-                data={data.by_category}
+                data={sortedCats}
                 dataKey="total"
                 nameKey="category"
                 cx="50%"
-                cy="50%"
-                outerRadius={100}
-                label={({ category, percent }) =>
-                  `${EMOJI_MAP[category] || ""} ${(percent * 100).toFixed(0)}%`
-                }
+                cy="42%"
+                outerRadius={95}
+                label={false}
               >
-                {data.by_category.map((_, i) => (
+                {sortedCats.map((_, i) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "#1e1e2e", border: "1px solid #333", borderRadius: 8 }}
-                formatter={(value: number) => [`€${value.toFixed(2)}`, "Totale"]}
+                contentStyle={{ background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 }}
+                formatter={(value: number, _: string, props: any) => {
+                  const pct = data.total_month > 0 ? ((value as number) / data.total_month * 100).toFixed(0) : 0;
+                  return [`€${(value as number).toFixed(2)} (${pct}%)`, props.payload.category];
+                }}
+              />
+              <Legend
+                formatter={(value) => (
+                  <span style={{ color: "#ccc", fontSize: 12, textTransform: "capitalize" }}>
+                    {EMOJI_MAP[value] || "❓"} {value}
+                  </span>
+                )}
+                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
               />
             </PieChart>
           </ResponsiveContainer>
