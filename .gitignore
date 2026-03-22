@@ -11,3 +11,6 @@ venv/
 .venv/
 *.png
 db_path
+.claude/
+.claude/
+.claude/
