@@ -9,3 +9,5 @@ dist/
 .pytest_cache/
 venv/
 .venv/
+*.png
+db_path
