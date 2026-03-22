@@ -23,6 +23,18 @@ async def list_budgets(db: Session = Depends(get_db)):
     return db.query(Budget).filter(Budget.active == True).all()
 
 
+@router.put("/{budget_id}")
+async def update_budget(budget_id: int, data: BudgetCreate, db: Session = Depends(get_db)):
+    b = db.query(Budget).filter(Budget.id == budget_id, Budget.active == True).first()
+    if not b:
+        raise HTTPException(404, "Budget non trovato")
+    b.amount = data.amount
+    b.category = data.category
+    db.commit()
+    db.refresh(b)
+    return b
+
+
 @router.delete("/{budget_id}")
 async def delete_budget(budget_id: int, db: Session = Depends(get_db)):
     b = db.query(Budget).filter(Budget.id == budget_id).first()
@@ -52,6 +64,7 @@ async def budget_status(db: Session = Depends(get_db)):
         )
         pct = round((spent / b.amount) * 100, 1) if b.amount > 0 else 0
         result.append({
+            "id": b.id,
             "category": b.category,
             "budget": b.amount,
             "spent": round(spent, 2),

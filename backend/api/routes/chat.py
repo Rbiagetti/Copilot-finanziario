@@ -23,7 +23,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         role="assistant",
         content=result["answer"],
         metadata_json=json.dumps({
-            "chart": result["chart"] is not None,
+            "chart_data": result["chart_data"] is not None,
             "followups": result["followup_questions"],
         }),
     ))
@@ -31,7 +31,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
     return ChatResponse(
         answer=result["answer"],
-        chart=result["chart"],
+        chart_data=result["chart_data"],
         data_table=result["data_table"],
         followup_questions=result["followup_questions"],
     )

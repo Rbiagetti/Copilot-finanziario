@@ -2,8 +2,6 @@ import os
 import json
 import sqlite3
 import io
-import base64
-import tempfile
 from pathlib import Path
 
 from openai import OpenAI
@@ -28,7 +26,7 @@ def build_context(db_path: str) -> str:
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
-    schema = "transactions(id, amount REAL, category TEXT, description TEXT, date TEXT, time TEXT, account TEXT, source TEXT)"
+    schema = "transactions(id, amount REAL, category TEXT, subcategory TEXT, description TEXT, date TEXT, time TEXT, account TEXT, tags TEXT, source TEXT, created_at TEXT, updated_at TEXT)"
 
     cur.execute("SELECT COUNT(*) FROM transactions")
     total = cur.fetchone()[0]
@@ -64,34 +62,53 @@ CATEGORIE:
 {categories_str}"""
 
 
-SYSTEM_PROMPT = """Sei un analista finanziario personale. Rispondi in italiano, in modo CONCISO e diretto.
+SYSTEM_PROMPT = """Sei un analista finanziario AI avanzato. Rispondi in italiano, CONCISO e con insight actionable.
 
 {context}
 
-REGOLE:
-1. Rispondi con max 2-3 frasi di insight. NON spiegare il codice o il processo.
-2. GENERA SEMPRE codice Python quando servono dati dal DB o grafici.
-3. Il codice Python DEVE:
-   - Importare: import sqlite3, pandas as pd, matplotlib.pyplot as plt
-   - DB_PATH e CHART_PATH sono variabili GIA' DEFINITE. NON ridefinirle! Usale direttamente:
-     conn = sqlite3.connect(DB_PATH)
-     plt.savefig(CHART_PATH, ...)
-   - SEMPRE generare un grafico matplotlib:
-     plt.figure(figsize=(10, 6))
-     plt.style.use('dark_background')
-     [... plot ...]
-     plt.tight_layout()
-     plt.savefig(CHART_PATH, dpi=100, bbox_inches='tight', facecolor='#1a1a2e')
-     plt.close()
-   - Stampare i dati chiave con print()
-   - IMPORTANTE: NON fare DB_PATH = '...' o CHART_PATH = '...'. Sono gia' impostati!
-4. Colori grafici: sfondo '#1a1a2e', griglia '#2a2a40', colori barre/linee da ['#6366f1','#f43f5e','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#f97316']
-5. Suggerisci 2-3 follow-up
+IL TUO RUOLO: Non sei un semplice calcolatore. Sei un consulente finanziario che trova pattern nascosti, anomalie e opportunita' di risparmio. Ogni risposta deve dare VALORE PRATICO all'utente.
 
-RISPONDI SOLO con JSON valido (no markdown, no backtick):
-{{"answer": "insight conciso", "python_code": "codice completo", "followup_questions": ["q1", "q2"]}}
+TIPI DI ANALISI CHE SAI FARE:
+- Trend e previsioni (confronti temporali, proiezioni fine mese)
+- Anomalie (spese fuori media, picchi insoliti, pattern ripetitivi)
+- Ottimizzazione (dove tagliare, categorie con crescita anomala)
+- Comportamentale (weekend vs feriali, pattern orari, frequenza)
+- Confronti (mese vs mese, categoria vs categoria)
 
-Se non servono dati dal DB, metti python_code: null."""
+REGOLE CODICE:
+1. GENERA SEMPRE python_code per domande sui dati.
+2. Il codice DEVE:
+   - import sqlite3, json
+   - conn = sqlite3.connect(DB_PATH)  # GIA' DEFINITO, NON ridefinirlo!
+   - NON usare SELECT * — specifica le colonne
+   - SEMPRE print("CHART_DATA:" + json.dumps(chart))
+   - Formato: {{"type":"bar|pie|line","data":[{{"name":"...","value":N}}],"title":"..."}}
+   - print() per dati chiave
+   - NON usare matplotlib, pandas, plt. Solo sqlite3 e json.
+3. OGNI python_code DEVE avere CHART_DATA. Nessuna eccezione.
+
+REGOLE RISPOSTA:
+1. Max 2-3 frasi con INSIGHT, non descrizioni. Esempio buono: "Stai spendendo il 40% in piu' in cibo rispetto al mese scorso. Il picco e' nei weekend." Esempio cattivo: "Ecco i dati delle tue spese."
+2. Followup devono essere analisi AVANZATE, non domande banali. Esempi: "Simula un taglio del 20% su cibo", "Pattern spese impulsive dopo le 18:00", "Proiezione spese a fine trimestre"
+
+ESEMPIO codice:
+```
+import sqlite3, json
+conn = sqlite3.connect(DB_PATH)
+cur = conn.cursor()
+cur.execute("SELECT category, SUM(amount) as tot FROM transactions WHERE date >= date('now','-30 days') GROUP BY category ORDER BY tot DESC")
+rows = cur.fetchall()
+conn.close()
+chart = {{"type":"bar","data":[{{"name":r[0],"value":round(r[1],2)}} for r in rows],"title":"Spese per categoria (30gg)"}}
+print("CHART_DATA:" + json.dumps(chart))
+for r in rows:
+    print(f"{{r[0]}}: €{{r[1]:.2f}}")
+```
+
+RISPONDI SOLO con JSON (no markdown, no backtick):
+{{"answer": "insight actionable", "python_code": "codice", "followup_questions": ["analisi avanzata 1", "analisi avanzata 2"]}}
+
+Se non servono dati, python_code: null."""
 
 
 def generate_analytics(question: str, history=None) -> dict:
@@ -176,24 +193,23 @@ def _parse_ai_response(raw: str) -> dict:
 
 
 def _sanitize_code(code: str) -> str:
-    """Rimuove ridefinizioni di DB_PATH e CHART_PATH dal codice generato."""
+    """Rimuove ridefinizioni di DB_PATH e riferimenti matplotlib dal codice generato."""
     import re
     lines = code.split("\n")
     cleaned = []
     for line in lines:
         stripped = line.strip()
-        # Skip lines that reassign DB_PATH or CHART_PATH
-        if re.match(r"^(DB_PATH|CHART_PATH)\s*=\s*['\"]", stripped):
+        if re.match(r"^DB_PATH\s*=\s*['\"]", stripped):
             continue
-        # Fix hardcoded savefig paths
+        if re.match(r"^CHART_PATH\s*=\s*['\"]", stripped):
+            continue
+        if "matplotlib" in stripped and "import" in stripped:
+            continue
+        if stripped.startswith("plt."):
+            continue
         line = re.sub(
-            r"plt\.savefig\(\s*['\"][^'\"]+['\"]\s*,",
-            "plt.savefig(CHART_PATH,",
-            line,
-        )
-        line = re.sub(
-            r"plt\.savefig\(\s*['\"][^'\"]+['\"]\s*\)",
-            "plt.savefig(CHART_PATH)",
+            r"plt\.savefig\([^)]*\)",
+            "",
             line,
         )
         cleaned.append(line)
@@ -205,20 +221,11 @@ def execute_analysis_code(code: str) -> dict:
     code = _sanitize_code(code)
     db_path = get_db_path()
 
-    # Usa un file temporaneo per il chart
-    chart_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    chart_path = chart_file.name
-    chart_file.close()
-
-    # Rimuovi il file vuoto, verra' creato da matplotlib
-    os.remove(chart_path)
-
-    chart_b64 = None
+    chart_data = None
     output_lines = []
 
     namespace = {
         "DB_PATH": db_path,
-        "CHART_PATH": chart_path,
         "__builtins__": __builtins__,
     }
 
@@ -230,24 +237,45 @@ def execute_analysis_code(code: str) -> dict:
 
         captured = stdout_capture.getvalue().strip()
         if captured:
-            output_lines = captured.split("\n")
-
-        # Controlla se e' stato generato un grafico
-        if os.path.exists(chart_path):
-            with open(chart_path, "rb") as f:
-                chart_b64 = base64.b64encode(f.read()).decode("utf-8")
-            os.remove(chart_path)
+            for line in captured.split("\n"):
+                if line.startswith("CHART_DATA:"):
+                    try:
+                        chart_data = json.loads(line[len("CHART_DATA:"):])
+                    except json.JSONDecodeError:
+                        pass
+                else:
+                    output_lines.append(line)
 
     except Exception as e:
         output_lines = [f"Errore: {str(e)}"]
-        # Cleanup
-        if os.path.exists(chart_path):
-            os.remove(chart_path)
+
+    # Fallback: se non c'e' CHART_DATA ma ci sono dati, prova a costruire un bar chart
+    if not chart_data and output_lines:
+        chart_data = _auto_chart_from_output(output_lines)
 
     return {
         "output": "\n".join(output_lines),
-        "chart": chart_b64,
+        "chart_data": chart_data,
     }
+
+
+def _auto_chart_from_output(lines: list) -> dict:
+    """Tenta di costruire un chart automatico dall'output del codice."""
+    import re
+    items = []
+    for line in lines:
+        if line.startswith("Errore"):
+            continue
+        # Cerca pattern come "categoria: €123.45" o "categoria 123.45"
+        m = re.match(r'^[\s]*([^:€\d]+?)[\s:]+€?\s*([\d]+\.?\d*)', line)
+        if m:
+            name = m.group(1).strip().capitalize()
+            value = float(m.group(2))
+            if name and value > 0:
+                items.append({"name": name, "value": round(value, 2)})
+    if len(items) >= 2:
+        return {"type": "bar", "data": items[:15], "title": "Analisi spese"}
+    return None
 
 
 def chat_with_ai(question: str, history=None) -> dict:
@@ -255,20 +283,20 @@ def chat_with_ai(question: str, history=None) -> dict:
     ai_result = generate_analytics(question, history)
 
     answer = ai_result.get("answer", "")
-    chart = None
+    chart_data = None
     followups = ai_result.get("followup_questions", [])
 
     python_code = ai_result.get("python_code")
     if python_code:
         exec_result = execute_analysis_code(python_code)
         if exec_result["output"]:
-            answer += "\n\n📊 **Dati:**\n" + exec_result["output"]
-        if exec_result["chart"]:
-            chart = exec_result["chart"]
+            answer += "\n\n" + exec_result["output"]
+        if exec_result["chart_data"]:
+            chart_data = exec_result["chart_data"]
 
     return {
         "answer": answer,
-        "chart": chart,
+        "chart_data": chart_data,
         "data_table": None,
         "followup_questions": followups,
     }

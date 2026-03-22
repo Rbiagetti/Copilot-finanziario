@@ -2,12 +2,88 @@ import { useState, useRef, useEffect } from "react";
 import { sendChat } from "../../api/client";
 import type { ChatResponse } from "../../api/client";
 import { Send, Bot, User, Sparkles } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Cell, PieChart, Pie,
+} from "recharts";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
-  chart?: string | null;
+  chart_data?: { type: string; data: { name: string; value: number }[]; title: string } | null;
   followups?: string[];
+}
+
+const COLORS = [
+  "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",
+  "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#64748b",
+];
+
+function ChatChart({ chartData }: { chartData: { type: string; data: { name: string; value: number }[]; title: string } }) {
+  const tooltipStyle = { background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 };
+
+  if (chartData.type === "pie") {
+    return (
+      <div className="msg-chart-container">
+        <h4 className="msg-chart-title">{chartData.title}</h4>
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart>
+            <Pie
+              data={chartData.data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={90}
+              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            >
+              {chartData.data.map((_, i) => (
+                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  if (chartData.type === "line") {
+    return (
+      <div className="msg-chart-container">
+        <h4 className="msg-chart-title">{chartData.title}</h4>
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={chartData.data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
+            <XAxis dataKey="name" tick={{ fill: "#888", fontSize: 11 }} />
+            <YAxis tick={{ fill: "#888" }} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]} />
+            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ fill: "#6366f1", r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // Default: bar chart
+  return (
+    <div className="msg-chart-container">
+      <h4 className="msg-chart-title">{chartData.title}</h4>
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={chartData.data}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
+          <XAxis dataKey="name" tick={{ fill: "#888", fontSize: 11 }} />
+          <YAxis tick={{ fill: "#888" }} />
+          <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            {chartData.data.map((_, i) => (
+              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 export default function ChatInterface() {
@@ -41,7 +117,7 @@ export default function ChatInterface() {
         {
           role: "assistant",
           content: data.answer,
-          chart: data.chart,
+          chart_data: data.chart_data,
           followups: data.followup_questions,
         },
       ]);
@@ -73,10 +149,12 @@ export default function ChatInterface() {
             <p>Chiedimi qualsiasi cosa sulle tue spese. Ecco alcuni esempi:</p>
             <div className="suggestions">
               {[
-                "Quanto ho speso questo mese?",
-                "Qual è la mia categoria di spesa più alta?",
-                "Confronta le spese di questo mese vs il precedente",
-                "In quali giorni ho speso di più?",
+                "Analisi completa: dove vanno i miei soldi?",
+                "Quali spese potrei tagliare per risparmiare?",
+                "Trend settimanale: sto spendendo troppo?",
+                "Le mie 5 spese ricorrenti piu costose",
+                "Distribuzione spese: weekend vs giorni feriali",
+                "Previsione: quanto spendero a fine mese?",
               ].map((s) => (
                 <button key={s} className="suggestion-btn" onClick={() => handleSend(s)}>
                   {s}
@@ -97,13 +175,7 @@ export default function ChatInterface() {
                   .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
                   .replace(/\n/g, "<br/>"),
               }} />
-              {msg.chart && (
-                <img
-                  className="msg-chart"
-                  src={`data:image/png;base64,${msg.chart}`}
-                  alt="Grafico analisi"
-                />
-              )}
+              {msg.chart_data && <ChatChart chartData={msg.chart_data} />}
               {msg.followups && msg.followups.length > 0 && (
                 <div className="msg-followups">
                   {msg.followups.map((f, j) => (
