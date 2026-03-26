@@ -83,9 +83,13 @@ REGOLE CODICE:
    - NON usare SELECT * — specifica le colonne
    - SEMPRE print("CHART_DATA:" + json.dumps(chart))
    - Formato: {{"type":"bar|pie|line","data":[{{"name":"...","value":N}}],"title":"..."}}
-   - print() per dati chiave
    - NON usare matplotlib, pandas, plt. Solo sqlite3 e json.
 3. OGNI python_code DEVE avere CHART_DATA. Nessuna eccezione.
+4. IMPORTANTE sintassi Python sicura:
+   - Usa str(round(val, 2)) invece di f-string complesse con formato
+   - NON usare f"{val:.2f}" dentro print() — usa "%.2f" % val oppure str(round(val,2))
+   - Controlla che tutte le parentesi siano bilanciate prima di scrivere il codice
+   - Tieni il codice semplice: nessuna list comprehension annidata
 
 REGOLE RISPOSTA:
 1. Max 2-3 frasi con INSIGHT, non descrizioni. Esempio buono: "Stai spendendo il 40% in piu' in cibo rispetto al mese scorso. Il picco e' nei weekend." Esempio cattivo: "Ecco i dati delle tue spese."
@@ -243,6 +247,12 @@ def execute_analysis_code(code: str) -> dict:
         "__builtins__": __builtins__,
     }
 
+    # Valida sintassi prima di eseguire — evita exec() su codice rotto
+    try:
+        compile(code, "<ai_code>", "exec")
+    except SyntaxError as se:
+        return {"output": "", "chart_data": None}
+
     try:
         import contextlib
         stdout_capture = io.StringIO()
@@ -255,7 +265,6 @@ def execute_analysis_code(code: str) -> dict:
                 if line.startswith("CHART_DATA:"):
                     try:
                         raw_chart = json.loads(line[len("CHART_DATA:"):])
-                        # BUG-1: filtra items con name None/null/vuoto
                         raw_chart["data"] = [
                             item for item in raw_chart.get("data", [])
                             if item.get("name") and str(item["name"]).lower() not in ("none", "null", "nan", "")
@@ -266,20 +275,20 @@ def execute_analysis_code(code: str) -> dict:
                     except json.JSONDecodeError:
                         pass
                 else:
-                    # BUG-2: filtra righe con "None:" nell'output
                     cleaned_line = line.strip()
-                    if cleaned_line and not cleaned_line.startswith("None:") and "None:" not in cleaned_line[:10]:
+                    if cleaned_line and "None:" not in cleaned_line[:10]:
                         output_lines.append(cleaned_line)
 
-    except Exception as e:
-        output_lines = [f"Errore: {str(e)}"]
+    except Exception:
+        # Codice crashed — non mostrare errori tecnici all'utente
+        output_lines = []
 
     # Fallback: se non c'e' CHART_DATA ma ci sono dati, prova a costruire un bar chart
     if not chart_data and output_lines:
         chart_data = _auto_chart_from_output(output_lines)
 
-    # BUG-5: se c'e' un grafico, l'output testuale e' ridondante — rimuovilo
-    if chart_data and output_lines:
+    # Se c'e' un grafico, l'output testuale e' ridondante
+    if chart_data:
         output_lines = []
 
     return {
@@ -293,13 +302,16 @@ def _auto_chart_from_output(lines: list) -> dict:
     import re
     items = []
     for line in lines:
-        if line.startswith("Errore"):
-            continue
-        # Cerca pattern come "categoria: €123.45" o "categoria 123.45"
-        m = re.match(r'^[\s]*([^:€\d]+?)[\s:]+€?\s*([\d]+\.?\d*)', line)
+        # Cerca pattern come "categoria: €123.45" o "categoria: €1.234,56" (virgola italiana)
+        m = re.match(r'^[\s]*([^:€\d]+?)[\s:]+€?\s*([\d]+[.,]?[\d]*)', line)
         if m:
             name = m.group(1).strip().capitalize()
-            value = float(m.group(2))
+            # Normalizza numero: rimuovi punti migliaia, converti virgola decimale in punto
+            raw_num = m.group(2).replace(".", "").replace(",", ".")
+            try:
+                value = float(raw_num)
+            except ValueError:
+                continue
             if name and value > 0:
                 items.append({"name": name, "value": round(value, 2)})
     if len(items) >= 2:
