@@ -1,8 +1,9 @@
+from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func
 from datetime import date, timedelta
-from collections import defaultdict
+import calendar
 
 from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import DashboardResponse
@@ -68,3 +69,56 @@ async def get_dashboard(db: Session = Depends(get_db)):
         by_category=by_category,
         daily_trend=daily_trend,
     )
+
+
+@router.get("/forecast")
+async def get_forecast(db: Session = Depends(get_db)):
+    """Proiezione spese a fine mese basata su media mobile ponderata (ultimi 14gg)."""
+    today = date.today()
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    days_elapsed = today.day
+    days_remaining = days_in_month - days_elapsed
+
+    # Daily totals ultimi 14gg
+    fourteen_ago = (today - timedelta(days=14)).isoformat()
+    daily_rows = (
+        db.query(Transaction.date, func.sum(Transaction.amount))
+        .filter(Transaction.date >= fourteen_ago)
+        .group_by(Transaction.date)
+        .order_by(Transaction.date)
+        .all()
+    )
+
+    if not daily_rows:
+        return {
+            "projected_total": 0.0,
+            "month_so_far": 0.0,
+            "daily_burn_rate": 0.0,
+            "days_remaining": days_remaining,
+            "confidence": "low",
+        }
+
+    # Media mobile ponderata (i giorni più recenti pesano di più)
+    n = len(daily_rows)
+    weights = list(range(1, n + 1))
+    total_weight = sum(weights)
+    daily_burn = sum(w * float(r[1]) for w, r in zip(weights, daily_rows)) / total_weight
+
+    # Spese mese corrente fino ad oggi
+    first_of_month = today.replace(day=1)
+    month_so_far = float(
+        db.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(Transaction.date >= first_of_month.isoformat())
+        .scalar()
+    )
+
+    projected_total = month_so_far + (daily_burn * days_remaining)
+    confidence = "high" if n >= 10 else "medium" if n >= 5 else "low"
+
+    return {
+        "projected_total": round(projected_total, 2),
+        "month_so_far": round(month_so_far, 2),
+        "daily_burn_rate": round(daily_burn, 2),
+        "days_remaining": days_remaining,
+        "confidence": confidence,
+    }

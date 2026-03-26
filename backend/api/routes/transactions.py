@@ -42,6 +42,7 @@ async def list_transactions(
     category: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = Query(default=100, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -54,8 +55,45 @@ async def list_transactions(
         q = q.filter(Transaction.date >= date_from)
     if date_to:
         q = q.filter(Transaction.date <= date_to)
+    if search:
+        term = f"%{search.lower()}%"
+        from sqlalchemy import or_, func as sqlfunc
+        q = q.filter(or_(
+            sqlfunc.lower(Transaction.description).like(term),
+            sqlfunc.lower(Transaction.category).like(term),
+        ))
     q = q.order_by(desc(Transaction.date), desc(Transaction.id))
     return q.offset(offset).limit(limit).all()
+
+
+@router.get("/count")
+async def count_transactions(
+    category: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Conta transazioni con gli stessi filtri e restituisce anche il totale €."""
+    from sqlalchemy import func as sqlfunc, or_
+    q = db.query(
+        sqlfunc.count(Transaction.id),
+        sqlfunc.coalesce(sqlfunc.sum(Transaction.amount), 0),
+    )
+    if category:
+        q = q.filter(Transaction.category == category)
+    if date_from:
+        q = q.filter(Transaction.date >= date_from)
+    if date_to:
+        q = q.filter(Transaction.date <= date_to)
+    if search:
+        term = f"%{search.lower()}%"
+        q = q.filter(or_(
+            sqlfunc.lower(Transaction.description).like(term),
+            sqlfunc.lower(Transaction.category).like(term),
+        ))
+    count, total = q.one()
+    return {"count": count, "total": round(float(total), 2)}
 
 
 @router.get("/{tx_id}", response_model=TransactionResponse)

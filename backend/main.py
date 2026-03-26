@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.core.database import init_db
-from backend.api.routes import transactions, analytics, chat, budgets
+from backend.api.routes import transactions, analytics, chat, budgets, ai
 
 app = FastAPI(
     title="FinCopilot API",
@@ -30,6 +30,7 @@ app.include_router(transactions.router)
 app.include_router(analytics.router)
 app.include_router(chat.router)
 app.include_router(budgets.router)
+app.include_router(ai.router)
 
 
 @app.on_event("startup")

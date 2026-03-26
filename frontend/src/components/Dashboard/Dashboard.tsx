@@ -3,9 +3,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell, PieChart, Pie, Legend,
 } from "recharts";
-import { getDashboard } from "../../api/client";
-import type { DashboardData } from "../../api/client";
-import { TrendingUp, TrendingDown, Euro, Tag, CalendarDays, BarChart3 } from "lucide-react";
+import { getDashboard, getForecast, getBriefing, getAnomalies } from "../../api/client";
+import type { DashboardData, ForecastData, BriefingData, Anomaly } from "../../api/client";
+import {
+  TrendingUp, TrendingDown, Euro, Tag, CalendarDays, BarChart3,
+  Sparkles, AlertTriangle, Target, RefreshCw,
+} from "lucide-react";
 
 const COLORS = [
   "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",
@@ -19,18 +22,45 @@ const EMOJI_MAP: Record<string, string> = {
   intrattenimento: "🎭", shopping: "🛍️",
 };
 
+const INSIGHT_COLORS: Record<string, string> = {
+  positive: "#10b981",
+  warning: "#f59e0b",
+  info: "#6366f1",
+};
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [forecast, setForecast] = useState<ForecastData | null>(null);
+  const [briefing, setBriefing] = useState<BriefingData | null>(null);
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [loadingMain, setLoadingMain] = useState(true);
+  const [loadingBriefing, setLoadingBriefing] = useState(true);
+  const [showAnomalies, setShowAnomalies] = useState(false);
 
   useEffect(() => {
-    getDashboard()
-      .then((res) => setData(res.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    Promise.allSettled([getDashboard(), getForecast(), getAnomalies()])
+      .then(([dashRes, forecastRes, anomalyRes]) => {
+        if (dashRes.status === "fulfilled") setData(dashRes.value.data);
+        if (forecastRes.status === "fulfilled") setForecast(forecastRes.value.data);
+        if (anomalyRes.status === "fulfilled") setAnomalies(anomalyRes.value.data.anomalies);
+      })
+      .finally(() => setLoadingMain(false));
+
+    getBriefing()
+      .then((res) => setBriefing(res.data))
+      .catch(() => setBriefing(null))
+      .finally(() => setLoadingBriefing(false));
   }, []);
 
-  if (loading) return <div className="loading">Caricamento dashboard...</div>;
+  const refreshBriefing = () => {
+    setLoadingBriefing(true);
+    getBriefing()
+      .then((res) => setBriefing(res.data))
+      .catch(console.error)
+      .finally(() => setLoadingBriefing(false));
+  };
+
+  if (loadingMain) return <div className="loading">Caricamento dashboard...</div>;
   if (!data) return <div className="error">Errore nel caricamento</div>;
 
   const isPositive = data.variation_pct >= 0;
@@ -39,10 +69,54 @@ export default function Dashboard() {
     : 0;
   const sortedCats = [...data.by_category].sort((a, b) => b.total - a.total);
 
+  // Forecast progress bar
+  const forecastPct = forecast && data.total_month > 0
+    ? Math.min((forecast.projected_total / (data.total_month * (30 / (30 - forecast.days_remaining || 1)))) * 100, 150)
+    : 0;
+  const forecastColor = forecastPct > 120 ? "#f43f5e" : forecastPct > 100 ? "#f59e0b" : "#10b981";
+
   return (
     <div className="dashboard">
       <h2>Dashboard</h2>
 
+      {/* === BRIEFING AI === */}
+      <div className="briefing-card">
+        <div className="briefing-header">
+          <div className="briefing-title">
+            <Sparkles size={18} />
+            <span>Il tuo Copilota dice</span>
+          </div>
+          <button className="btn-icon" onClick={refreshBriefing} title="Aggiorna" disabled={loadingBriefing}>
+            <RefreshCw size={14} className={loadingBriefing ? "spin" : ""} />
+          </button>
+        </div>
+
+        {loadingBriefing ? (
+          <div className="briefing-skeleton">
+            <div className="skeleton-line" />
+            <div className="skeleton-line short" />
+            <div className="skeleton-line" />
+          </div>
+        ) : briefing ? (
+          <>
+            <div className="briefing-insights">
+              {briefing.insights.map((ins, i) => (
+                <div key={i} className="briefing-insight" style={{ borderLeftColor: INSIGHT_COLORS[ins.type] }}>
+                  <span className="insight-title">{ins.title}</span>
+                  <span className="insight-body">{ins.body}</span>
+                </div>
+              ))}
+            </div>
+            {briefing.action && (
+              <div className="briefing-action">
+                <span>💡 </span>{briefing.action}
+              </div>
+            )}
+          </>
+        ) : null}
+      </div>
+
+      {/* === KPI === */}
       <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-icon"><Euro size={24} /></div>
@@ -76,8 +150,68 @@ export default function Dashboard() {
             <span className="kpi-value capitalize">{data.top_category}</span>
           </div>
         </div>
+
+        {/* Forecast KPI */}
+        {forecast && (
+          <div className="kpi-card kpi-forecast">
+            <div className="kpi-icon"><Target size={24} /></div>
+            <div className="kpi-content">
+              <span className="kpi-label">
+                Previsione fine mese
+                <span className={`confidence-badge ${forecast.confidence}`}>{forecast.confidence}</span>
+              </span>
+              <span className="kpi-value" style={{ color: forecastColor }}>
+                &euro;{forecast.projected_total.toFixed(0)}
+              </span>
+              <div className="forecast-sub">
+                burn: €{forecast.daily_burn_rate.toFixed(1)}/giorno · {forecast.days_remaining}gg al mese
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Anomalie KPI */}
+        {anomalies.length > 0 && (
+          <div className="kpi-card kpi-anomaly" onClick={() => setShowAnomalies(true)} style={{ cursor: "pointer" }}>
+            <div className="kpi-icon" style={{ color: "#f59e0b" }}><AlertTriangle size={24} /></div>
+            <div className="kpi-content">
+              <span className="kpi-label">Anomalie rilevate</span>
+              <span className="kpi-value" style={{ color: "#f59e0b" }}>{anomalies.length} spese</span>
+              <div className="forecast-sub">Clicca per vedere i dettagli</div>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* === MODAL ANOMALIE === */}
+      {showAnomalies && (
+        <div className="modal-overlay" onClick={() => setShowAnomalies(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>⚠️ Spese anomale rilevate</h3>
+              <button className="btn-icon" onClick={() => setShowAnomalies(false)}>✕</button>
+            </div>
+            <p className="modal-sub">Transazioni significativamente superiori alla media della categoria (ultimi 60gg)</p>
+            <div className="anomaly-list">
+              {anomalies.map((a) => (
+                <div key={a.id} className="anomaly-row">
+                  <span className="anomaly-emoji">{EMOJI_MAP[a.category] || "❓"}</span>
+                  <div className="anomaly-info">
+                    <span className="anomaly-desc">{a.description || a.category}</span>
+                    <span className="anomaly-date">{a.date} · media categoria: €{a.avg_category.toFixed(2)}</span>
+                  </div>
+                  <div className="anomaly-amount">
+                    <span className="anomaly-val">€{a.amount.toFixed(2)}</span>
+                    <span className="anomaly-pct">+{a.pct_above_avg}% dalla media</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === GRAFICI === */}
       <div className="charts-grid">
         <div className="chart-card">
           <h3>Spese per categoria</h3>

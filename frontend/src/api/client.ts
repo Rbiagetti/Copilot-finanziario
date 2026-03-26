@@ -41,8 +41,41 @@ export interface BudgetStatus {
   status: "ok" | "warning" | "over";
 }
 
+export interface ForecastData {
+  projected_total: number;
+  month_so_far: number;
+  daily_burn_rate: number;
+  days_remaining: number;
+  confidence: "high" | "medium" | "low";
+}
+
+export interface BriefingInsight {
+  title: string;
+  body: string;
+  type: "positive" | "warning" | "info";
+}
+
+export interface BriefingData {
+  insights: BriefingInsight[];
+  action: string;
+}
+
+export interface Anomaly {
+  id: number;
+  amount: number;
+  category: string;
+  description: string;
+  date: string;
+  z_score: number;
+  avg_category: number;
+  pct_above_avg: number;
+}
+
 export const getTransactions = (params?: Record<string, string>) =>
   api.get<Transaction[]>("/transactions/", { params });
+
+export const getTransactionCount = (params?: Record<string, string>) =>
+  api.get<{ count: number; total: number }>("/transactions/count", { params });
 
 export const createTransaction = (data: {
   amount: number;
@@ -62,6 +95,10 @@ export const sendChat = (message: string, history: { role: string; content: stri
 
 export const parseNatural = (text: string) =>
   api.post<Transaction>("/transactions/parse-natural", { text });
+
+export const getForecast = () => api.get<ForecastData>("/analytics/forecast");
+export const getBriefing = () => api.get<BriefingData>("/ai/briefing");
+export const getAnomalies = () => api.get<{ anomalies: Anomaly[]; count: number }>("/ai/anomalies");
 
 export const getBudgets = () => api.get("/budgets/");
 export const createBudget = (data: { category: string; amount: number }) =>

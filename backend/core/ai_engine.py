@@ -307,6 +307,114 @@ def _auto_chart_from_output(lines: list) -> dict:
     return None
 
 
+BRIEFING_PROMPT = """Sei un consulente finanziario AI. Analizza i dati e produci un briefing conciso.
+
+{context}
+
+Rispondi SOLO con JSON (no markdown, no backtick):
+{{"insights": [{{"title": "...", "body": "...", "type": "positive|warning|info"}}], "action": "azione concreta oggi"}}
+
+Regole:
+- Esattamente 3 insight, ognuno 1 frase breve
+- type "warning" se c'e' qualcosa da correggere, "positive" se va bene, "info" per dati neutri
+- "action" deve essere specifica (es: "Hai speso 45 euro in piu' del solito in cibo: prova a cucinare a casa stasera")
+- Rispondi in italiano, tono diretto e utile"""
+
+_briefing_cache: dict = {"data": None, "ts": 0.0}
+
+
+def generate_briefing() -> dict:
+    """Genera il briefing AI giornaliero con cache 1h."""
+    import time
+    now = time.time()
+    if _briefing_cache["data"] and (now - _briefing_cache["ts"]) < 3600:
+        return _briefing_cache["data"]
+
+    db_path = get_db_path()
+    context = build_context(db_path)
+
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": BRIEFING_PROMPT.format(context=context)},
+                {"role": "user", "content": "Dammi il briefing finanziario di oggi."},
+            ],
+            temperature=0.2,
+            max_tokens=600,
+        )
+        raw = response.choices[0].message.content.strip()
+        import re as _re
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            m = _re.search(r'\{[\s\S]*\}', raw)
+            result = json.loads(m.group()) if m else None
+
+        if result and "insights" in result:
+            _briefing_cache["data"] = result
+            _briefing_cache["ts"] = now
+            return result
+    except Exception:
+        pass
+
+    return {
+        "insights": [
+            {"title": "Dati caricati", "body": "Il tuo storico e' disponibile per l'analisi.", "type": "info"},
+        ],
+        "action": "Fai una domanda nella chat per analizzare le tue spese.",
+    }
+
+
+def get_anomalies() -> list:
+    """Rileva transazioni anomale (z-score > 1.5 per categoria, ultimi 60gg)."""
+    import statistics
+    from collections import defaultdict as _dd
+
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, amount, category, description, date FROM transactions "
+        "WHERE date >= date('now', '-60 days') ORDER BY date DESC"
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    if not rows:
+        return []
+
+    by_cat: dict = _dd(list)
+    for row in rows:
+        by_cat[row[2]].append(row)
+
+    anomalies = []
+    for cat, cat_rows in by_cat.items():
+        if len(cat_rows) < 3:
+            continue
+        amounts = [r[1] for r in cat_rows]
+        mean = statistics.mean(amounts)
+        stdev = statistics.stdev(amounts) if len(amounts) > 1 else 0
+        if stdev == 0:
+            continue
+        for row in cat_rows:
+            z = (row[1] - mean) / stdev
+            if z > 1.5:
+                anomalies.append({
+                    "id": row[0],
+                    "amount": round(row[1], 2),
+                    "category": row[2],
+                    "description": row[3] or "",
+                    "date": row[4],
+                    "z_score": round(z, 2),
+                    "avg_category": round(mean, 2),
+                    "pct_above_avg": round((row[1] - mean) / mean * 100) if mean > 0 else 0,
+                })
+
+    anomalies.sort(key=lambda x: x["z_score"], reverse=True)
+    return anomalies[:5]
+
+
 def chat_with_ai(question: str, history=None) -> dict:
     """Pipeline completa: domanda -> AI -> esecuzione codice -> risposta."""
     ai_result = generate_analytics(question, history)
