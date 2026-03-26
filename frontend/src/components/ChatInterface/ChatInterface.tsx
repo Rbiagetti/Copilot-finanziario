@@ -20,6 +20,9 @@ const COLORS = [
 ];
 
 function ChatChart({ chartData }: { chartData: { type: string; data: { name: string; value: number }[]; title: string } }) {
+  // Chart con meno di 2 punti non ha senso visivamente
+  if (!chartData.data || chartData.data.length < 2) return null;
+
   const tooltipStyle = { background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 };
   const legendStyle = { fontSize: 12, color: "#aaa" };
   // BUG-3: con molte categorie ruota le label per evitare overlap

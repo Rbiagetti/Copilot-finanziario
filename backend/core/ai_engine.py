@@ -91,7 +91,7 @@ REGOLE RISPOSTA:
 1. Max 2-3 frasi con INSIGHT, non descrizioni. Esempio buono: "Stai spendendo il 40% in piu' in cibo rispetto al mese scorso. Il picco e' nei weekend." Esempio cattivo: "Ecco i dati delle tue spese."
 2. Followup devono essere analisi AVANZATE, non domande banali. Esempi: "Simula un taglio del 20% su cibo", "Pattern spese impulsive dopo le 18:00", "Proiezione spese a fine trimestre"
 
-ESEMPIO codice:
+ESEMPIO codice (analisi categorie):
 ```
 import sqlite3, json
 conn = sqlite3.connect(DB_PATH)
@@ -101,9 +101,23 @@ rows = cur.fetchall()
 conn.close()
 chart = {{"type":"bar","data":[{{"name":r[0],"value":round(r[1],2)}} for r in rows],"title":"Spese per categoria (30gg)"}}
 print("CHART_DATA:" + json.dumps(chart))
-for r in rows:
-    print(f"{{r[0]}}: €{{r[1]:.2f}}")
 ```
+
+ESEMPIO codice (simulazione taglio/risparmio):
+```
+import sqlite3, json
+conn = sqlite3.connect(DB_PATH)
+cur = conn.cursor()
+cur.execute("SELECT SUM(amount) FROM transactions WHERE time >= '18:00'")
+spesa_attuale = round(cur.fetchone()[0] or 0, 2)
+conn.close()
+risparmio = round(spesa_attuale * 0.20, 2)
+nuova_spesa = round(spesa_attuale - risparmio, 2)
+chart = {{"type":"bar","data":[{{"name":"Spesa attuale","value":spesa_attuale}},{{"name":"Con taglio 20%","value":nuova_spesa}},{{"name":"Risparmio","value":risparmio}}],"title":"Simulazione taglio 20% dopo le 18:00"}}
+print("CHART_DATA:" + json.dumps(chart))
+```
+
+REGOLA SIMULAZIONI: per domande "simula", "se taglio", "cosa succede se" il chart DEVE avere ALMENO 2 barre: valore attuale e valore simulato. Mai un solo dato.
 
 RISPONDI SOLO con JSON (no markdown, no backtick):
 {{"answer": "insight actionable", "python_code": "codice", "followup_questions": ["analisi avanzata 1", "analisi avanzata 2"]}}
@@ -264,12 +278,9 @@ def execute_analysis_code(code: str) -> dict:
     if not chart_data and output_lines:
         chart_data = _auto_chart_from_output(output_lines)
 
-    # BUG-5: se c'e' un grafico, nascondi l'output testuale grezzo (ridondante)
+    # BUG-5: se c'e' un grafico, l'output testuale e' ridondante — rimuovilo
     if chart_data and output_lines:
-        # Tieni solo righe informative (totali, medie), non dump di dati
-        output_lines = [l for l in output_lines if not any(
-            sep in l for sep in [":", "€"]
-        ) or len(output_lines) <= 2]
+        output_lines = []
 
     return {
         "output": "\n".join(output_lines),
