@@ -87,7 +87,7 @@ REGOLE CODICE:
 3. OGNI python_code DEVE avere CHART_DATA. Nessuna eccezione.
 4. IMPORTANTE sintassi Python sicura:
    - Usa str(round(val, 2)) invece di f-string complesse con formato
-   - NON usare f"{val:.2f}" dentro print() — usa "%.2f" % val oppure str(round(val,2))
+   - NON usare f"{{val:.2f}}" dentro print() — usa "%.2f" % val oppure str(round(val,2))
    - Controlla che tutte le parentesi siano bilanciate prima di scrivere il codice
    - Tieni il codice semplice: nessuna list comprehension annidata
 
