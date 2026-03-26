@@ -98,36 +98,6 @@ async def count_transactions(
     return {"count": count, "total": round(float(total), 2)}
 
 
-@router.get("/{tx_id}", response_model=TransactionResponse)
-async def get_transaction(tx_id: int, db: Session = Depends(get_db)):
-    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
-    if not tx:
-        raise HTTPException(404, "Transazione non trovata")
-    return tx
-
-
-@router.put("/{tx_id}", response_model=TransactionResponse)
-async def update_transaction(tx_id: int, data: TransactionUpdate, db: Session = Depends(get_db)):
-    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
-    if not tx:
-        raise HTTPException(404, "Transazione non trovata")
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(tx, field, value)
-    db.commit()
-    db.refresh(tx)
-    return tx
-
-
-@router.delete("/{tx_id}")
-async def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
-    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
-    if not tx:
-        raise HTTPException(404, "Transazione non trovata")
-    db.delete(tx)
-    db.commit()
-    return {"detail": "Transazione eliminata"}
-
-
 @router.get("/export")
 async def export_transactions_csv(
     category: Optional[str] = None,
@@ -171,6 +141,36 @@ async def export_transactions_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.get("/{tx_id}", response_model=TransactionResponse)
+async def get_transaction(tx_id: int, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+    if not tx:
+        raise HTTPException(404, "Transazione non trovata")
+    return tx
+
+
+@router.put("/{tx_id}", response_model=TransactionResponse)
+async def update_transaction(tx_id: int, data: TransactionUpdate, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+    if not tx:
+        raise HTTPException(404, "Transazione non trovata")
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(tx, field, value)
+    db.commit()
+    db.refresh(tx)
+    return tx
+
+
+@router.delete("/{tx_id}")
+async def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+    if not tx:
+        raise HTTPException(404, "Transazione non trovata")
+    db.delete(tx)
+    db.commit()
+    return {"detail": "Transazione eliminata"}
 
 
 @router.get("/stats/categories")
