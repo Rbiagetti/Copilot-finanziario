@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { useAppStore } from "../../store/appStore";
-import { LayoutDashboard, PlusCircle, MessageCircle, Wallet, List } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Wallet, List, Sun, Moon } from "lucide-react";
 
 const NAV_ITEMS = [
   { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
@@ -10,6 +11,12 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const { currentView, setView } = useAppStore();
+  const [dark, setDark] = useState(() => localStorage.getItem("theme") !== "light");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   return (
     <aside className="sidebar">
@@ -29,6 +36,12 @@ export default function Sidebar() {
           </button>
         ))}
       </nav>
+      <div className="sidebar-bottom">
+        <button className="nav-item theme-toggle" onClick={() => setDark(!dark)} title={dark ? "Modalità chiara" : "Modalità scura"}>
+          {dark ? <Sun size={20} /> : <Moon size={20} />}
+          <span>{dark ? "Chiara" : "Scura"}</span>
+        </button>
+      </div>
     </aside>
   );
 }

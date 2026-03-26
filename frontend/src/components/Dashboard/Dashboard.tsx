@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell, PieChart, Pie, Legend,
 } from "recharts";
-import { getDashboard, getForecast, getBriefing, getAnomalies } from "../../api/client";
+import { getDashboard, getForecast, getBriefing, getAnomalies, getMonthlyHistory } from "../../api/client";
 import type { DashboardData, ForecastData, BriefingData, Anomaly } from "../../api/client";
 import {
   TrendingUp, TrendingDown, Euro, Tag, CalendarDays, BarChart3,
@@ -33,16 +33,18 @@ export default function Dashboard() {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [monthlyHistory, setMonthlyHistory] = useState<{ month: string; label: string; total: number }[]>([]);
   const [loadingMain, setLoadingMain] = useState(true);
   const [loadingBriefing, setLoadingBriefing] = useState(true);
   const [showAnomalies, setShowAnomalies] = useState(false);
 
   useEffect(() => {
-    Promise.allSettled([getDashboard(), getForecast(), getAnomalies()])
-      .then(([dashRes, forecastRes, anomalyRes]) => {
+    Promise.allSettled([getDashboard(), getForecast(), getAnomalies(), getMonthlyHistory(6)])
+      .then(([dashRes, forecastRes, anomalyRes, historyRes]) => {
         if (dashRes.status === "fulfilled") setData(dashRes.value.data);
         if (forecastRes.status === "fulfilled") setForecast(forecastRes.value.data);
         if (anomalyRes.status === "fulfilled") setAnomalies(anomalyRes.value.data.anomalies);
+        if (historyRes.status === "fulfilled") setMonthlyHistory(historyRes.value.data);
       })
       .finally(() => setLoadingMain(false));
 
@@ -303,6 +305,28 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {monthlyHistory.length > 0 && (
+        <div className="chart-card chart-full" style={{ marginTop: "1.5rem" }}>
+          <h3>Storico mensile (6 mesi)</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={monthlyHistory} margin={{ left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
+              <XAxis dataKey="label" tick={{ fill: "#aaa", fontSize: 11 }} />
+              <YAxis tick={{ fill: "#aaa", fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
+              <Tooltip
+                contentStyle={{ background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 }}
+                formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]}
+              />
+              <Bar dataKey="total" radius={[6, 6, 0, 0]}>
+                {monthlyHistory.map((_, i) => (
+                  <Cell key={i} fill={i === monthlyHistory.length - 1 ? "#6366f1" : "#3b3b6b"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div className="chart-card top-categories">
         <h3><BarChart3 size={18} /> Classifica categorie mese</h3>

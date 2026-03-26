@@ -16,6 +16,15 @@
   --sidebar-w: 220px;
 }
 
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-input: #f0f0f5;
+  --border: #ddd;
+  --text: #1a1a2e;
+  --text-muted: #666;
+}
+
 body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
@@ -75,6 +84,14 @@ body {
 }
 .nav-item:hover { background: rgba(99,102,241,0.1); color: var(--text); }
 .nav-item.active { background: rgba(99,102,241,0.15); color: var(--primary); font-weight: 600; }
+
+.sidebar-bottom {
+  margin-top: auto;
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.theme-toggle { width: 100%; }
+.active-recurring { color: var(--primary) !important; border-color: var(--primary) !important; }
 
 .main-content {
   margin-left: var(--sidebar-w);
@@ -330,11 +347,31 @@ h3 { font-size: 1.1rem; margin-bottom: 1rem; }
   border: 1px solid var(--border);
 }
 .tx-emoji { font-size: 1.3rem; }
-.tx-info { flex: 1; display: flex; flex-direction: column; }
+.tx-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; }
+.tx-info-top { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .tx-category { font-weight: 600; text-transform: capitalize; font-size: 0.9rem; }
 .tx-desc { font-size: 0.8rem; color: var(--text-muted); }
-.tx-date { font-size: 0.8rem; color: var(--text-muted); }
-.tx-amount { font-weight: 700; min-width: 80px; text-align: right; }
+.tx-date { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.tx-amount { font-weight: 700; min-width: 80px; text-align: right; white-space: nowrap; }
+.tx-actions { display: flex; gap: 0.25rem; }
+.tx-recurring { border-color: rgba(99,102,241,0.3); }
+.badge-recurring {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  font-size: 0.7rem; color: var(--primary);
+  background: rgba(99,102,241,0.1); border-radius: 10px;
+  padding: 0.1rem 0.45rem;
+}
+.badge-tag {
+  font-size: 0.7rem; color: var(--text-muted);
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 10px; padding: 0.1rem 0.45rem;
+}
+.edit-form { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+.form-group-check {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.9rem; cursor: pointer;
+}
+.form-group-check input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
 /* === CHAT === */
 .chat-container {

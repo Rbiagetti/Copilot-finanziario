@@ -31,6 +31,8 @@ class TransactionResponse(BaseModel):
     time: Optional[str]
     account: str
     source: str
+    tags: Optional[str]
+    is_recurring: Optional[bool]
     created_at: Optional[datetime]
 
     class Config:
@@ -43,6 +45,7 @@ class TransactionUpdate(BaseModel):
     description: Optional[str] = None
     date: Optional[str] = None
     tags: Optional[str] = None
+    is_recurring: Optional[bool] = None
 
 
 class ChatRequest(BaseModel):

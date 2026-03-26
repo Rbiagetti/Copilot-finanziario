@@ -13,6 +13,8 @@ export interface Transaction {
   time: string | null;
   account: string;
   source: string;
+  tags: string | null;
+  is_recurring: boolean | null;
   created_at: string | null;
 }
 
@@ -97,8 +99,17 @@ export const parseNatural = (text: string) =>
   api.post<Transaction>("/transactions/parse-natural", { text });
 
 export const getForecast = () => api.get<ForecastData>("/analytics/forecast");
+export const getMonthlyHistory = (months = 6) => api.get<{ month: string; label: string; total: number }[]>(`/analytics/monthly-history?months=${months}`);
 export const getBriefing = () => api.get<BriefingData>("/ai/briefing");
 export const getAnomalies = () => api.get<{ anomalies: Anomaly[]; count: number }>("/ai/anomalies");
+
+export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>
+  api.put<Transaction>(`/transactions/${id}`, data);
+
+export const exportTransactionsCsv = (params?: Record<string, string>) => {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  window.open(`http://localhost:8000/api/v1/transactions/export${qs}`, "_blank");
+};
 
 export const getBudgets = () => api.get("/budgets/");
 export const createBudget = (data: { category: string; amount: number }) =>

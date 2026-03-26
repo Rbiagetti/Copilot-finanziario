@@ -122,3 +122,37 @@ async def get_forecast(db: Session = Depends(get_db)):
         "days_remaining": days_remaining,
         "confidence": confidence,
     }
+
+
+@router.get("/monthly-history")
+async def get_monthly_history(months: int = 6, db: Session = Depends(get_db)):
+    """Totale spese per mese negli ultimi N mesi."""
+    today = date.today()
+    result = []
+    for i in range(months - 1, -1, -1):
+        # calcola primo e ultimo giorno del mese target
+        month_date = date(today.year, today.month, 1)
+        # sottrai i mesi
+        m = today.month - i
+        y = today.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        first = date(y, m, 1)
+        last_day = calendar.monthrange(y, m)[1]
+        last = date(y, m, last_day)
+
+        total = float(
+            db.query(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(
+                Transaction.date >= first.isoformat(),
+                Transaction.date <= last.isoformat(),
+            )
+            .scalar()
+        )
+        result.append({
+            "month": first.strftime("%Y-%m"),
+            "label": first.strftime("%b %Y"),
+            "total": round(total, 2),
+        })
+    return result

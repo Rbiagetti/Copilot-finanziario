@@ -1,9 +1,11 @@
 from __future__ import annotations
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import date, datetime
+import csv, io
 
 from pydantic import BaseModel
 
@@ -124,6 +126,51 @@ async def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
     db.delete(tx)
     db.commit()
     return {"detail": "Transazione eliminata"}
+
+
+@router.get("/export")
+async def export_transactions_csv(
+    category: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Esporta transazioni in formato CSV con gli stessi filtri della lista."""
+    from sqlalchemy import or_, func as sqlfunc
+    q = db.query(Transaction)
+    if category:
+        q = q.filter(Transaction.category == category)
+    if date_from:
+        q = q.filter(Transaction.date >= date_from)
+    if date_to:
+        q = q.filter(Transaction.date <= date_to)
+    if search:
+        term = f"%{search.lower()}%"
+        q = q.filter(or_(
+            sqlfunc.lower(Transaction.description).like(term),
+            sqlfunc.lower(Transaction.category).like(term),
+        ))
+    q = q.order_by(desc(Transaction.date), desc(Transaction.id))
+    txs = q.all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["id", "data", "ora", "importo", "categoria", "descrizione", "account", "tags", "ricorrente"])
+    for t in txs:
+        writer.writerow([
+            t.id, t.date, t.time or "", round(t.amount, 2),
+            t.category, t.description or "", t.account,
+            t.tags or "", "si" if t.is_recurring else "no",
+        ])
+
+    buf.seek(0)
+    filename = f"fincopilot_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/stats/categories")

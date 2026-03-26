@@ -23,6 +23,7 @@ class Transaction(Base):
     account = Column(String, default="principale")
     tags = Column(Text, nullable=True)
     source = Column(String, default="manual")
+    is_recurring = Column(Boolean, default=False, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -50,6 +51,17 @@ class ChatHistory(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Migrazione colonne aggiunte dopo la creazione iniziale del DB
+    import sqlite3, os
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    if os.path.exists(db_path):
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        existing = [r[1] for r in cur.execute("PRAGMA table_info(transactions)").fetchall()]
+        if "is_recurring" not in existing:
+            cur.execute("ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0")
+            conn.commit()
+        conn.close()
 
 
 def get_db():
