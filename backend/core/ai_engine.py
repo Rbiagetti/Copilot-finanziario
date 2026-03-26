@@ -307,18 +307,23 @@ def _auto_chart_from_output(lines: list) -> dict:
     return None
 
 
-BRIEFING_PROMPT = """Sei un consulente finanziario AI. Analizza i dati e produci un briefing conciso.
+BRIEFING_PROMPT = """Sei un analista finanziario AI. Hai accesso ai dati reali dell'utente:
 
 {context}
 
-Rispondi SOLO con JSON (no markdown, no backtick):
-{{"insights": [{{"title": "...", "body": "...", "type": "positive|warning|info"}}], "action": "azione concreta oggi"}}
+Produci un briefing basato ESCLUSIVAMENTE sui numeri sopra. Non inventare dati, non fare supposizioni.
 
-Regole:
-- Esattamente 3 insight, ognuno 1 frase breve
-- type "warning" se c'e' qualcosa da correggere, "positive" se va bene, "info" per dati neutri
-- "action" deve essere specifica (es: "Hai speso 45 euro in piu' del solito in cibo: prova a cucinare a casa stasera")
-- Rispondi in italiano, tono diretto e utile"""
+Rispondi SOLO con JSON (no markdown, no backtick):
+{{"insights": [{{"title": "...", "body": "...", "type": "positive|warning|info"}}], "action": "..."}}
+
+Regole OBBLIGATORIE:
+- Esattamente 3 insight
+- Ogni body DEVE contenere numeri reali presi dal contesto (euro, percentuali, conteggi)
+- Esempio body corretto: "Cibo e' la categoria piu' costosa con 847 euro questo mese, il 36% del totale"
+- Esempio body SBAGLIATO: "Le tue spese sono elevate, considera di ridurle" (generico, nessun numero)
+- type: "warning" se la categoria supera il 30% del totale o e' aumentata, "positive" se e' diminuita, "info" per dati neutri
+- "action" deve citare una categoria specifica con importo reale: "Hai speso 847 euro in cibo questo mese (+12% vs mese scorso): prova a fissare un budget di 700 euro"
+- Rispondi in italiano"""
 
 _briefing_cache: dict = {"data": None, "ts": 0.0}
 
