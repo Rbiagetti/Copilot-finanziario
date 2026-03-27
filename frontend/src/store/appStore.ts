@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type View = "dashboard" | "transactions" | "chat" | "budget";
+type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
 
 interface AppState {
   currentView: View;

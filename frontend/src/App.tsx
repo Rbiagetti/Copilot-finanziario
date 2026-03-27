@@ -6,6 +6,7 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import TransactionList from "./components/TransactionList/TransactionList";
 import ChatInterface from "./components/ChatInterface/ChatInterface";
 import BudgetPanel from "./components/BudgetPanel/BudgetPanel";
+import SettingsPanel from "./components/Settings/SettingsPanel";
 import LoginPage from "./components/Auth/LoginPage";
 import { supabase } from "./lib/supabase";
 
@@ -14,6 +15,10 @@ function App() {
   const [session, setSession] = useState<any>(undefined); // undefined = loading
 
   useEffect(() => {
+    document.documentElement.setAttribute(
+      "data-theme",
+      localStorage.getItem("theme") === "light" ? "light" : "dark",
+    );
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => subscription.unsubscribe();
@@ -48,6 +53,7 @@ function App() {
         {currentView === "transactions" && <TransactionList />}
         {currentView === "chat" && <ChatInterface />}
         {currentView === "budget" && <BudgetPanel />}
+        {currentView === "settings" && <SettingsPanel />}
       </main>
     </div>
   );
