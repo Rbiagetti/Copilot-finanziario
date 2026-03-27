@@ -56,7 +56,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     chart_data: Optional[Dict] = None
-    data_table: Optional[List[Dict]] = None
+    data_table: Optional[Dict] = None
     followup_questions: List[str] = Field(default_factory=list)
 
 

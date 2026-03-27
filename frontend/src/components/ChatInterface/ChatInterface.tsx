@@ -1,17 +1,26 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Component } from "react";
+import type { ReactNode } from "react";
 import { sendChat } from "../../api/client";
 import type { ChatResponse } from "../../api/client";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { Send, Bot, User, Sparkles, RefreshCw, Mic, MicOff } from "lucide-react";
+import { useChartColors } from "../../hooks/useTheme";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Cell, PieChart, Pie, Legend,
+  LineChart, Line, Cell,
 } from "recharts";
+
+interface TableData {
+  headers: string[];
+  rows: (string | number)[][];
+}
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   chart_data?: { type: string; data: { name: string; value: number }[]; title: string } | null;
+  data_table?: TableData | null;
   followups?: string[];
+  originalQuestion?: string;
 }
 
 const COLORS = [
@@ -19,51 +28,68 @@ const COLORS = [
   "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#64748b",
 ];
 
+// ── Chart Error Boundary ─────────────────────────────────────────────────────
+
+interface BoundaryProps { children: ReactNode; onError: () => void; }
+interface BoundaryState { hasError: boolean; }
+
+class ChartErrorBoundary extends Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): BoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {
+    this.props.onError();
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+// ── ChatTable ────────────────────────────────────────────────────────────────
+
+function ChatTable({ tableData }: { tableData: TableData }) {
+  if (!tableData.rows || tableData.rows.length === 0) return null;
+  return (
+    <div className="msg-table-container">
+      <table className="chat-table">
+        <thead>
+          <tr>
+            {tableData.headers.map((h, i) => (
+              <th key={i}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tableData.rows.map((row, i) => (
+            <tr key={i}>
+              {row.map((cell, j) => (
+                <td key={j}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── ChatChart ────────────────────────────────────────────────────────────────
+
 function ChatChart({ chartData }: { chartData: { type: string; data: { name: string; value: number }[]; title: string } }) {
-  // Chart con meno di 2 punti non ha senso visivamente
+  const cc = useChartColors();
+
   if (!chartData.data || chartData.data.length < 2) return null;
 
-  const tooltipStyle = { background: "#1e1e2e", border: "1px solid #2a2a40", borderRadius: 8 };
-  const legendStyle = { fontSize: 12, color: "#aaa" };
-  // BUG-3: con molte categorie ruota le label per evitare overlap
+  const tooltipStyle = { background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8 };
+  const tooltipLabelStyle = { color: cc.tooltipText };
+  const tooltipItemStyle = { color: cc.tooltipItem };
   const manyItems = chartData.data.length > 6;
 
-  if (chartData.type === "pie") {
-    // BUG-4: usa Legend invece di label inline per evitare overlap sulle fette
-    return (
-      <div className="msg-chart-container">
-        <h4 className="msg-chart-title">{chartData.title}</h4>
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={chartData.data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="45%"
-              outerRadius={95}
-              label={false}
-            >
-              {chartData.data.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={tooltipStyle}
-              formatter={(v: number, _: string, props: any) => [
-                `€${v.toFixed(2)} (${((props.payload.percent || 0) * 100).toFixed(0)}%)`,
-                props.payload.name,
-              ]}
-            />
-            <Legend
-              wrapperStyle={legendStyle}
-              formatter={(value) => <span style={{ color: "#ccc", fontSize: 12 }}>{value}</span>}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
 
   if (chartData.type === "line") {
     return (
@@ -71,40 +97,46 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
         <h4 className="msg-chart-title">{chartData.title}</h4>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData.data} margin={{ bottom: manyItems ? 40 : 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
+            <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
             <XAxis
               dataKey="name"
-              tick={{ fill: "#888", fontSize: 10 }}
+              tick={{ fill: cc.tick, fontSize: 10 }}
               angle={manyItems ? -45 : 0}
               textAnchor={manyItems ? "end" : "middle"}
               interval={manyItems ? Math.floor(chartData.data.length / 8) : 0}
             />
-            <YAxis tick={{ fill: "#888", fontSize: 11 }} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]} />
-            <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={chartData.data.length > 20 ? false : { fill: "#6366f1", r: 3 }} />
+            <YAxis tick={{ fill: cc.tick, fontSize: 11 }} />
+            <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]} />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="#6366f1"
+              strokeWidth={2}
+              dot={chartData.data.length > 20 ? false : { fill: "#6366f1", r: 3 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
     );
   }
 
-  // Default: bar chart — BUG-3: ruota label se molte categorie
+  // Default: bar chart
   return (
     <div className="msg-chart-container">
       <h4 className="msg-chart-title">{chartData.title}</h4>
       <ResponsiveContainer width="100%" height={manyItems ? 280 : 250}>
         <BarChart data={chartData.data} margin={{ bottom: manyItems ? 50 : 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2a2a40" />
+          <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
           <XAxis
             dataKey="name"
-            tick={{ fill: "#888", fontSize: manyItems ? 10 : 11 }}
+            tick={{ fill: cc.tick, fontSize: manyItems ? 10 : 11 }}
             angle={manyItems ? -40 : 0}
             textAnchor={manyItems ? "end" : "middle"}
             interval={0}
           />
-          <YAxis tick={{ fill: "#888", fontSize: 11 }} />
-          <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
-          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+          <YAxis tick={{ fill: cc.tick, fontSize: 11 }} />
+          <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]} cursor={{ fill: cc.cursorFill }}>
             {chartData.data.map((_, i) => (
               <Cell key={i} fill={COLORS[i % COLORS.length]} />
             ))}
@@ -115,11 +147,56 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
   );
 }
 
+// ── Main Component ───────────────────────────────────────────────────────────
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [chartErrors, setChartErrors] = useState<Set<number>>(new Set());
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const listeningRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const startRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const rec = new SpeechRecognition();
+    rec.lang = "it-IT";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e: any) => {
+      const last = e.results[e.results.length - 1];
+      if (last.isFinal) setInput((prev) => prev + last[0].transcript + " ");
+    };
+    rec.onend = () => {
+      if (listeningRef.current) startRecognition(); // browser stopped it, restart
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === "no-speech") return; // ignore silence, onend will restart
+      listeningRef.current = false;
+      setListening(false);
+    };
+    recognitionRef.current = rec;
+    rec.start();
+  };
+
+  const toggleVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (listeningRef.current) {
+      listeningRef.current = false;
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
+    listeningRef.current = true;
+    setListening(true);
+    startRecognition();
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -135,10 +212,7 @@ export default function ChatInterface() {
     setLoading(true);
 
     try {
-      const history = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const history = messages.map((m) => ({ role: m.role, content: m.content }));
       const res = await sendChat(msg, history);
       const data = res.data;
       setMessages((prev) => [
@@ -147,17 +221,27 @@ export default function ChatInterface() {
           role: "assistant",
           content: data.answer,
           chart_data: data.chart_data,
+          data_table: data.data_table,
           followups: data.followup_questions,
+          originalQuestion: msg,
         },
       ]);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Errore nella risposta AI. Riprova." },
+        { role: "assistant", content: "Si è verificato un errore. Riprova." },
       ]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const retryAsText = (question: string) => {
+    handleSend(question + " Rispondi solo via testo, senza grafici o codice Python.");
+  };
+
+  const handleChartError = (msgIndex: number) => {
+    setChartErrors((prev) => new Set(prev).add(msgIndex));
   };
 
   return (
@@ -180,10 +264,10 @@ export default function ChatInterface() {
               {[
                 "Analisi completa: dove vanno i miei soldi?",
                 "Quali spese potrei tagliare per risparmiare?",
-                "Trend settimanale: sto spendendo troppo?",
-                "Le mie 5 spese ricorrenti piu costose",
+                "Top 10 transazioni più costose questo mese",
+                "Confronto mese corrente vs mese precedente",
                 "Distribuzione spese: weekend vs giorni feriali",
-                "Previsione: quanto spendero a fine mese?",
+                "Statistiche riassuntive degli ultimi 30 giorni",
               ].map((s) => (
                 <button key={s} className="suggestion-btn" onClick={() => handleSend(s)}>
                   {s}
@@ -204,15 +288,34 @@ export default function ChatInterface() {
                   .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
                   .replace(/\n/g, "<br/>"),
               }} />
-              {msg.chart_data && <ChatChart chartData={msg.chart_data} />}
+
+              {/* Tabella dati */}
+              {msg.data_table && <ChatTable tableData={msg.data_table} />}
+
+              {/* Grafico con error boundary */}
+              {msg.chart_data && !chartErrors.has(i) && (
+                <ChartErrorBoundary onError={() => handleChartError(i)}>
+                  <ChatChart chartData={msg.chart_data} />
+                </ChartErrorBoundary>
+              )}
+
+              {/* Fallback se grafico fallisce */}
+              {msg.chart_data && chartErrors.has(i) && msg.originalQuestion && (
+                <div className="chart-error-fallback">
+                  <span>📊 Grafico non disponibile</span>
+                  <button
+                    className="btn-retry-text"
+                    onClick={() => retryAsText(msg.originalQuestion!)}
+                  >
+                    <RefreshCw size={12} /> Riprova in testo
+                  </button>
+                </div>
+              )}
+
               {msg.followups && msg.followups.length > 0 && (
                 <div className="msg-followups">
                   {msg.followups.map((f, j) => (
-                    <button
-                      key={j}
-                      className="followup-btn"
-                      onClick={() => handleSend(f)}
-                    >
+                    <button key={j} className="followup-btn" onClick={() => handleSend(f)}>
                       {f}
                     </button>
                   ))}
@@ -241,10 +344,18 @@ export default function ChatInterface() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Fai una domanda sulle tue spese..."
+          onKeyDown={(e) => e.key === "Enter" && !loading && handleSend()}
+          placeholder={listening ? "Sto ascoltando..." : "Fai una domanda sulle tue spese..."}
           disabled={loading}
         />
+        <button
+          className={`btn-voice ${listening ? "recording" : ""}`}
+          onClick={toggleVoice}
+          title={listening ? "Ferma dettatura" : "Dettatura vocale"}
+          disabled={loading}
+        >
+          {listening ? <MicOff size={16} /> : <Mic size={16} />}
+        </button>
         <button
           className="btn-send"
           onClick={() => handleSend()}

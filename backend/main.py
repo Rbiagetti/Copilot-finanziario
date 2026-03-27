@@ -4,7 +4,6 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from backend.core.database import init_db
 from backend.api.routes import transactions, analytics, chat, budgets, ai

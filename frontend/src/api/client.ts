@@ -1,7 +1,17 @@
 import axios from "axios";
+import { getToken } from "../lib/supabase";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000/api/v1",
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1",
+});
+
+// Attacca il JWT Supabase ad ogni richiesta
+api.interceptors.request.use(async (config) => {
+  const token = await getToken();
+  if (token) {
+    config.headers["Authorization"] = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export interface Transaction {
@@ -27,10 +37,15 @@ export interface DashboardData {
   daily_trend: { date: string; total: number }[];
 }
 
+export interface TableData {
+  headers: string[];
+  rows: (string | number)[][];
+}
+
 export interface ChatResponse {
   answer: string;
   chart_data: { type: string; data: { name: string; value: number }[]; title: string } | null;
-  data_table: Record<string, unknown>[] | null;
+  data_table: TableData | null;
   followup_questions: string[];
 }
 
@@ -106,9 +121,12 @@ export const getAnomalies = () => api.get<{ anomalies: Anomaly[]; count: number 
 export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>
   api.put<Transaction>(`/transactions/${id}`, data);
 
-export const exportTransactionsCsv = (params?: Record<string, string>) => {
-  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-  window.open(`http://localhost:8000/api/v1/transactions/export${qs}`, "_blank");
+export const exportTransactionsCsv = async (params?: Record<string, string>) => {
+  const token = await getToken();
+  const base = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+  const p = new URLSearchParams(params);
+  if (token) p.set("token", token);
+  window.open(`${base}/transactions/export?${p.toString()}`, "_blank");
 };
 
 export const getBudgets = () => api.get("/budgets/");

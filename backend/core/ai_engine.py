@@ -1,10 +1,13 @@
 import os
 import json
-import sqlite3
 import io
-from pathlib import Path
+from datetime import date, timedelta
+from collections import defaultdict
 
+from sqlalchemy import text
 from openai import OpenAI
+
+from backend.core.database import engine
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 MODEL = "llama-3.3-70b-versatile"
@@ -15,151 +18,502 @@ client = OpenAI(
 )
 
 
-def get_db_path() -> str:
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./data/fincopilot.db")
-    path = db_url.replace("sqlite:///", "")
-    return str(Path(path).resolve())
+def _q(sql: str, params: dict = None):
+    """Esegue una query e restituisce tutte le righe."""
+    with engine.connect() as conn:
+        return conn.execute(text(sql), params or {}).fetchall()
 
 
-def build_context(db_path: str) -> str:
+def _scalar(sql: str, params: dict = None):
+    """Esegue una query e restituisce il primo valore della prima riga."""
+    with engine.connect() as conn:
+        row = conn.execute(text(sql), params or {}).fetchone()
+        return row[0] if row else None
+
+
+def _dates(days_ago: int = 0) -> str:
+    """Restituisce la data ISO di N giorni fa."""
+    return (date.today() - timedelta(days=days_ago)).isoformat()
+
+
+def _month_start(months_back: int = 0) -> str:
+    """Primo giorno del mese corrente (o N mesi fa)."""
+    d = date.today().replace(day=1)
+    for _ in range(months_back):
+        d = (d - timedelta(days=1)).replace(day=1)
+    return d.isoformat()
+
+
+def build_context() -> str:
     """Costruisce il contesto del DB per il prompt AI."""
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
+    d30 = _dates(30)
+    d60 = _dates(60)
 
-    schema = "transactions(id, amount REAL, category TEXT, subcategory TEXT, description TEXT, date TEXT, time TEXT, account TEXT, tags TEXT, source TEXT, created_at TEXT, updated_at TEXT)"
+    schema = "transactions(id, amount REAL, category TEXT, description TEXT, date TEXT)"
+    total_all = _scalar("SELECT COUNT(*) FROM transactions") or 0
+    date_range = _q("SELECT MIN(date), MAX(date) FROM transactions")
+    dr = date_range[0] if date_range else (None, None)
+    grand_total = round(_scalar("SELECT SUM(amount) FROM transactions") or 0, 2)
 
-    cur.execute("SELECT COUNT(*) FROM transactions")
-    total = cur.fetchone()[0]
+    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d", {"d": d30})
+    last_30_total = round(row[0][0] or 0, 2) if row else 0
+    last_30_count = row[0][1] or 0 if row else 0
 
-    cur.execute("SELECT MIN(date), MAX(date) FROM transactions")
-    date_range = cur.fetchone()
+    prev_30 = round(_scalar(
+        "SELECT SUM(amount) FROM transactions WHERE date >= :d60 AND date < :d30",
+        {"d60": d60, "d30": d30}
+    ) or 0, 2)
 
-    cur.execute(
-        "SELECT category, COUNT(*), ROUND(SUM(amount),2), ROUND(AVG(amount),2) "
-        "FROM transactions GROUP BY category ORDER BY SUM(amount) DESC"
-    )
-    cat_stats = cur.fetchall()
-
-    cur.execute("SELECT ROUND(SUM(amount),2) FROM transactions")
-    grand_total = cur.fetchone()[0] or 0
-
-    cur.execute(
-        "SELECT ROUND(SUM(amount),2) FROM transactions WHERE date >= date('now', '-30 days')"
-    )
-    last_30 = cur.fetchone()[0] or 0
-
-    conn.close()
-
-    categories_str = "\n".join(
-        f"  - {c[0]}: {c[1]} tx, tot €{c[2]}, media €{c[3]}"
-        for c in cat_stats
+    cat_30 = _q(
+        "SELECT category, COUNT(*), SUM(amount), AVG(amount) FROM transactions "
+        "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC",
+        {"d": d30}
     )
 
-    return f"""SCHEMA: {schema}
-TOTALE: {total} transazioni, €{grand_total}, range {date_range[0]} → {date_range[1]}
-ULTIMI 30GG: €{last_30}
-CATEGORIE:
-{categories_str}"""
+    total_30_pct = round((last_30_total - prev_30) / prev_30 * 100, 1) if prev_30 > 0 else 0
+    trend = f"+{total_30_pct}%" if total_30_pct >= 0 else f"{total_30_pct}%"
+
+    cats_30_str = "\n".join(
+        f"  - {c[0]}: {c[1]} tx, €{round(c[2],2)} "
+        f"({round(c[2]/last_30_total*100) if last_30_total>0 else 0}% del mese), media €{round(c[3],2)}"
+        for c in cat_30
+    ) if cat_30 else "  (nessuna transazione)"
+
+    return (
+        f"SCHEMA: {schema}\n"
+        f"STORICO TOTALE: {total_all} transazioni, €{grand_total}, range {dr[0]} → {dr[1]}\n"
+        f"ULTIMI 30 GIORNI: €{last_30_total} ({last_30_count} transazioni, {trend} vs mese precedente €{prev_30})\n"
+        f"CATEGORIE ULTIMI 30 GIORNI (usa QUESTI dati per il briefing, NON lo storico):\n{cats_30_str}"
+    )
 
 
-SYSTEM_PROMPT = """Sei un analista finanziario AI avanzato. Rispondi in italiano, CONCISO e con insight actionable.
+# ─── FUNZIONI PRECONFEZIONATE ─────────────────────────────────────────────────
 
-{context}
+FUNCTION_CATALOG = {
+    "spending_by_category": {
+        "desc": "Spese per categoria in un periodo. Grafico a barre.",
+        "params": "period_days: int=30",
+    },
+    "daily_trend": {
+        "desc": "Trend giornaliero delle spese. Grafico a linee.",
+        "params": "days: int=30",
+    },
+    "top_transactions": {
+        "desc": "Tabella delle N transazioni piu' costose con dettagli.",
+        "params": "n: int=10, category: str=null, period_days: int=30",
+    },
+    "month_vs_month": {
+        "desc": "Confronto spese mese corrente vs precedente per categoria.",
+        "params": "(nessuno)",
+    },
+    "spending_by_weekday": {
+        "desc": "Media spese per giorno della settimana (Lun-Dom).",
+        "params": "period_days: int=90",
+    },
+    "category_trend": {
+        "desc": "Andamento mensile di una categoria negli ultimi N mesi.",
+        "params": "category: str, months: int=6",
+    },
+    "summary_stats": {
+        "desc": "Statistiche riassuntive: totale, media transazione, n. transazioni, categoria top.",
+        "params": "period_days: int=30",
+    },
+    "year_end_forecast": {
+        "desc": "Proiezione spese fino a fine anno basata sulla media giornaliera recente.",
+        "params": "(nessuno)",
+    },
+}
 
-IL TUO RUOLO: Non sei un semplice calcolatore. Sei un consulente finanziario che trova pattern nascosti, anomalie e opportunita' di risparmio. Ogni risposta deve dare VALORE PRATICO all'utente.
-
-TIPI DI ANALISI CHE SAI FARE:
-- Trend e previsioni (confronti temporali, proiezioni fine mese)
-- Anomalie (spese fuori media, picchi insoliti, pattern ripetitivi)
-- Ottimizzazione (dove tagliare, categorie con crescita anomala)
-- Comportamentale (weekend vs feriali, pattern orari, frequenza)
-- Confronti (mese vs mese, categoria vs categoria)
-
-REGOLE CODICE:
-1. GENERA SEMPRE python_code per domande sui dati.
-2. Il codice DEVE:
-   - import sqlite3, json
-   - conn = sqlite3.connect(DB_PATH)  # GIA' DEFINITO, NON ridefinirlo!
-   - NON usare SELECT * — specifica le colonne
-   - SEMPRE print("CHART_DATA:" + json.dumps(chart))
-   - Formato: {{"type":"bar|pie|line","data":[{{"name":"...","value":N}}],"title":"..."}}
-   - NON usare matplotlib, pandas, plt. Solo sqlite3 e json.
-3. OGNI python_code DEVE avere CHART_DATA. Nessuna eccezione.
-4. IMPORTANTE sintassi Python sicura:
-   - Usa str(round(val, 2)) invece di f-string complesse con formato
-   - NON usare f"{{val:.2f}}" dentro print() — usa "%.2f" % val oppure str(round(val,2))
-   - Controlla che tutte le parentesi siano bilanciate prima di scrivere il codice
-   - Tieni il codice semplice: nessuna list comprehension annidata
-
-REGOLE RISPOSTA:
-1. Max 2-3 frasi con INSIGHT, non descrizioni. Esempio buono: "Stai spendendo il 40% in piu' in cibo rispetto al mese scorso. Il picco e' nei weekend." Esempio cattivo: "Ecco i dati delle tue spese."
-2. Followup devono essere analisi AVANZATE, non domande banali. Esempi: "Simula un taglio del 20% su cibo", "Pattern spese impulsive dopo le 18:00", "Proiezione spese a fine trimestre"
-
-ESEMPIO codice (analisi categorie):
-```
-import sqlite3, json
-conn = sqlite3.connect(DB_PATH)
-cur = conn.cursor()
-cur.execute("SELECT category, SUM(amount) as tot FROM transactions WHERE date >= date('now','-30 days') GROUP BY category ORDER BY tot DESC")
-rows = cur.fetchall()
-conn.close()
-chart = {{"type":"bar","data":[{{"name":r[0],"value":round(r[1],2)}} for r in rows],"title":"Spese per categoria (30gg)"}}
-print("CHART_DATA:" + json.dumps(chart))
-```
-
-ESEMPIO codice (simulazione taglio/risparmio):
-```
-import sqlite3, json
-conn = sqlite3.connect(DB_PATH)
-cur = conn.cursor()
-cur.execute("SELECT SUM(amount) FROM transactions WHERE time >= '18:00'")
-spesa_attuale = round(cur.fetchone()[0] or 0, 2)
-conn.close()
-risparmio = round(spesa_attuale * 0.20, 2)
-nuova_spesa = round(spesa_attuale - risparmio, 2)
-chart = {{"type":"bar","data":[{{"name":"Spesa attuale","value":spesa_attuale}},{{"name":"Con taglio 20%","value":nuova_spesa}},{{"name":"Risparmio","value":risparmio}}],"title":"Simulazione taglio 20% dopo le 18:00"}}
-print("CHART_DATA:" + json.dumps(chart))
-```
-
-REGOLA SIMULAZIONI: per domande "simula", "se taglio", "cosa succede se" il chart DEVE avere ALMENO 2 barre: valore attuale e valore simulato. Mai un solo dato.
-
-RISPONDI SOLO con JSON (no markdown, no backtick):
-{{"answer": "insight actionable", "python_code": "codice", "followup_questions": ["analisi avanzata 1", "analisi avanzata 2"]}}
-
-Se non servono dati, python_code: null."""
+_CATALOG_WIKI = "\n".join(
+    f"  - {name}({meta['params']}): {meta['desc']}"
+    for name, meta in FUNCTION_CATALOG.items()
+)
 
 
-def generate_analytics(question: str, history=None) -> dict:
-    """Chiama Groq LLM per generare analisi dalla domanda utente."""
-    db_path = get_db_path()
-    context = build_context(db_path)
+def _fn_spending_by_category(db_path: str, params: dict) -> dict:
+    period_days = int(params.get("period_days", 30))
+    chart_type = params.get("chart_type", "bar")
+    cutoff = _dates(period_days)
+    rows = _q(
+        "SELECT category, SUM(amount) FROM transactions "
+        "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC",
+        {"d": cutoff}
+    )
+    data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if r[1] and r[1] > 0]
+    return {
+        "chart_data": {"type": chart_type, "data": data, "title": f"Spese per categoria (ultimi {period_days}gg)"},
+        "table_data": None,
+    }
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT.format(context=context)}]
 
+def _fn_daily_trend(db_path: str, params: dict) -> dict:
+    days = int(params.get("days", 30))
+    cutoff = _dates(days)
+    rows = _q(
+        "SELECT date, SUM(amount) FROM transactions "
+        "WHERE date >= :d GROUP BY date ORDER BY date",
+        {"d": cutoff}
+    )
+    data = [{"name": r[0][5:], "value": round(r[1], 2)} for r in rows]
+    return {
+        "chart_data": {"type": "line", "data": data, "title": f"Trend giornaliero (ultimi {days}gg)"},
+        "table_data": None,
+    }
+
+
+def _fn_top_transactions(db_path: str, params: dict) -> dict:
+    n = int(params.get("n", 10))
+    category = params.get("category")
+    period_days = int(params.get("period_days", 30))
+    cutoff = _dates(period_days)
+    if category:
+        rows = _q(
+            "SELECT date, category, description, amount FROM transactions "
+            "WHERE date >= :d AND category = :cat ORDER BY amount DESC LIMIT :n",
+            {"d": cutoff, "cat": category, "n": n}
+        )
+    else:
+        rows = _q(
+            "SELECT date, category, description, amount FROM transactions "
+            "WHERE date >= :d ORDER BY amount DESC LIMIT :n",
+            {"d": cutoff, "n": n}
+        )
+    return {
+        "chart_data": None,
+        "table_data": {
+            "headers": ["Data", "Categoria", "Descrizione", "Importo"],
+            "rows": [[r[0], r[1], r[2] or "-", f"€{round(r[3],2)}"] for r in rows],
+        },
+    }
+
+
+def _fn_month_vs_month(db_path: str, params: dict) -> dict:
+    ms = _month_start(0)   # inizio mese corrente
+    pms = _month_start(1)  # inizio mese precedente
+
+    rows = _q(
+        "SELECT category, "
+        "SUM(CASE WHEN date >= :ms THEN amount ELSE 0 END) as curr, "
+        "SUM(CASE WHEN date >= :pms AND date < :ms THEN amount ELSE 0 END) as prev "
+        "FROM transactions WHERE date >= :pms "
+        "GROUP BY category ORDER BY curr DESC",
+        {"ms": ms, "pms": pms}
+    )
+    table = {
+        "headers": ["Categoria", "Mese corrente", "Mese prec.", "Variazione"],
+        "rows": [
+            [r[0], f"€{round(r[1],2)}", f"€{round(r[2],2)}",
+             f"+{round((r[1]-r[2])/r[2]*100)}%" if r[2] > 0 else "N/A"]
+            for r in rows if (r[1] or 0) > 0 or (r[2] or 0) > 0
+        ],
+    }
+    data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if (r[1] or 0) > 0]
+    return {
+        "chart_data": {"type": "bar", "data": data, "title": "Spese mese corrente per categoria"},
+        "table_data": table,
+    }
+
+
+def _fn_spending_by_weekday(db_path: str, params: dict) -> dict:
+    from datetime import datetime as _dt
+    period_days = int(params.get("period_days", 90))
+    cutoff = _dates(period_days)
+    rows = _q(
+        "SELECT date, SUM(amount) FROM transactions WHERE date >= :d GROUP BY date",
+        {"d": cutoff}
+    )
+    # Raggruppa per giorno settimana in Python (0=Dom, 1=Lun, ... 6=Sab, conv. SQLite)
+    dow_vals: dict = defaultdict(list)
+    for date_str, total in rows:
+        try:
+            weekday = _dt.strptime(date_str, "%Y-%m-%d").weekday()  # 0=Lun, 6=Dom
+            dow_sun = (weekday + 1) % 7  # 0=Dom, 1=Lun, ..., 6=Sab
+        except ValueError:
+            continue
+        dow_vals[dow_sun].append(total or 0)
+
+    day_names = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"]
+    data = [
+        {"name": day_names[dow], "value": round(sum(vals) / len(vals), 2)}
+        for dow, vals in sorted(dow_vals.items())
+    ]
+    return {
+        "chart_data": {"type": "bar", "data": data, "title": "Media spese per giorno della settimana"},
+        "table_data": None,
+    }
+
+
+def _fn_category_trend(db_path: str, params: dict) -> dict:
+    category = params.get("category", "cibo")
+    months = int(params.get("months", 6))
+    cutoff = _dates(months * 30)
+    rows = _q(
+        "SELECT date, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
+        {"cat": category, "d": cutoff}
+    )
+    monthly: dict = defaultdict(float)
+    for date_str, amount in rows:
+        monthly[date_str[:7]] += amount or 0
+    data = [{"name": k, "value": round(v, 2)} for k, v in sorted(monthly.items())]
+    return {
+        "chart_data": {"type": "line", "data": data, "title": f"Andamento mensile: {category}"},
+        "table_data": None,
+    }
+
+
+def _fn_year_end_forecast(db_path: str, params: dict) -> dict:
+    today = date.today()
+    d30 = _dates(30)
+    year_start = today.replace(month=1, day=1).isoformat()
+
+    total_30 = round(_scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d", {"d": d30}) or 0, 2)
+    spent_ytd = round(_scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d", {"d": year_start}) or 0, 2)
+
+    days_remaining = (date(today.year, 12, 31) - today).days
+    daily_avg = round(total_30 / 30, 2) if total_30 > 0 else 0
+    projected_remaining = round(daily_avg * days_remaining, 2)
+    projected_total = round(spent_ytd + projected_remaining, 2)
+
+    return {
+        "chart_data": {
+            "type": "bar",
+            "data": [
+                {"name": "Già speso (YTD)", "value": spent_ytd},
+                {"name": f"Previsto ({days_remaining}gg)", "value": projected_remaining},
+            ],
+            "title": f"Proiezione spese fine anno {today.year}",
+        },
+        "table_data": {
+            "headers": ["Metrica", "Valore"],
+            "rows": [
+                ["Speso da inizio anno", f"€{spent_ytd}"],
+                ["Media giornaliera (ultimi 30gg)", f"€{daily_avg}"],
+                ["Giorni rimasti all'anno", str(days_remaining)],
+                ["Previsto per il resto dell'anno", f"€{projected_remaining}"],
+                ["Totale proiettato anno", f"€{projected_total}"],
+            ],
+        },
+    }
+
+
+def _fn_summary_stats(db_path: str, params: dict) -> dict:
+    period_days = int(params.get("period_days", 30))
+    cutoff = _dates(period_days)
+    row = _q(
+        "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d",
+        {"d": cutoff}
+    )
+    total, count, avg = (round(row[0][0] or 0, 2), row[0][1] or 0, round(row[0][2] or 0, 2)) if row else (0, 0, 0)
+    top_cat = _q(
+        "SELECT category FROM transactions WHERE date >= :d "
+        "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+        {"d": cutoff}
+    )
+    return {
+        "chart_data": None,
+        "table_data": {
+            "headers": ["Metrica", "Valore"],
+            "rows": [
+                ["Totale spese", f"€{total}"],
+                ["Transazioni", str(count)],
+                ["Media per transazione", f"€{avg}"],
+                ["Categoria top", top_cat[0][0] if top_cat else "-"],
+                ["Periodo analizzato", f"ultimi {period_days}gg"],
+            ],
+        },
+    }
+
+
+_PREBUILT_FUNCTIONS = {
+    "spending_by_category": _fn_spending_by_category,
+    "daily_trend": _fn_daily_trend,
+    "top_transactions": _fn_top_transactions,
+    "month_vs_month": _fn_month_vs_month,
+    "spending_by_weekday": _fn_spending_by_weekday,
+    "category_trend": _fn_category_trend,
+    "summary_stats": _fn_summary_stats,
+    "year_end_forecast": _fn_year_end_forecast,
+}
+
+
+def execute_prebuilt_function(name: str, params: dict) -> dict:
+    fn = _PREBUILT_FUNCTIONS.get(name)
+    if not fn:
+        return {"chart_data": None, "table_data": None}
+    try:
+        return fn(None, params or {})
+    except Exception:
+        return {"chart_data": None, "table_data": None}
+
+
+# ─── PROMPT: SELEZIONE FUNZIONE ────────────────────────────────────────────────
+
+FUNCTION_SELECTOR_PROMPT = """Sei un router finanziario. Classifica la domanda in uno dei tre casi.
+
+FUNZIONI DISPONIBILI:
+- spending_by_category(period_days=30): "dove vanno i soldi", "analisi completa", "distribuzione spese", "per categoria"
+- daily_trend(days=30): "trend giornaliero", "grafico spese nel tempo", "giorno per giorno"
+- top_transactions(n=10, category=null, period_days=30): "spese piu' alte", "transazioni piu' costose", "top N"
+- month_vs_month(): "confronto mesi", "questo mese vs mese scorso", "variazione mensile"
+- spending_by_weekday(period_days=90): "weekend vs feriali", "giorno piu' costoso", "media per giorno settimana"
+- category_trend(category, months=6): "andamento [categoria] nel tempo", "storico [categoria] mesi"
+- summary_stats(period_days=30): "statistiche generali", "totale e media", "quante transazioni"
+- year_end_forecast(): "stima fine anno", "previsione annuale", "quanto spendero' entro dicembre"
+
+CASO 1 — c'e' una funzione adatta:
+{{"use_function": {{"name": "nome", "params": {{...}}}}, "in_perimeter": true}}
+
+CASO 2 — domanda finanziaria/budget ma nessuna funzione la copre (consigli, simulazioni semplici, domande sul comportamento di spesa):
+{{"use_function": null, "in_perimeter": true}}
+
+CASO 3 — domanda NON finanziaria (cucina, sport, coding, ecc.):
+{{"use_function": null, "in_perimeter": false}}
+
+Rispondi SOLO JSON (no testo extra):"""
+
+# ─── PROMPT: INTERPRETAZIONE RISULTATI ────────────────────────────────────────
+
+INTERPRET_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
+
+DOMANDA: {question}
+
+DATI:
+{data_summary}
+
+Scrivi 2-3 frasi da consulente. REGOLE:
+- Usa numeri ESATTI dai dati (importi, nomi, date)
+- Identifica il pattern principale o l'anomalia piu' interessante
+- NON dire "la tabella mostra", "ecco i dati" — analizza direttamente
+- Usa **grassetto** per cifre o categorie chiave
+- Chiudi con 1 raccomandazione concreta
+
+Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
+Esempi corretti: "Mostrami il trend dell'abbigliamento negli ultimi 6 mesi", "Quali sono le 5 spese piu' alte di trasporti?"
+NON includere suggerimenti di domande dentro il campo answer. Il campo answer contiene SOLO l'analisi.
+
+SOLO JSON: {{"answer": "...", "followup_questions": ["...", "..."]}}"""
+
+# ─── PROMPT: RISPOSTA TESTUALE IN-PERIMETER ────────────────────────────────────
+
+TEXT_ANSWER_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
+
+DATI UTENTE (ultimi 30gg):
+{compact_context}
+
+Rispondi alla domanda in 2-4 frasi. REGOLE:
+- Usa i numeri dal contesto quando utile
+- Sii diretto e pratico, dai consigli concreti
+- Usa **grassetto** per cifre o concetti chiave
+- Se non hai dati sufficienti per rispondere con certezza, dillo chiaramente
+
+Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
+Esempi corretti: "Mostrami il trend del cibo negli ultimi 3 mesi", "Qual e' la mia spesa media settimanale?"
+NON includere suggerimenti di domande dentro il campo answer. Il campo answer contiene SOLO la risposta.
+
+SOLO JSON: {{"answer": "...", "followup_questions": ["...", "..."]}}"""
+
+# ─── RISPOSTA FUORI PERIMETRO ──────────────────────────────────────────────────
+
+_OUT_OF_SCOPE = {
+    "answer": (
+        "Questa analisi non è ancora disponibile. Posso aiutarti con:\n\n"
+        "• **Spese per categoria** — questo mese o periodo custom\n"
+        "• **Top transazioni** più costose (con filtro per categoria)\n"
+        "• **Trend giornaliero** delle spese\n"
+        "• **Confronto mese** corrente vs precedente\n"
+        "• **Media per giorno** della settimana\n"
+        "• **Andamento mensile** di una categoria specifica\n"
+        "• **Statistiche** riassuntive (totale, media, conteggio)"
+    ),
+    "followup_questions": [
+        "Quali categorie hanno pesato di più questo mese?",
+        "Mostrami le 10 spese più alte degli ultimi 30 giorni",
+    ],
+}
+
+
+def _format_data_for_interpretation(chart_data, table_data) -> str:
+    parts = []
+    if chart_data:
+        parts.append(f"Grafico '{chart_data.get('title', '')}' ({chart_data.get('type', 'bar')}):")
+        for item in chart_data.get("data", [])[:15]:
+            parts.append(f"  {item.get('name')}: €{item.get('value')}")
+    if table_data:
+        headers = table_data.get("headers", [])
+        rows = table_data.get("rows", [])
+        parts.append(f"Tabella ({len(rows)} righe) — colonne: {', '.join(headers)}:")
+        for row in rows[:15]:
+            parts.append("  " + " | ".join(str(c) for c in row))
+    return "\n".join(parts) if parts else "Nessun dato trovato."
+
+
+def build_compact_context() -> str:
+    """Contesto minimo per risposte testuali: solo totali e top categorie."""
+    d30 = _dates(30)
+    d60 = _dates(60)
+    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d", {"d": d30})
+    total = round(row[0][0] or 0, 2) if row else 0
+    count = row[0][1] or 0 if row else 0
+    prev = round(_scalar(
+        "SELECT SUM(amount) FROM transactions WHERE date >= :d60 AND date < :d30",
+        {"d60": d60, "d30": d30}
+    ) or 0, 2)
+    cats = _q(
+        "SELECT category, SUM(amount) FROM transactions WHERE date >= :d "
+        "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5",
+        {"d": d30}
+    )
+    trend = f"+{round((total-prev)/prev*100,1)}%" if prev > 0 else "N/D"
+    cats_str = ", ".join(f"{c[0]} €{round(c[1],2)}" for c in cats)
+    return f"Totale 30gg: €{total} ({count} tx, {trend} vs mese prec.) | Top categorie: {cats_str}"
+
+
+def _answer_in_perimeter(question: str, compact_context: str) -> dict:
+    prompt = TEXT_ANSWER_PROMPT.format(compact_context=compact_context)
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": question},
+        ],
+        temperature=0.3,
+        max_tokens=400,
+    )
+    return _parse_ai_response(response.choices[0].message.content.strip())
+
+
+def _select_function(question: str, history) -> dict:
+    messages = [{"role": "system", "content": FUNCTION_SELECTOR_PROMPT}]
     if history:
-        for h in history[-4:]:
-            messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
-
+        for h in history[-2:]:
+            if h.get("role") == "user":
+                messages.append({"role": "user", "content": h.get("content", "")})
     messages.append({"role": "user", "content": question})
-
     response = client.chat.completions.create(
         model=MODEL,
         messages=messages,
-        temperature=0.1,
-        max_tokens=2500,
+        temperature=0,
+        max_tokens=200,
     )
+    return _parse_ai_response(response.choices[0].message.content.strip())
 
-    raw = response.choices[0].message.content.strip()
 
-    result = _parse_ai_response(raw)
-    return result
+def _interpret_results(question: str, data_summary: str) -> dict:
+    prompt = INTERPRET_PROMPT.format(question=question, data_summary=data_summary)
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Analizza."},
+        ],
+        temperature=0.3,
+        max_tokens=500,
+    )
+    return _parse_ai_response(response.choices[0].message.content.strip())
 
 
 def _parse_ai_response(raw: str) -> dict:
-    """Parsing robusto della risposta AI in JSON."""
     import re
-
-    # Rimuovi markdown wrapping
     cleaned = raw
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
@@ -167,189 +521,53 @@ def _parse_ai_response(raw: str) -> dict:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
         cleaned = cleaned.strip()
-
-    # Tentativo 1: parse diretto
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
-
-    # Tentativo 2: trova il primo blocco JSON { ... } nel testo
     match = re.search(r'\{[\s\S]*\}', cleaned)
     if match:
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
             pass
-
-    # Tentativo 3: estrai campi manualmente con regex
     answer_match = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
-    code_match = re.search(r'"python_code"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
-    code_null = re.search(r'"python_code"\s*:\s*null', cleaned)
-
     if answer_match:
         answer = answer_match.group(1).replace('\\"', '"').replace('\\n', '\n')
-        python_code = None
-        if code_match:
-            python_code = code_match.group(1).replace('\\n', '\n').replace('\\"', '"').replace('\\t', '\t')
         followups = []
         fq_match = re.search(r'"followup_questions"\s*:\s*\[(.*?)\]', cleaned, re.DOTALL)
         if fq_match:
             followups = re.findall(r'"((?:[^"\\]|\\.)*)"', fq_match.group(1))
-        return {
-            "answer": answer,
-            "python_code": python_code,
-            "followup_questions": followups,
-        }
-
-    # Fallback: testo come answer
-    return {
-        "answer": raw,
-        "python_code": None,
-        "followup_questions": [],
-    }
+        return {"answer": answer, "followup_questions": followups}
+    return {"answer": raw, "followup_questions": []}
 
 
-def _sanitize_code(code: str) -> str:
-    """Rimuove ridefinizioni di DB_PATH e riferimenti matplotlib dal codice generato."""
-    import re
-    lines = code.split("\n")
-    cleaned = []
-    for line in lines:
-        stripped = line.strip()
-        if re.match(r"^DB_PATH\s*=\s*['\"]", stripped):
-            continue
-        if re.match(r"^CHART_PATH\s*=\s*['\"]", stripped):
-            continue
-        if "matplotlib" in stripped and "import" in stripped:
-            continue
-        if stripped.startswith("plt."):
-            continue
-        line = re.sub(
-            r"plt\.savefig\([^)]*\)",
-            "",
-            line,
-        )
-        cleaned.append(line)
-    return "\n".join(cleaned)
-
-
-def execute_analysis_code(code: str) -> dict:
-    """Esegue il codice Python generato dall'AI in modo sicuro."""
-    code = _sanitize_code(code)
-    db_path = get_db_path()
-
-    chart_data = None
-    output_lines = []
-
-    namespace = {
-        "DB_PATH": db_path,
-        "__builtins__": __builtins__,
-    }
-
-    # Valida sintassi prima di eseguire — evita exec() su codice rotto
-    try:
-        compile(code, "<ai_code>", "exec")
-    except SyntaxError as se:
-        return {"output": "", "chart_data": None}
-
-    try:
-        import contextlib
-        stdout_capture = io.StringIO()
-        with contextlib.redirect_stdout(stdout_capture):
-            exec(code, namespace)
-
-        captured = stdout_capture.getvalue().strip()
-        if captured:
-            for line in captured.split("\n"):
-                if line.startswith("CHART_DATA:"):
-                    try:
-                        raw_chart = json.loads(line[len("CHART_DATA:"):])
-                        raw_chart["data"] = [
-                            item for item in raw_chart.get("data", [])
-                            if item.get("name") and str(item["name"]).lower() not in ("none", "null", "nan", "")
-                            and item.get("value") is not None and item["value"] > 0
-                        ]
-                        if raw_chart["data"]:
-                            chart_data = raw_chart
-                    except json.JSONDecodeError:
-                        pass
-                else:
-                    cleaned_line = line.strip()
-                    if cleaned_line and "None:" not in cleaned_line[:10]:
-                        output_lines.append(cleaned_line)
-
-    except Exception:
-        # Codice crashed — non mostrare errori tecnici all'utente
-        output_lines = []
-
-    # Fallback: se non c'e' CHART_DATA ma ci sono dati, prova a costruire un bar chart
-    if not chart_data and output_lines:
-        chart_data = _auto_chart_from_output(output_lines)
-
-    # Se c'e' un grafico, l'output testuale e' ridondante
-    if chart_data:
-        output_lines = []
-
-    return {
-        "output": "\n".join(output_lines),
-        "chart_data": chart_data,
-    }
-
-
-def _auto_chart_from_output(lines: list) -> dict:
-    """Tenta di costruire un chart automatico dall'output del codice."""
-    import re
-    items = []
-    for line in lines:
-        # Cerca pattern come "categoria: €123.45" o "categoria: €1.234,56" (virgola italiana)
-        m = re.match(r'^[\s]*([^:€\d]+?)[\s:]+€?\s*([\d]+[.,]?[\d]*)', line)
-        if m:
-            name = m.group(1).strip().capitalize()
-            # Normalizza numero: rimuovi punti migliaia, converti virgola decimale in punto
-            raw_num = m.group(2).replace(".", "").replace(",", ".")
-            try:
-                value = float(raw_num)
-            except ValueError:
-                continue
-            if name and value > 0:
-                items.append({"name": name, "value": round(value, 2)})
-    if len(items) >= 2:
-        return {"type": "bar", "data": items[:15], "title": "Analisi spese"}
-    return None
-
-
-BRIEFING_PROMPT = """Sei un analista finanziario AI. Hai accesso ai dati reali dell'utente:
+BRIEFING_PROMPT = """Sei un analista finanziario AI. Hai accesso ai dati REALI dell'utente:
 
 {context}
 
-Produci un briefing basato ESCLUSIVAMENTE sui numeri sopra. Non inventare dati, non fare supposizioni.
+REGOLA ASSOLUTA: usa SOLO i dati "ULTIMI 30 GIORNI" e "CATEGORIE ULTIMI 30 GIORNI". NON usare mai lo storico totale per il briefing.
 
-Rispondi SOLO con JSON (no markdown, no backtick):
+Produci 3 insight sul mese corrente (ultimi 30 giorni). Rispondi SOLO con JSON (no markdown, no backtick):
 {{"insights": [{{"title": "...", "body": "...", "type": "positive|warning|info"}}], "action": "..."}}
 
 Regole OBBLIGATORIE:
-- Esattamente 3 insight
-- Ogni body DEVE contenere numeri reali presi dal contesto (euro, percentuali, conteggi)
-- Esempio body corretto: "Cibo e' la categoria piu' costosa con 847 euro questo mese, il 36% del totale"
-- Esempio body SBAGLIATO: "Le tue spese sono elevate, considera di ridurle" (generico, nessun numero)
-- type: "warning" se la categoria supera il 30% del totale o e' aumentata, "positive" se e' diminuita, "info" per dati neutri
-- "action" deve citare una categoria specifica con importo reale: "Hai speso 847 euro in cibo questo mese (+12% vs mese scorso): prova a fissare un budget di 700 euro"
+- Ogni body usa numeri reali dai DATI MENSILI (non dal totale storico)
+- type: "warning" se categoria > 30% del mensile o trend positivo, "positive" se in calo, "info" neutro
+- "action" cita categoria specifica con €importo MENSILE reale e suggerimento concreto
+- Se trend vs mese prec. e' disponibile, citalo nell'insight principale
 - Rispondi in italiano"""
 
 _briefing_cache: dict = {"data": None, "ts": 0.0}
 
 
 def generate_briefing() -> dict:
-    """Genera il briefing AI giornaliero con cache 1h."""
     import time
     now = time.time()
     if _briefing_cache["data"] and (now - _briefing_cache["ts"]) < 3600:
         return _briefing_cache["data"]
 
-    db_path = get_db_path()
-    context = build_context(db_path)
-
+    context = build_context()
     try:
         response = client.chat.completions.create(
             model=MODEL,
@@ -384,24 +602,17 @@ def generate_briefing() -> dict:
 
 
 def get_anomalies() -> list:
-    """Rileva transazioni anomale (z-score > 1.5 per categoria, ultimi 60gg)."""
     import statistics
-    from collections import defaultdict as _dd
-
-    db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute(
+    d60 = _dates(60)
+    rows = _q(
         "SELECT id, amount, category, description, date FROM transactions "
-        "WHERE date >= date('now', '-60 days') ORDER BY date DESC"
+        "WHERE date >= :d ORDER BY date DESC",
+        {"d": d60}
     )
-    rows = cur.fetchall()
-    conn.close()
-
     if not rows:
         return []
 
-    by_cat: dict = _dd(list)
+    by_cat: dict = defaultdict(list)
     for row in rows:
         by_cat[row[2]].append(row)
 
@@ -433,24 +644,39 @@ def get_anomalies() -> list:
 
 
 def chat_with_ai(question: str, history=None) -> dict:
-    """Pipeline completa: domanda -> AI -> esecuzione codice -> risposta."""
-    ai_result = generate_analytics(question, history)
+    selector = _select_function(question, history)
+    use_function = selector.get("use_function")
+    in_perimeter = selector.get("in_perimeter", True)
 
-    answer = ai_result.get("answer", "")
-    chart_data = None
-    followups = ai_result.get("followup_questions", [])
+    if not in_perimeter:
+        return {
+            "answer": _OUT_OF_SCOPE["answer"],
+            "chart_data": None,
+            "data_table": None,
+            "followup_questions": _OUT_OF_SCOPE["followup_questions"],
+        }
 
-    python_code = ai_result.get("python_code")
-    if python_code:
-        exec_result = execute_analysis_code(python_code)
-        if exec_result["output"]:
-            answer += "\n\n" + exec_result["output"]
-        if exec_result["chart_data"]:
-            chart_data = exec_result["chart_data"]
+    if use_function and isinstance(use_function, dict):
+        fn_result = execute_prebuilt_function(
+            use_function.get("name", ""),
+            use_function.get("params") or {},
+        )
+        chart_data = fn_result.get("chart_data")
+        table_data = fn_result.get("table_data")
+        data_summary = _format_data_for_interpretation(chart_data, table_data)
+        interp = _interpret_results(question, data_summary)
+        return {
+            "answer": interp.get("answer", "Analisi completata.").strip(),
+            "chart_data": chart_data,
+            "data_table": table_data,
+            "followup_questions": interp.get("followup_questions", [])[:2],
+        }
 
+    compact_ctx = build_compact_context()
+    interp = _answer_in_perimeter(question, compact_ctx)
     return {
-        "answer": answer,
-        "chart_data": chart_data,
+        "answer": interp.get("answer", "").strip(),
+        "chart_data": None,
         "data_table": None,
-        "followup_questions": followups,
+        "followup_questions": interp.get("followup_questions", [])[:2],
     }

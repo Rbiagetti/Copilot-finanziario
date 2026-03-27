@@ -5,7 +5,16 @@ from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/fincopilot.db")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# psycopg2 vuole "postgresql://" ma Supabase/Render forniscono "postgres://"
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -51,17 +60,6 @@ class ChatHistory(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    # Migrazione colonne aggiunte dopo la creazione iniziale del DB
-    import sqlite3, os
-    db_path = DATABASE_URL.replace("sqlite:///", "")
-    if os.path.exists(db_path):
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        existing = [r[1] for r in cur.execute("PRAGMA table_info(transactions)").fetchall()]
-        if "is_recurring" not in existing:
-            cur.execute("ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0")
-            conn.commit()
-        conn.close()
 
 
 def get_db():
