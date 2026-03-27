@@ -18,6 +18,15 @@ export default function Sidebar() {
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    root.classList.add("theme-transitioning");
+    setDark((prev) => !prev);
+    window.setTimeout(() => {
+      root.classList.remove("theme-transitioning");
+    }, 520);
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -37,7 +46,7 @@ export default function Sidebar() {
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <button className="nav-item theme-toggle" onClick={() => setDark(!dark)} title={dark ? "Modalità chiara" : "Modalità scura"}>
+        <button className="nav-item theme-toggle" onClick={toggleTheme} title={dark ? "Modalità chiara" : "Modalità scura"}>
           {dark ? <Sun size={20} /> : <Moon size={20} />}
           <span>{dark ? "Chiara" : "Scura"}</span>
         </button>
