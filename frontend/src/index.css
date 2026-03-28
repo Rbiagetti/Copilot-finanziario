@@ -1519,3 +1519,261 @@ select option { background: #0d1e3a; color: var(--text); }
   .nav-item { font-size: 0.52rem; }
   .nav-item span { font-size: 0.52rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   UNIFIED RESPONSIVE NAVIGATION (Mobile & Small Screens)
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  /* 1. Trasformiamo la Sidebar in una Navbar orizzontale in basso */
+  .sidebar {
+    width: 100% !important;
+    height: 70px !important;
+    flex-direction: row !important;
+    top: auto !important;
+    bottom: 0 !important;
+    border-right: none !important;
+    border-top: 1px solid var(--glass-border);
+    padding: 0 1rem !important;
+    justify-content: space-around;
+    align-items: center;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  /* 2. Nascondiamo il logo in versione mobile per pulizia */
+  .sidebar-logo {
+    display: none !important;
+  }
+
+  /* 3. Uniformiamo la lista di navigazione */
+  .sidebar-nav {
+    flex-direction: row !important;
+    width: 100%;
+    justify-content: space-around;
+    padding: 0 !important;
+    gap: 0.5rem !important;
+  }
+
+  /* 4. Rendiamo i bottoni coerenti (Icona sopra, testo piccolo sotto o solo icona) */
+  .nav-item {
+    flex-direction: column !important;
+    gap: 4px !important;
+    padding: 8px 12px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.65rem !important; /* Testo minuscolo tipo iPhone */
+    width: auto !important;
+    min-width: 60px;
+    background: transparent !important;
+    transform: none !important; /* Rimuoviamo il traslateX della versione desktop */
+  }
+
+  /* 5. Feedback visuale identico alla versione desktop */
+  .nav-item:hover {
+    background: var(--glass-1) !important;
+    transform: translateY(-2px) !important; /* Su mobile meglio verso l'alto */
+  }
+
+  .nav-item.active {
+    box-shadow: 0 -4px 12px rgba(79,142,247,0.1) !important;
+  }
+
+  /* 6. Spostiamo il contenuto principale per non finire sotto la barra */
+  .main-content {
+    margin-left: 0 !important;
+    margin-bottom: 80px !important;
+    padding: 1.5rem 1rem !important;
+  }
+}
+
+/* 7. Animazione fluida globale per il cambio layout */
+.sidebar, .nav-item, .main-content {
+  transition: all var(--duration-base) var(--ease-spring-soft) !important;
+}
+
+/* --- Drill-down Card Styles --- */
+.kpi-card.has-drilldown {
+  position: relative;
+  cursor: pointer;
+  border: 1px dashed var(--glass-border-hi) !important;
+  transition: all var(--duration-base) var(--spring);
+}
+
+.kpi-card.has-drilldown:hover {
+  background: var(--glass-2) !important;
+  border-style: solid !important;
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+}
+
+.drilldown-icon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  opacity: 0.5;
+  color: var(--accent);
+  transition: transform var(--duration-fast) var(--spring);
+}
+
+.kpi-card.has-drilldown:hover .drilldown-icon {
+  opacity: 1;
+  transform: rotate(15deg) scale(1.2);
+}
+
+.kpi-card.customizable-mode {
+  animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+  0% { border-color: var(--glass-border); }
+  50% { border-color: var(--accent); }
+  100% { border-color: var(--glass-border); }
+}
+
+/* Fix Layout Grafici */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* Se un grafico deve essere a tutta larghezza su schermi grandi */
+.chart-full {
+  grid-column: 1 / -1;
+}
+
+/* Miglioria Tooltip Card */
+.card-detail-popover {
+  font-size: 0.75rem;
+  background: var(--glass-3);
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 4px;
+  border: 1px solid var(--accent);
+}
+
+/* Quick Actions Style - Liquid Glass */
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.quick-action-card {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  padding: 1.2rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  cursor: pointer;
+  transition: all var(--duration-base) var(--spring);
+  color: var(--text);
+  text-align: center;
+}
+
+.quick-action-card:hover {
+  background: var(--glass-2);
+  border-color: var(--accent);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.quick-action-card .icon-wrapper {
+  background: var(--glass-2);
+  padding: 10px;
+  border-radius: 12px;
+  color: var(--accent);
+  transition: transform var(--duration-fast) var(--spring);
+}
+
+.quick-action-card:hover .icon-wrapper {
+  transform: scale(1.1) rotate(-5deg);
+  background: var(--accent);
+  color: white;
+}
+
+.quick-action-card span {
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Empty State Top Spese */
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-dim);
+  background: var(--glass-1);
+  border-radius: 12px;
+  border: 1px dashed var(--glass-border);
+}
+
+/* Tooltip & Modal Theme Fix */
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+.custom-tooltip {
+  background: var(--glass-3) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border) !important;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+}
+
+.custom-tooltip p {
+  color: var(--text) !important;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.modal-box {
+  background: var(--bg-card) !important; /* Forza il background del tema */
+  color: var(--text) !important;
+  border: 1px solid var(--glass-border);
+}
+
+.tx-variation-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  margin-left: 8px;
+}
+
+.variation-up { background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
+
+/* --- FIX MODAL E RIGHE --- */
+.modal-box {
+  background: var(--bg-base) !important; 
+  color: var(--text) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.modal-box .tx-row {
+  background: transparent !important; /* Rimuove il grigio brutto */
+  border: none !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  border-radius: 0 !important;
+  padding: 12px 0 !important;
+  margin: 0 !important;
+}
+
+.modal-box .tx-row:last-child {
+  border-bottom: none !important;
+}
+
+/* Fix Layout Grafici per non avere buchi a destra */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}

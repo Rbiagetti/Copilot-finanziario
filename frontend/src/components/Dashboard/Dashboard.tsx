@@ -3,32 +3,17 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell,
 } from "recharts";
-import { getDashboard, getForecast, getBriefing, getAnomalies, getMonthlyHistory } from "../../api/client";
-import type { DashboardData, ForecastData, BriefingData, Anomaly } from "../../api/client";
+import { getDashboard, getForecast, getBriefing, getAnomalies, getTransactions } from "../../api/client";
+import type { DashboardData, ForecastData, BriefingData, Anomaly, Transaction } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import {
-  TrendingUp, TrendingDown, Euro, Tag, CalendarDays, BarChart3,
-  Sparkles, AlertTriangle, Target, RefreshCw,
+  TrendingUp, TrendingDown, Euro, AlertTriangle, Target, 
+  RefreshCw, Info, X, Sparkles, Plus, MessageSquare, PieChart
 } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 
-const COLORS = [
-  "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",
-  "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#64748b",
-];
-
-const EMOJI_MAP: Record<string, string> = {
-  cibo: "🍕", trasporti: "🚗", casa: "🏠", salute: "💊",
-  svago: "🎭", abbigliamento: "👕", lavoro: "💼",
-  abbonamenti: "📱", formazione: "🎓", altro: "❓",
-  intrattenimento: "🎭", shopping: "🛍️",
-};
-
-const INSIGHT_COLORS: Record<string, string> = {
-  positive: "#10b981",
-  warning: "#f59e0b",
-  info: "#6366f1",
-};
+const COLORS = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4"];
+const INSIGHT_COLORS: Record<string, string> = { positive: "#10b981", warning: "#f59e0b", info: "#6366f1" };
 
 export default function Dashboard() {
   const { setView } = useAppStore();
@@ -36,335 +21,211 @@ export default function Dashboard() {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
-  const [monthlyHistory, setMonthlyHistory] = useState<{ month: string; label: string; total: number }[]>([]);
-  const [loadingMain, setLoadingMain] = useState(true);
-  const [loadingBriefing, setLoadingBriefing] = useState(true);
-  const [showAnomalies, setShowAnomalies] = useState(false);
+  const [topTx, setTopTx] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingBriefing, setLoadingBriefing] = useState(false);
+  const [modalContent, setModalContent] = useState<{title: string, type: 'anomalies' | 'forecast'} | null>(null);
 
-  useEffect(() => {
-    Promise.allSettled([getDashboard(), getForecast(), getAnomalies(), getMonthlyHistory(6)])
-      .then(([dashRes, forecastRes, anomalyRes, historyRes]) => {
-        if (dashRes.status === "fulfilled") setData(dashRes.value.data);
-        if (forecastRes.status === "fulfilled") setForecast(forecastRes.value.data);
-        if (anomalyRes.status === "fulfilled") setAnomalies(anomalyRes.value.data.anomalies);
-        if (historyRes.status === "fulfilled") setMonthlyHistory(historyRes.value.data);
-      })
-      .finally(() => setLoadingMain(false));
-
-    getBriefing()
-      .then((res) => setBriefing(res.data))
-      .catch(() => setBriefing(null))
-      .finally(() => setLoadingBriefing(false));
-  }, []);
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [dash, fore, anom, txs] = await Promise.all([
+        getDashboard(), getForecast(), getAnomalies(), getTransactions({ limit: 50 })
+      ]);
+      setData(dash.data);
+      setForecast(fore.data);
+      setAnomalies(anom.data.anomalies || []);
+      
+      const rawTxs = txs.data.transactions || txs.data || [];
+      const sorted = [...rawTxs]
+        .filter(t => t.amount > 0)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+      setTopTx(sorted);
+    } catch (e) { console.error("Errore caricamento dati:", e); }
+    setLoading(false);
+  };
 
   const refreshBriefing = () => {
     setLoadingBriefing(true);
-    getBriefing()
-      .then((res) => setBriefing(res.data))
-      .catch(console.error)
-      .finally(() => setLoadingBriefing(false));
+    getBriefing().then(res => setBriefing(res.data)).catch(() => setBriefing(null)).finally(() => setLoadingBriefing(false));
   };
 
+  useEffect(() => { 
+    loadAll(); 
+    refreshBriefing(); 
+  }, []);
+
   const cc = useChartColors();
+  if (loading || !data) return <div className="loading">Sincronizzazione in corso...</div>;
 
-  if (loadingMain) return <div className="loading">Caricamento dashboard...</div>;
-  if (!data) return <div className="error">Errore nel caricamento</div>;
-  const isPositive = data.variation_pct >= 0;
-  const avgDaily = data.daily_trend.length > 0
-    ? data.daily_trend.reduce((s, d) => s + d.total, 0) / data.daily_trend.length
-    : 0;
   const sortedCats = [...data.by_category].sort((a, b) => b.total - a.total);
-
-  // Forecast progress bar
-  const forecastPct = forecast && data.total_month > 0
-    ? Math.min((forecast.projected_total / (data.total_month * (30 / (30 - forecast.days_remaining || 1)))) * 100, 150)
-    : 0;
-  const forecastColor = forecastPct > 120 ? "#f43f5e" : forecastPct > 100 ? "#f59e0b" : "#10b981";
 
   return (
     <div className="dashboard">
       <div className="dashboard-hero">
         <h2>Dashboard</h2>
-        <p className="dashboard-subtitle">
-          Una vista chiara delle tue spese, insight AI e azioni rapide.
-        </p>
+        <p className="dashboard-subtitle">Controllo totale del tuo ecosistema finanziario.</p>
       </div>
 
+      {/* BRIEFING AI */}
       <section className="dashboard-section section-insights">
         <div className="section-head">
-          <h3>Copilot Insights</h3>
-          <span className="section-kicker">Panoramica intelligente</span>
+          <div className="flex-row" style={{display:'flex', alignItems:'center', gap:'8px'}}>
+            <Sparkles size={18} color="var(--accent)"/> 
+            <h3>Copilot Insights</h3>
+          </div>
+          <button className="btn-icon" onClick={refreshBriefing} disabled={loadingBriefing}>
+            <RefreshCw size={14} className={loadingBriefing ? "spin" : ""} />
+          </button>
         </div>
-        <div className="briefing-card">
-          <div className="briefing-header">
-            <div className="briefing-title">
-              <Sparkles size={18} />
-              <span>Il tuo Copilota dice</span>
-            </div>
-            <button className="btn-icon" onClick={refreshBriefing} title="Aggiorna" disabled={loadingBriefing}>
-              <RefreshCw size={14} className={loadingBriefing ? "spin" : ""} />
-            </button>
-          </div>
-
-          {loadingBriefing ? (
-            <div className="briefing-skeleton">
-              <div className="skeleton-line" />
-              <div className="skeleton-line short" />
-              <div className="skeleton-line" />
-            </div>
-          ) : briefing ? (
-            <>
-              <div className="briefing-insights">
-                {briefing.insights.map((ins, i) => (
-                  <div key={i} className="briefing-insight" style={{ borderLeftColor: INSIGHT_COLORS[ins.type] }}>
-                    <span className="insight-title">{ins.title}</span>
-                    <span className="insight-body">{ins.body}</span>
-                  </div>
-                ))}
+        <div className="briefing-card card-glass">
+          {briefing?.insights && briefing.insights.length > 0 ? (
+            briefing.insights.map((ins, i) => (
+              <div key={i} className="briefing-insight" style={{ borderLeftColor: INSIGHT_COLORS[ins.type] || 'var(--accent)' }}>
+                <span className="insight-title">{ins.title}</span>
+                <span className="insight-body">{ins.body}</span>
               </div>
-              {briefing.action && (
-                <div className="briefing-action">
-                  <span>💡 </span>{briefing.action}
-                </div>
-              )}
-            </>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="dashboard-section section-overview">
-        <div className="section-head">
-          <h3>Cards Overview</h3>
-          <span className="section-kicker">Metriche principali</span>
-        </div>
-        <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-icon"><Euro size={24} /></div>
-            <div className="kpi-content">
-              <span className="kpi-label">Spese mese</span>
-              <span className="kpi-value">&euro;{data.total_month.toFixed(2)}</span>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon">
-              {isPositive ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-            </div>
-            <div className="kpi-content">
-              <span className="kpi-label">vs mese prec.</span>
-              <span className={`kpi-value ${isPositive ? "negative" : "positive"}`}>
-                {isPositive ? "+" : ""}{data.variation_pct.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon"><CalendarDays size={24} /></div>
-            <div className="kpi-content">
-              <span className="kpi-label">Media giornaliera</span>
-              <span className="kpi-value">&euro;{avgDaily.toFixed(2)}</span>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon"><Tag size={24} /></div>
-            <div className="kpi-content">
-              <span className="kpi-label">Top categoria</span>
-              <span className="kpi-value capitalize">{data.top_category}</span>
-            </div>
-          </div>
-
-          {/* Forecast KPI */}
-          {forecast && (
-            <div className="kpi-card kpi-forecast">
-              <div className="kpi-icon"><Target size={24} /></div>
-              <div className="kpi-content">
-                <span className="kpi-label">
-                  Previsione fine mese
-                  <span className={`confidence-badge ${forecast.confidence}`}>{forecast.confidence}</span>
-                </span>
-                <span className="kpi-value" style={{ color: forecastColor }}>
-                  &euro;{forecast.projected_total.toFixed(0)}
-                </span>
-                <div className="forecast-sub">
-                  burn: €{forecast.daily_burn_rate.toFixed(1)}/giorno · {forecast.days_remaining}gg al mese
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Anomalie KPI */}
-          {anomalies.length > 0 && (
-            <div className="kpi-card kpi-anomaly" onClick={() => setShowAnomalies(true)} style={{ cursor: "pointer" }}>
-              <div className="kpi-icon" style={{ color: "#f59e0b" }}><AlertTriangle size={24} /></div>
-              <div className="kpi-content">
-                <span className="kpi-label">Anomalie rilevate</span>
-                <span className="kpi-value" style={{ color: "#f59e0b" }}>{anomalies.length} spese</span>
-                <div className="forecast-sub">Clicca per vedere i dettagli</div>
-              </div>
-            </div>
+            ))
+          ) : (
+            <p className="text-dim" style={{padding:'1rem'}}>L'AI sta analizzando i tuoi movimenti...</p>
           )}
         </div>
       </section>
 
-      <section className="dashboard-section section-quick-actions">
-        <div className="section-head">
-          <h3>Quick Actions</h3>
-          <span className="section-kicker">Scorciatoie utili</span>
+      {/* KPI GRID */}
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <div className="kpi-icon"><Euro size={20} /></div>
+          <div className="kpi-content"><span className="kpi-label">Spese mese</span><span className="kpi-value">€{data.total_month.toFixed(2)}</span></div>
         </div>
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{color: data.variation_pct >= 0 ? "var(--danger)" : "var(--success)"}}>
+            {data.variation_pct >= 0 ? <TrendingUp size={20}/> : <TrendingDown size={20}/>}
+          </div>
+          <div className="kpi-content"><span className="kpi-label">vs mese prec.</span><span className="kpi-value" style={{color: data.variation_pct >= 0 ? "var(--danger)" : "var(--success)"}}>{data.variation_pct >= 0 ? "+" : ""}{data.variation_pct.toFixed(1)}%</span></div>
+        </div>
+        <div className="kpi-card has-drilldown" onClick={() => setModalContent({title: 'Analisi Previsionale', type: 'forecast'})}>
+          <Info size={14} className="drilldown-icon" />
+          <div className="kpi-icon" style={{color:'var(--accent)'}}><Target size={20} /></div>
+          <div className="kpi-content"><span className="kpi-label">Target fine mese</span><span className="kpi-value">€{forecast?.projected_total.toFixed(0) || "---"}</span></div>
+        </div>
+        <div className="kpi-card has-drilldown" onClick={() => setModalContent({title: 'Dettaglio Anomalie', type: 'anomalies'})}>
+          <Info size={14} className="drilldown-icon" />
+          <div className="kpi-icon" style={{color:'var(--warning)'}}><AlertTriangle size={20} /></div>
+          <div className="kpi-content"><span className="kpi-label">Anomalie AI</span><span className="kpi-value" style={{color:'var(--warning)'}}>{anomalies.length} rilevate</span></div>
+        </div>
+      </div>
+
+      {/* QUICK ACTIONS */}
+      <section className="dashboard-section" style={{marginTop:'1.5rem'}}>
         <div className="quick-actions-grid">
-          <button className="quick-action-card" onClick={() => setView("transactions")}>
-            <span className="quick-action-title">Aggiungi una spesa</span>
-            <span className="quick-action-copy">Apri la sezione Transazioni e registra un movimento.</span>
-          </button>
-          <button className="quick-action-card" onClick={() => setView("chat")}>
-            <span className="quick-action-title">Apri Chat AI</span>
-            <span className="quick-action-copy">Fai una domanda in linguaggio naturale sulle tue spese.</span>
-          </button>
-          <button className="quick-action-card" onClick={() => setView("budget")}>
-            <span className="quick-action-title">Gestisci budget</span>
-            <span className="quick-action-copy">Configura limiti per categoria e monitora gli sforamenti.</span>
-          </button>
-          <button className="quick-action-card" onClick={refreshBriefing}>
-            <span className="quick-action-title">Rigenera insight</span>
-            <span className="quick-action-copy">Aggiorna briefing e segnali principali con un tap.</span>
-          </button>
+          <div className="quick-action-card" onClick={() => setView("transactions")}>
+            <div className="icon-wrapper"><Plus size={22}/></div>
+            <span>Nuova Spesa</span>
+          </div>
+          <div className="quick-action-card" onClick={() => setView("chat")}>
+            <div className="icon-wrapper"><MessageSquare size={22}/></div>
+            <span>Chiedi all'AI</span>
+          </div>
+          <div className="quick-action-card" onClick={() => setView("budget")}>
+            <div className="icon-wrapper"><PieChart size={22}/></div>
+            <span>Vedi Budget</span>
+          </div>
+          <div className="quick-action-card" onClick={() => loadAll()}>
+            <div className="icon-wrapper"><RefreshCw size={22}/></div>
+            <span>Aggiorna Dati</span>
+          </div>
         </div>
       </section>
 
+      {/* GRAFICI */}
       <section className="dashboard-section section-analytics">
-        <div className="section-head">
-          <h3>Charts & Analytics</h3>
-          <span className="section-kicker">Pattern e trend</span>
-        </div>
         <div className="charts-grid">
           <div className="chart-card">
             <h3>Spese per categoria</h3>
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={sortedCats} margin={{ bottom: 55, left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
-                <XAxis
-                  dataKey="category"
-                  tick={{ fill: cc.tick, fontSize: 11 }}
-                  angle={-40}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis tick={{ fill: cc.tick, fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
-                <Tooltip
-                  contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8 }}
-                  labelStyle={{ color: cc.tooltipText, textTransform: "capitalize" }}
-                  itemStyle={{ color: cc.tooltipItem }}
-                  formatter={(value: number) => [`€${value.toFixed(2)}`, "Totale"]}
-                />
-                <Bar dataKey="total" radius={[6, 6, 0, 0]} cursor={{ fill: cc.cursorFill }}>
-                  {sortedCats.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={sortedCats}>
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+                <XAxis dataKey="category" tick={{fill: cc.tick, fontSize: 10}} angle={-20} textAnchor="end" height={50} />
+                <YAxis tick={{fill: cc.tick, fontSize: 10}} />
+                <Tooltip contentStyle={{background: cc.tooltipBg, border: 'none', color: cc.tick, borderRadius: 8}} />
+                <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                  {sortedCats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-
-          <div className="chart-card chart-full">
-            <h3>Trend giornaliero (30gg)</h3>
+          <div className="chart-card">
+            <h3>Trend Giornaliero (30gg)</h3>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={data.daily_trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: cc.tick, fontSize: 11 }}
-                  tickFormatter={(v) => v.slice(5)}
-                />
-                <YAxis tick={{ fill: cc.tick }} />
-                <Tooltip
-                  contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8 }}
-                  labelStyle={{ color: cc.tooltipText }}
-                  itemStyle={{ color: cc.tooltipItem }}
-                  formatter={(value: number) => [`€${value.toFixed(2)}`, "Spese"]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={{ fill: "#6366f1", r: 3 }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+                <XAxis dataKey="date" tickFormatter={v => v.slice(-2)} tick={{fill: cc.tick}} />
+                <YAxis tick={{fill: cc.tick}} />
+                <Tooltip contentStyle={{background: cc.tooltipBg, border: 'none', color: cc.tick, borderRadius: 8}} />
+                <Line type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={3} dot={{ r: 4, fill: 'var(--accent)' }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-
-          {monthlyHistory.length > 0 && (
-            <div className="chart-card chart-full" style={{ marginTop: "1.5rem" }}>
-              <h3>Storico mensile (6 mesi)</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={monthlyHistory} margin={{ left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
-                  <XAxis dataKey="label" tick={{ fill: cc.tick, fontSize: 11 }} />
-                  <YAxis tick={{ fill: cc.tick, fontSize: 11 }} tickFormatter={(v) => `€${v}`} />
-                  <Tooltip
-                    contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8 }}
-                    labelStyle={{ color: cc.tooltipText }}
-                    itemStyle={{ color: cc.tooltipItem }}
-                    formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]}
-                  />
-                  <Bar dataKey="total" radius={[6, 6, 0, 0]} cursor={{ fill: cc.cursorFill }}>
-                    {monthlyHistory.map((_, i) => (
-                      <Cell key={i} fill={i === monthlyHistory.length - 1 ? "#6366f1" : "#3b3b6b"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          <div className="chart-card top-categories">
-            <h3><BarChart3 size={18} /> Classifica categorie mese</h3>
-            <div className="cat-ranking">
-              {sortedCats.map((c, i) => {
-                const pct = data.total_month > 0 ? (c.total / data.total_month) * 100 : 0;
-                return (
-                  <div key={c.category} className="cat-rank-row">
-                    <span className="cat-rank-pos">#{i + 1}</span>
-                    <span className="cat-rank-emoji">{EMOJI_MAP[c.category] || "❓"}</span>
-                    <span className="cat-rank-name capitalize">{c.category}</span>
-                    <div className="cat-rank-bar">
-                      <div
-                        className="cat-rank-fill"
-                        style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }}
-                      />
-                    </div>
-                    <span className="cat-rank-amount">&euro;{c.total.toFixed(2)}</span>
-                    <span className="cat-rank-pct">{pct.toFixed(0)}%</span>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
       </section>
 
-      {/* === MODAL ANOMALIE === */}
-      {showAnomalies && (
-        <div className="modal-overlay" onClick={() => setShowAnomalies(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>⚠️ Spese anomale rilevate</h3>
-              <button className="btn-icon" onClick={() => setShowAnomalies(false)}>✕</button>
+      {/* TOP SPESE RILEVATE */}
+      <section className="dashboard-section">
+        <div className="section-head"><h3>Spese più elevate (30gg)</h3></div>
+        <div className="card-glass" style={{padding: '0.5rem'}}>
+          {topTx.length > 0 ? topTx.map(tx => (
+            <div key={tx.id} className="tx-row" style={{padding: '12px', borderBottom: '1px solid var(--glass-border)'}}>
+              <div className="tx-info">
+                <span style={{fontWeight: 600, color: 'var(--text)'}}>{tx.description || tx.category}</span>
+                <small style={{display:'block', color:'var(--text-dim)'}}>{tx.date} • {tx.category}</small>
+              </div>
+              <div className="tx-amount negative" style={{fontWeight: 700}}>€{tx.amount.toFixed(2)}</div>
             </div>
-            <p className="modal-sub">Transazioni significativamente superiori alla media della categoria (ultimi 60gg)</p>
-            <div className="anomaly-list">
-              {anomalies.map((a) => (
-                <div key={a.id} className="anomaly-row">
-                  <span className="anomaly-emoji">{EMOJI_MAP[a.category] || "❓"}</span>
-                  <div className="anomaly-info">
-                    <span className="anomaly-desc">{a.description || a.category}</span>
-                    <span className="anomaly-date">{a.date} · media categoria: €{a.avg_category.toFixed(2)}</span>
+          )) : <div className="empty-state">Nessuna spesa rilevante trovata.</div>}
+        </div>
+      </section>
+
+      {/* MODAL - Riprogettato per Leggibilità e Glassmorphism */}
+      {modalContent && (
+        <div className="modal-overlay" onClick={() => setModalContent(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--glass-border)' }}>
+            <div className="modal-header">
+              <h3 style={{ color: 'var(--text)' }}>{modalContent.title}</h3>
+              <button className="btn-icon" onClick={() => setModalContent(null)}><X size={18}/></button>
+            </div>
+            <div style={{padding: '0.5rem 1.2rem 1.2rem'}}>
+              {modalContent.type === 'anomalies' && anomalies.map((a, i) => {
+                const diff = ((a.amount - a.avg_category) / a.avg_category * 100).toFixed(0);
+                return (
+                  <div key={i} className="tx-row" style={{
+                    background: 'var(--glass-1)', // Ritorna l'effetto "pillola", ma segue il tema
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: '12px',
+                    padding: '12px 16px',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div className="tx-info">
+                      <span style={{color: 'var(--text)', fontWeight: 500, display: 'block'}}>{a.description || a.category}</span>
+                      <small style={{color:'var(--text-dim)'}}>Media: €{a.avg_category.toFixed(0)}</small>
+                    </div>
+                    <div style={{textAlign: 'right'}}>
+                      <div className="negative" style={{fontWeight:700, fontSize: '1.1rem'}}>€{a.amount}</div>
+                      <span className="tx-variation-badge variation-up">+{diff}%</span>
+                    </div>
                   </div>
-                  <div className="anomaly-amount">
-                    <span className="anomaly-val">€{a.amount.toFixed(2)}</span>
-                    <span className="anomaly-pct">+{a.pct_above_avg}% dalla media</span>
-                  </div>
+                );
+              })}
+              {modalContent.type === 'forecast' && (
+                <div style={{color: 'var(--text)', paddingTop: '10px'}}>
+                  <p>Burn Rate: <strong>€{forecast?.daily_burn_rate.toFixed(2)}/gg</strong></p>
+                  <p style={{marginTop: '10px'}}>Confidenza AI: <span className="badge info">{forecast?.confidence}</span></p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
