@@ -242,7 +242,7 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="chat-container">
+    <div className="chat-container animate-in">
       <div className="chat-header">
         <Sparkles size={22} />
         <div>

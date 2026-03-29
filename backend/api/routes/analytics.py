@@ -6,9 +6,15 @@ from datetime import date, timedelta
 import calendar
 
 from backend.core.database import get_db, Transaction
-from backend.api.models.schemas import DashboardResponse
+from backend.api.models.schemas import DashboardResponse, FullHistoryResponse
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+
+
+@router.get("/full-history", response_model=List[FullHistoryResponse])
+async def get_full_history(db: Session = Depends(get_db)):
+    """Restituisce tutte le transazioni con campi minimi per aggregazione frontend."""
+    return db.query(Transaction).order_by(Transaction.date.desc()).all()
 
 
 @router.get("/dashboard", response_model=DashboardResponse)

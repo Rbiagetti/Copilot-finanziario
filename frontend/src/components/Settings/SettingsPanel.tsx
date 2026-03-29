@@ -16,7 +16,7 @@ export default function SettingsPanel() {
   };
 
   return (
-    <div className="settings-page">
+    <div className="settings-page animate-in">
       <h2>Impostazioni</h2>
       <div className="settings-card">
         <div className="settings-row">

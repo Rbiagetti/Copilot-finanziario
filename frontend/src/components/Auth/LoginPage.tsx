@@ -20,7 +20,11 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
       const { error: err } = await signIn(email, password);
       setLoading(false);
       if (err) {
-        setError("Email o password non corretti.");
+        if (err.status === 429) {
+          setError("Troppe richieste. Per favore attendi qualche minuto prima di riprovare.");
+        } else {
+          setError(err.status === 400 ? "Credenziali errate." : "Errore durante l'accesso.");
+        }
       } else {
         onLogin();
       }
@@ -28,7 +32,11 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
       const { error: err } = await signUp(email, password);
       setLoading(false);
       if (err) {
-        setError(err.message);
+        if (err.status === 429) {
+          setError("Limite di registrazioni raggiunto per ora. Attendi qualche minuto.");
+        } else {
+          setError(err.message);
+        }
       } else {
         setInfo("Registrazione completata! Controlla la tua email per confermare l'account, poi accedi.");
         setMode("login");

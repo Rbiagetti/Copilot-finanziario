@@ -1770,18 +1770,22 @@ button:active,
 }
 
 .custom-tooltip {
-  background: var(--glass-3) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--glass-border) !important;
-  padding: 10px;
-  border-radius: 8px;
-  box-shadow: var(--shadow-lg);
+  background: rgba(8, 12, 20, 0.98) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--accent) !important;
+  padding: 12px 16px;
+  border-radius: 14px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  color: white !important;
+  z-index: 10000;
+  pointer-events: none;
 }
 
 .custom-tooltip p {
-  color: var(--text) !important;
+  color: white !important;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 /* --- Dashboard 2.0 Education UI --- */
@@ -1917,31 +1921,68 @@ button:active,
 
 /* --- UX MOTION & AUDIT ANIMATIONS --- */
 @keyframes scaleUpFade {
-  0% { opacity: 0; transform: scale(0.96) translateY(10px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  0% { opacity: 0; transform: scale(0.96) translateY(20px); filter: blur(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
 }
 
-/* Entry animations per Card Strutturali con Staggering */
-.kpi-card, .chart-card, .briefing-card, .tx-row {
-  animation: scaleUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+.animate-in {
+  animation: scaleUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Stagger KPI */
-.kpi-card:nth-child(1) { animation-delay: 0.1s; }
-.kpi-card:nth-child(2) { animation-delay: 0.18s; }
-.kpi-card:nth-child(3) { animation-delay: 0.26s; }
-.kpi-card:nth-child(4) { animation-delay: 0.34s; }
+/* Helper per lo staggering dei figli (fino a 10 elementi) */
+.stagger-in > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-in > *:nth-child(2) { animation-delay: 0.12s; }
+.stagger-in > *:nth-child(3) { animation-delay: 0.19s; }
+.stagger-in > *:nth-child(4) { animation-delay: 0.26s; }
+.stagger-in > *:nth-child(5) { animation-delay: 0.33s; }
+.stagger-in > *:nth-child(6) { animation-delay: 0.40s; }
+.stagger-in > *:nth-child(n+7) { animation-delay: 0.45s; }
 
-/* Stagger Charts */
-.chart-card:nth-child(1) { animation-delay: 0.15s; }
-.chart-card:nth-child(2) { animation-delay: 0.25s; }
+/* Entry animations per Card Strutturali nella Dashboard (Manteniamo compatibilità) */
+.kpi-card, .chart-card, .briefing-card, .tx-row, .transactions-page, .chat-interface {
+  animation: scaleUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
-/* Stagger Transazioni in lista (fino a 10 per fluidità, il resto appare subito) */
-.tx-table .tx-row:nth-child(1) { animation-delay: 0.05s; }
-.tx-table .tx-row:nth-child(2) { animation-delay: 0.08s; }
-.tx-table .tx-row:nth-child(3) { animation-delay: 0.11s; }
-.tx-table .tx-row:nth-child(4) { animation-delay: 0.14s; }
-.tx-table .tx-row:nth-child(5) { animation-delay: 0.17s; }
-.tx-table .tx-row:nth-child(n+6) { animation-delay: 0.20s; }
+/* --- Dashboard 3.0 Filters --- */
+.input-minimal {
+  background: transparent !important;
+  border: none !important;
+  color: var(--text) !important;
+  font-family: inherit !important;
+  outline: none !important;
+  border-bottom: 1px solid transparent !important;
+  transition: border-color 0.2s !important;
+  cursor: pointer !important;
+  padding: 2px 4px !important;
+}
+
+.input-minimal:hover, .input-minimal:focus {
+  border-bottom: 1px solid var(--accent) !important;
+}
+
+.text-dim {
+  color: var(--text-dim) !important;
+}
+
+.flex-row {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.flex-col {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.badge.info {
+  background: rgba(99, 102, 241, 0.2) !important;
+  color: #818cf8 !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 
 

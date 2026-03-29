@@ -85,3 +85,17 @@ class DashboardResponse(BaseModel):
     top_category: str
     by_category: List[Dict]
     daily_trend: List[Dict]
+
+
+class FullHistoryResponse(BaseModel):
+    id: int
+    amount: float
+    category: str
+    date: str
+    time: Optional[str] = None
+    account: str = "principale"
+    tags: Optional[str] = None
+    is_recurring: Optional[bool] = False
+
+    class Config:
+        from_attributes = True

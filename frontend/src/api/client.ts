@@ -14,6 +14,20 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Gestione errori globali (es. 401 Unauthorized)
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      console.warn("Sessione scaduta o non valida. Disconnessione...");
+      const { signOut } = await import("../lib/supabase");
+      await signOut();
+      window.location.reload(); // Forza il reset dell'app allo stato di login
+    }
+    return Promise.reject(error);
+  }
+);
+
 export interface Transaction {
   id: number;
   amount: number;
@@ -35,6 +49,17 @@ export interface DashboardData {
   top_category: string;
   by_category: { category: string; total: number }[];
   daily_trend: { date: string; total: number }[];
+}
+
+export interface FullHistoryTransaction {
+  id: number;
+  amount: number;
+  category: string;
+  date: string;
+  time: string | null;
+  account: string;
+  tags: string | null;
+  is_recurring: boolean;
 }
 
 export interface TableData {
@@ -117,6 +142,7 @@ export const getForecast = () => api.get<ForecastData>("/analytics/forecast");
 export const getMonthlyHistory = (months = 6) => api.get<{ month: string; label: string; total: number }[]>(`/analytics/monthly-history?months=${months}`);
 export const getBriefing = () => api.get<BriefingData>("/ai/briefing");
 export const getAnomalies = () => api.get<{ anomalies: Anomaly[]; count: number }>("/ai/anomalies");
+export const getFullHistory = () => api.get<FullHistoryTransaction[]>("/analytics/full-history");
 
 export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>
   api.put<Transaction>(`/transactions/${id}`, data);

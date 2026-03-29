@@ -3,11 +3,12 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.database import init_db
 from backend.api.routes import transactions, analytics, chat, budgets, ai
+from backend.api.auth import get_current_user
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,12 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes
-app.include_router(transactions.router)
-app.include_router(analytics.router)
-app.include_router(chat.router)
-app.include_router(budgets.router)
-app.include_router(ai.router)
+# Routes - Protette da JWT Supabase
+app.include_router(transactions.router, dependencies=[Depends(get_current_user)])
+app.include_router(analytics.router, dependencies=[Depends(get_current_user)])
+app.include_router(chat.router, dependencies=[Depends(get_current_user)])
+app.include_router(budgets.router, dependencies=[Depends(get_current_user)])
+app.include_router(ai.router, dependencies=[Depends(get_current_user)])
 
 @app.get("/api/v1/health")
 async def health():

@@ -41,7 +41,11 @@ class VoiceService {
     rec.continuous = options.continuous ?? true;
     rec.interimResults = options.interimResults ?? true;
 
+    // Sincronizzazione immediata: evitiamo il delay di onstart
+    this.isActive = true;
+
     rec.onstart = () => {
+      // Conferma che è partito, ma lo stato è già pronto
       this.isActive = true;
     };
 

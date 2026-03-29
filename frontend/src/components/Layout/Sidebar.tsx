@@ -1,5 +1,6 @@
 import { useAppStore } from "../../store/appStore";
-import { LayoutDashboard, MessageCircle, Wallet, List, Settings, Mic } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Wallet, List, Settings, Mic, LogOut } from "lucide-react";
+import { signOut } from "../../lib/supabase";
 
 const NAV_ITEMS = [
   { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
@@ -15,6 +16,10 @@ export default function Sidebar() {
   const startVoiceTransaction = () => {
     setView("transactions");
     setAutoStartVoice(true);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
   };
 
   return (
@@ -50,6 +55,13 @@ export default function Sidebar() {
           <span style={{fontWeight: 600}}>Voce Rapida</span>
         </button>
       </nav>
+
+      <div className="sidebar-footer" style={{ marginTop: 'auto', padding: '1rem' }}>
+        <button className="nav-item text-dim" onClick={handleLogout} style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--text-dim)' }}>
+          <LogOut size={20} />
+          <span>Disconnetti</span>
+        </button>
+      </div>
     </aside>
   );
 }

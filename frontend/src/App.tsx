@@ -28,13 +28,20 @@ function App() {
   const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL;
 
   if (supabaseConfigured && session === undefined) {
-    return <div className="loading">Caricamento...</div>;
+    return (
+      <div className="loading-screen" style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+        <div className="spin" style={{ width: '40px', height: '40px', border: '3px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%' }}></div>
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>Verifica sessione in corso...</p>
+      </div>
+    );
   }
 
   if (supabaseConfigured && !session) {
     return (
       <LoginPage
-        onLogin={() => supabase.auth.getSession().then(({ data }) => setSession(data.session))}
+        onLogin={() => {
+          supabase.auth.getSession().then(({ data }) => setSession(data.session));
+        }}
       />
     );
   }

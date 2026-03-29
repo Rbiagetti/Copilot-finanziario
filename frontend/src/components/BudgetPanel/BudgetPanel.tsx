@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { getBudgetStatus, createBudget, deleteBudget, updateBudget } from "../../api/client";
+import { getBudgetStatus, createBudget, deleteBudget } from "../../api/client";
 import type { BudgetStatus } from "../../api/client";
-import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2, Pencil } from "lucide-react";
+import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CATEGORIES = [
@@ -28,8 +28,6 @@ export default function BudgetPanel() {
   const [loading, setLoading] = useState(true);
   const [newCat, setNewCat] = useState("cibo");
   const [newAmount, setNewAmount] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editAmount, setEditAmount] = useState("");
 
   const load = () => {
     setLoading(true);
@@ -76,7 +74,7 @@ export default function BudgetPanel() {
   };
 
   return (
-    <div className="budget-page">
+    <div className="budget-page animate-in">
       <h2>Budget mensili</h2>
 
       <form className="budget-form" onSubmit={handleAdd}>

@@ -4,6 +4,7 @@ import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
+import { useAppStore } from "../../store/appStore";
 
 const EMOJI_MAP: Record<string, string> = {
   cibo: "🍕", trasporti: "🚗", casa: "🏠", salute: "💊",
@@ -65,6 +66,20 @@ export default function TransactionList() {
     const t = setTimeout(() => setSearch(searchInput), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // DRILLDOWN: Carica filtri dalla Dashboard
+  const { dashboardFilter, setDashboardFilter } = useAppStore();
+  useEffect(() => {
+    if (Object.keys(dashboardFilter).length > 0) {
+      if (dashboardFilter.category) setFilter(dashboardFilter.category);
+      if (dashboardFilter.tags) setSearchInput(dashboardFilter.tags);
+      // Trasformazione date in daysRange approssimativo (o gestiamo date_from direttamente)
+      // Per semplicità usiamo i campi esistenti se possibile
+      
+      // Resetta il filtro globale dopo l'applicazione per permettere navigazioni pulite successive
+      setDashboardFilter({});
+    }
+  }, [dashboardFilter, setDashboardFilter]);
 
   const clearFilters = () => {
     setFilter(""); setSearch(""); setSearchInput(""); setDaysRange(365); setSortBy("date_desc");
@@ -131,7 +146,7 @@ export default function TransactionList() {
   };
 
   return (
-    <div className="transactions-page">
+    <div className="transactions-page animate-in">
       <TransactionForm onAdded={load} />
 
       <div className="transactions-list">
