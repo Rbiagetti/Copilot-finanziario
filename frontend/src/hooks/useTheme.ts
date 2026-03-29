@@ -25,5 +25,9 @@ export function useChartColors() {
     legendText: isDark ? "rgba(160,190,230,0.8)" : "#444",
     gridStroke: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)",
     cursorFill: isDark ? "rgba(255,255,255,0.04)" : "rgba(79,142,247,0.06)",
+    success: "#10b981",
+    warning: "#f59e0b",
+    danger: "#f43f5e",
+    neutral: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
   };
 }

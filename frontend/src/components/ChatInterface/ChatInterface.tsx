@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { sendChat } from "../../api/client";
 import type { ChatResponse } from "../../api/client";
 import { Send, Bot, User, Sparkles, RefreshCw, Mic, MicOff } from "lucide-react";
+import { voiceService } from "../../utils/voiceService";
 import { useChartColors } from "../../hooks/useTheme";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -106,7 +107,7 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
               interval={manyItems ? Math.floor(chartData.data.length / 8) : 0}
             />
             <YAxis tick={{ fill: cc.tick, fontSize: 11 }} />
-            <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Spese"]} />
+            <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: any) => v !== undefined ? [`€${Number(v).toFixed(2)}`, "Spese"] : ["-", "Spese"]} />
             <Line
               type="monotone"
               dataKey="value"
@@ -135,8 +136,8 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
             interval={0}
           />
           <YAxis tick={{ fill: cc.tick, fontSize: 11 }} />
-          <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: number) => [`€${v.toFixed(2)}`, "Totale"]} />
-          <Bar dataKey="value" radius={[6, 6, 0, 0]} cursor={{ fill: cc.cursorFill }}>
+          <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: any) => v !== undefined ? [`€${Number(v).toFixed(2)}`, "Totale"] : ["-", "Totale"]} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.data.map((_, i) => (
               <Cell key={i} fill={COLORS[i % COLORS.length]} />
             ))}
@@ -155,52 +156,48 @@ export default function ChatInterface() {
   const [loading, setLoading] = useState(false);
   const [chartErrors, setChartErrors] = useState<Set<number>>(new Set());
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const listeningRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  
+  // Singleton manages recognition
 
-  const startRecognition = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    const rec = new SpeechRecognition();
-    rec.lang = "it-IT";
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e: any) => {
-      const last = e.results[e.results.length - 1];
-      if (last.isFinal) setInput((prev) => prev + last[0].transcript + " ");
-    };
-    rec.onend = () => {
-      if (listeningRef.current) startRecognition(); // browser stopped it, restart
-    };
-    rec.onerror = (e: any) => {
-      if (e.error === "no-speech") return; // ignore silence, onend will restart
-      listeningRef.current = false;
-      setListening(false);
-    };
-    recognitionRef.current = rec;
-    rec.start();
-  };
+
+  // startRecognition rimossa: la logica è nel singleton voiceService
+
 
   const toggleVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    if (listeningRef.current) {
-      listeningRef.current = false;
-      recognitionRef.current?.stop();
+    if (voiceService.isListening()) {
+      voiceService.stop();
       setListening(false);
       return;
     }
 
-    listeningRef.current = true;
+    voiceService.start({
+      continuous: true,
+      interimResults: false,
+      onResult: (transcript, isFinal) => {
+        if (isFinal) setInput((prev) => prev + transcript + " ");
+      },
+      onError: () => {
+        setListening(false);
+      },
+      onEnd: () => {
+        setListening(false);
+      }
+    });
+
     setListening(true);
-    startRecognition();
   };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // CLEANUP PRIVACY: Assicura che il mic si spenga se l'utente cambia pagina o chiude il componente
+  useEffect(() => {
+    return () => {
+      voiceService.stop();
+    };
+  }, []);
 
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();

@@ -106,6 +106,7 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
+  scroll-behavior: smooth;
 }
 
 /* Ambient gradient orbs */
@@ -239,6 +240,7 @@ html.theme-transitioning * {
   display: flex;
   flex-direction: column;
   gap: 1.15rem;
+  animation: fadeIn var(--duration-base) var(--ease-out) both;
 }
 .dashboard-hero {
   display: flex;
@@ -567,7 +569,18 @@ select option { background: #0d1e3a; color: var(--text); }
     opacity var(--duration-fast),
     transform var(--duration-fast) var(--ease-spring-snappy),
     box-shadow var(--duration-fast);
-  box-shadow: 0 4px 16px rgba(79,142,247,0.3);
+  box-shadow: 0 4px 16px rgba(79, 142, 247, 0.3);
+}
+
+/* Tactile feedback for all interactions */
+button:active, 
+.btn-primary:active, 
+.btn-icon:active, 
+.nav-item:active, 
+.cat-btn:active, 
+.kpi-card:active {
+  transform: scale(0.96) !important;
+  transition: transform 0.05s ease !important;
 }
 .btn-primary:hover {
   opacity: 0.9;
@@ -1065,18 +1078,18 @@ select option { background: #0d1e3a; color: var(--text); }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .modal-box {
-  background: linear-gradient(135deg, rgba(13,30,58,0.92), rgba(8,20,40,0.96));
+  background: var(--bg-card);
+  color: var(--text);
   backdrop-filter: var(--blur-lg) saturate(200%);
   -webkit-backdrop-filter: var(--blur-lg) saturate(200%);
-  border: 1px solid var(--glass-border-hi);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   padding: 1.5rem;
   max-width: 560px; width: 100%;
   max-height: 80vh; overflow-y: auto;
   box-shadow: 0 40px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
-  animation: slideUp var(--duration-base) var(--ease-spring-soft) 70ms both;
+  animation: scaleUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
 .modal-sub { font-size: 0.80rem; color: var(--text-muted); margin-bottom: 1.25rem; }
 .anomaly-list { display: flex; flex-direction: column; gap: 0.65rem; }
@@ -1323,7 +1336,8 @@ select option { background: #0d1e3a; color: var(--text); }
   .smart-row input { min-width: 0; }
   .category-grid { gap: 0.3rem; }
   .cat-btn { padding: 0.35rem 0.55rem; font-size: 0.72rem; }
-  .budget-form { flex-direction: column; }
+  .budget-form { flex-direction: column; width: 100%; align-items: stretch; }
+  .budget-form select, .budget-form input { width: 100%; }
   .budget-form .btn-primary { width: 100%; }
   .chat-welcome { padding: 1.5rem; }
   .chat-welcome h3 { font-size: 1rem; }
@@ -1342,6 +1356,7 @@ select option { background: #0d1e3a; color: var(--text); }
 @media (max-width: 640px) {
   /* ── Sidebar → bottom tab bar ── */
   .sidebar {
+    position: fixed !important;
     width: 100% !important;
     height: 62px;
     top: auto;
@@ -1353,6 +1368,10 @@ select option { background: #0d1e3a; color: var(--text); }
     padding: 0;
     border-right: none;
     border-top: 1px solid var(--glass-border);
+    background: rgba(8, 20, 40, 0.85) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    z-index: 2000;
   }
 
   .sidebar-logo { display: none; }
@@ -1403,6 +1422,34 @@ select option { background: #0d1e3a; color: var(--text); }
   }
 
   .nav-item svg { width: 20px !important; height: 20px !important; }
+
+  /* FIX PULSANTE VOCE MOBILE (FAB) */
+  .nav-item.btn-sidebar-voice {
+    position: fixed;
+    bottom: 85px; /* Appena sopra la bottom nav-bar */
+    right: 20px;
+    left: auto;
+    transform: none !important;
+    background: linear-gradient(135deg, var(--danger), #ff7a93) !important;
+    border-radius: 50% !important;
+    width: 60px;
+    height: 60px;
+    padding: 0 !important;
+    box-shadow: 0 8px 20px rgba(255, 77, 109, 0.5) !important;
+    color: white !important;
+    border: none !important; /* Rimossa line di bordo ridondante */
+    z-index: 1000;
+  }
+
+  .nav-item.btn-sidebar-voice span {
+    display: none !important;
+  }
+  
+  .nav-item.btn-sidebar-voice svg {
+    margin: auto !important;
+    width: 28px !important;
+    height: 28px !important;
+  }
 
   .sidebar-bottom {
     display: none;
@@ -1497,14 +1544,18 @@ select option { background: #0d1e3a; color: var(--text); }
   .followup-btn { font-size: 0.72rem; padding: 0.35rem 0.65rem; }
   .msg-chart-container { padding: 0.75rem; }
 
-  /* ── Modal: bottom sheet ── */
-  .modal-overlay { padding: 0; align-items: flex-end; }
+  /* ── Modal: centered and on top ── */
+  .modal-overlay { 
+    padding: 1.25rem; 
+    align-items: center; 
+    z-index: 9999 !important; 
+  }
   .modal-box {
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-radius: var(--radius-xl);
     max-height: 85vh;
-    padding: 1.25rem 1rem;
+    padding: 1.5rem 1.25rem;
     width: 100%;
-    max-width: 100%;
+    margin-bottom: 2rem; /* Spazio per non coprire eventuale UI di sistema */
   }
 }
 
@@ -1733,42 +1784,102 @@ select option { background: #0d1e3a; color: var(--text); }
   font-size: 0.85rem;
 }
 
-.modal-box {
-  background: var(--bg-card) !important; /* Forza il background del tema */
-  color: var(--text) !important;
+/* --- Dashboard 2.0 Education UI --- */
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.2rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.chart-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.btn-chart-info {
+  background: var(--glass-1);
   border: 1px solid var(--glass-border);
+  color: var(--accent);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--spring);
 }
 
-.tx-variation-badge {
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 700;
-  margin-left: 8px;
+.btn-chart-info:hover {
+  background: var(--accent);
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
-.variation-up { background: rgba(244, 63, 94, 0.2); color: #f43f5e; }
-
-/* --- FIX MODAL E RIGHE --- */
-.modal-box {
-  background: var(--bg-base) !important; 
-  color: var(--text) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+.chart-card {
+  position: relative;
+  overflow: hidden;
 }
 
-.modal-box .tx-row {
-  background: transparent !important; /* Rimuove il grigio brutto */
-  border: none !important;
-  border-bottom: 1px solid var(--glass-border) !important;
-  border-radius: 0 !important;
-  padding: 12px 0 !important;
-  margin: 0 !important;
+.chart-info-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-3);
+  backdrop-filter: blur(12px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  text-align: center;
+  z-index: 10;
+  animation: fadeIn 0.3s ease;
 }
 
-.modal-box .tx-row:last-child {
-  border-bottom: none !important;
+.info-content {
+  color: var(--text);
+  max-width: 320px;
 }
+
+.info-content h4 {
+  margin-bottom: 0.75rem;
+  color: var(--accent);
+}
+
+.info-content p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin-bottom: 1.5rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to { opacity: 1; backdrop-filter: blur(12px); }
+}
+
+/* BoxPlot Whiskers & Median Custom */
+.recharts-boxplot-whisker {
+  stroke: var(--text-dim);
+  stroke-width: 1px;
+}
+
+.recharts-boxplot-median {
+  stroke: #fff;
+  stroke-width: 2px;
+}
+
+
+
 
 /* Fix Layout Grafici per non avere buchi a destra */
 .charts-grid {
@@ -1777,3 +1888,60 @@ select option { background: #0d1e3a; color: var(--text); }
   gap: 1.5rem;
   width: 100%;
 }
+
+/* --- MODAL ROW & BADGES FIX --- */
+.tx-row-modal {
+  background: var(--glass-1) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  margin-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.tx-variation-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  margin-left: 8px;
+  color: #fff;
+}
+
+.variation-up { 
+  background: var(--danger); 
+  box-shadow: 0 0 8px var(--danger-glow);
+}
+
+/* --- UX MOTION & AUDIT ANIMATIONS --- */
+@keyframes scaleUpFade {
+  0% { opacity: 0; transform: scale(0.96) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Entry animations per Card Strutturali con Staggering */
+.kpi-card, .chart-card, .briefing-card, .tx-row {
+  animation: scaleUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger KPI */
+.kpi-card:nth-child(1) { animation-delay: 0.1s; }
+.kpi-card:nth-child(2) { animation-delay: 0.18s; }
+.kpi-card:nth-child(3) { animation-delay: 0.26s; }
+.kpi-card:nth-child(4) { animation-delay: 0.34s; }
+
+/* Stagger Charts */
+.chart-card:nth-child(1) { animation-delay: 0.15s; }
+.chart-card:nth-child(2) { animation-delay: 0.25s; }
+
+/* Stagger Transazioni in lista (fino a 10 per fluidità, il resto appare subito) */
+.tx-table .tx-row:nth-child(1) { animation-delay: 0.05s; }
+.tx-table .tx-row:nth-child(2) { animation-delay: 0.08s; }
+.tx-table .tx-row:nth-child(3) { animation-delay: 0.11s; }
+.tx-table .tx-row:nth-child(4) { animation-delay: 0.14s; }
+.tx-table .tx-row:nth-child(5) { animation-delay: 0.17s; }
+.tx-table .tx-row:nth-child(n+6) { animation-delay: 0.20s; }
+
+

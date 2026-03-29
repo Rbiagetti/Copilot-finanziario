@@ -1,22 +1,68 @@
 import { useEffect, useState } from "react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  RadialBarChart, RadialBar, Legend, ComposedChart, Bar, Line, BarChart
 } from "recharts";
-import { getDashboard, getForecast, getBriefing, getAnomalies, getTransactions } from "../../api/client";
-import type { DashboardData, ForecastData, BriefingData, Anomaly, Transaction } from "../../api/client";
+import { 
+  getDashboard, getForecast, getBriefing, getAnomalies, 
+  getTransactions, getBudgetStatus, getMonthlyHistory 
+} from "../../api/client";
+import type { 
+  DashboardData, ForecastData, BriefingData, Anomaly, 
+  Transaction, BudgetStatus 
+} from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import {
   TrendingUp, TrendingDown, Euro, AlertTriangle, Target, 
-  RefreshCw, Info, X, Sparkles, Plus, MessageSquare, PieChart
+  RefreshCw, Info, X, Sparkles, HelpCircle
 } from "lucide-react";
-import { useAppStore } from "../../store/appStore";
 
-const COLORS = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4"];
 const INSIGHT_COLORS: Record<string, string> = { positive: "#10b981", warning: "#f59e0b", info: "#6366f1" };
 
+// ── BoxPlot Helper ──────────────────────────────────────────────────────────
+const calculateBoxData = (txs: Transaction[]) => {
+  const groups: Record<string, number[]> = {};
+  txs.forEach(t => {
+    if (!groups[t.category]) groups[t.category] = [];
+    groups[t.category].push(t.amount);
+  });
+
+  return Object.entries(groups).map(([cat, vals]) => {
+    const sorted = [...vals].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length * 0.25)];
+    const median = sorted[Math.floor(sorted.length * 0.5)];
+    const q3 = sorted[Math.floor(sorted.length * 0.75)];
+    const min = sorted[0];
+    const max = sorted[sorted.length - 1];
+    return { category: cat, min, q1, median, q3, max, count: vals.length };
+  }).filter(d => d.count > 2).sort((a,b) => b.median - a.median);
+};
+
+// ── ChartHeader Component ───────────────────────────────────────────────────
+function ChartHeader({ title, infoTitle, infoBody }: { title: string; infoTitle: string; infoBody: string }) {
+  const [showInfo, setShowInfo] = useState(false);
+  return (
+    <>
+      <div className="chart-header">
+        <h3>{title}</h3>
+        <button className="btn-chart-info" onClick={() => setShowInfo(true)}>
+          <HelpCircle size={16} />
+        </button>
+      </div>
+      {showInfo && (
+        <div className="chart-info-overlay" onClick={() => setShowInfo(false)}>
+          <div className="info-content">
+            <h4>{infoTitle}</h4>
+            <p>{infoBody}</p>
+            <button className="btn-primary" style={{padding: '8px 20px', fontSize: '0.8rem'}}>Ho capito</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Dashboard() {
-  const { setView } = useAppStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
@@ -25,24 +71,36 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadingBriefing, setLoadingBriefing] = useState(false);
   const [modalContent, setModalContent] = useState<{title: string, type: 'anomalies' | 'forecast'} | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [budgetStatus, setBudgetStatus] = useState<BudgetStatus[]>([]);
+  const [monthlyHistory, setMonthlyHistory] = useState<{ month: string; label: string; total: number }[]>([]);
+  const [boxData, setBoxData] = useState<any[]>([]);
 
   const loadAll = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
-      const [dash, fore, anom, txs] = await Promise.all([
-        getDashboard(), getForecast(), getAnomalies(), getTransactions({ limit: 50 })
+      const [dash, fore, anom, txs, budgets, history] = await Promise.all([
+        getDashboard(), getForecast(), getAnomalies(), getTransactions({ limit: "50" }),
+        getBudgetStatus(), getMonthlyHistory(6)
       ]);
       setData(dash.data);
       setForecast(fore.data);
       setAnomalies(anom.data.anomalies || []);
+      setBudgetStatus(budgets.data);
+      setMonthlyHistory(history.data);
+      setBoxData(calculateBoxData(txs.data));
       
-      const rawTxs = txs.data.transactions || txs.data || [];
+      const rawTxs = txs.data || [];
       const sorted = [...rawTxs]
         .filter(t => t.amount > 0)
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 5);
       setTopTx(sorted);
-    } catch (e) { console.error("Errore caricamento dati:", e); }
+    } catch (e: any) { 
+      console.error("Errore caricamento dati:", e); 
+      setErrorMsg(e?.message || "Errore sconosciuto di rete. I dati di simulazione o l'API potrebbero essere in ri-avvio.");
+    }
     setLoading(false);
   };
 
@@ -57,6 +115,47 @@ export default function Dashboard() {
   }, []);
 
   const cc = useChartColors();
+
+  const CustomTooltip = ({ active, payload, label, prefix = "€", type }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="custom-tooltip card-glass" style={{ 
+          padding: '12px 16px', 
+          border: `1px solid ${cc.tooltipBorder}`,
+          background: cc.tooltipBg,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+          pointerEvents: 'none',
+          zIndex: 1000
+        }}>
+          <p className="label" style={{ fontWeight: 800, margin: '0 0 6px', fontSize: '0.9rem', color: cc.tooltipText, borderBottom: `1px solid ${cc.gridStroke}`, paddingBottom: '4px' }}>
+            {label || data.name || data.label}
+          </p>
+          {type === 'budget' ? (
+            <div style={{ fontSize: '0.85rem', color: cc.tooltipItem }}>
+              <p style={{ margin: '4px 0' }}>Utilizzo: <strong>{data.value.toFixed(1)}%</strong></p>
+              <p style={{ margin: '0', fontSize: '0.75rem', opacity: 0.8 }}>Percentuale del budget mensile allocato.</p>
+            </div>
+          ) : (
+            payload.map((entry: any, index: number) => (
+              <div key={index} style={{ margin: '4px 0 0' }}>
+                <span style={{ fontSize: '0.85rem', color: entry.color || cc.tooltipItem }}>
+                  {entry.name}: <strong>{prefix}{Number(entry.value).toFixed(2)}</strong>
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (errorMsg) return <div className="loading" style={{color: 'var(--danger)', display:'flex', flexDirection:'column', gap:'1rem'}}>
+    <span>⚠️ Impossibile caricare la Dashboard.</span>
+    <span style={{fontSize:'0.8rem', opacity: 0.8}}>{errorMsg}</span>
+  </div>;
+
   if (loading || !data) return <div className="loading">Sincronizzazione in corso...</div>;
 
   const sortedCats = [...data.by_category].sort((a, b) => b.total - a.total);
@@ -117,57 +216,95 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* QUICK ACTIONS */}
-      <section className="dashboard-section" style={{marginTop:'1.5rem'}}>
-        <div className="quick-actions-grid">
-          <div className="quick-action-card" onClick={() => setView("transactions")}>
-            <div className="icon-wrapper"><Plus size={22}/></div>
-            <span>Nuova Spesa</span>
-          </div>
-          <div className="quick-action-card" onClick={() => setView("chat")}>
-            <div className="icon-wrapper"><MessageSquare size={22}/></div>
-            <span>Chiedi all'AI</span>
-          </div>
-          <div className="quick-action-card" onClick={() => setView("budget")}>
-            <div className="icon-wrapper"><PieChart size={22}/></div>
-            <span>Vedi Budget</span>
-          </div>
-          <div className="quick-action-card" onClick={() => loadAll()}>
-            <div className="icon-wrapper"><RefreshCw size={22}/></div>
-            <span>Aggiorna Dati</span>
-          </div>
-        </div>
-      </section>
-
-      {/* GRAFICI */}
-      <section className="dashboard-section section-analytics">
+      {/* GRAFICI Data Science */}
+      <section className="dashboard-section section-analytics" style={{marginTop:'1.5rem'}}>
         <div className="charts-grid">
+          
+          {/* 1. BoxPlot (Advanced View) */}
           <div className="chart-card">
-            <h3>Spese per categoria</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={sortedCats}>
-                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
-                <XAxis dataKey="category" tick={{fill: cc.tick, fontSize: 10}} angle={-20} textAnchor="end" height={50} />
-                <YAxis tick={{fill: cc.tick, fontSize: 10}} />
-                <Tooltip contentStyle={{background: cc.tooltipBg, border: 'none', color: cc.tick, borderRadius: 8}} />
-                <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                  {sortedCats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Bar>
+            <ChartHeader 
+              title="Varianza Spese (BoxPlot)" 
+              infoTitle="Analisi della Volatilità"
+              infoBody="Questo grafico mostra quanto oscillano le tue spese. I 'baffi' indicano i minimi e massimi, mentre il rettangolo (IQR) mostra dove si concentra il 50% delle spese. Più il rettangolo è grande, più la spesa in quella categoria è variabile e imprevedibile."
+            />
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={boxData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                <XAxis type="number" hide />
+                <YAxis dataKey="category" type="category" tick={{ fill: cc.tick, fontSize: 11 }} width={80} />
+                <Tooltip content={<CustomTooltip prefix="€" />} cursor={{fill: 'transparent'}} />
+                {/* Visualizzazione custom per BoxPlot via Stacked Bars */}
+                <Bar dataKey="min" stackId="a" fill="transparent" />
+                <Bar dataKey="q1" stackId="a" fill="transparent" />
+                <Bar dataKey="q3" stackId="a" fill="var(--accent-glow)" stroke={cc.gridStroke} />
+                <Bar dataKey="max" stackId="a" fill="transparent" />
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{textAlign:'center', fontSize:'0.7rem', color: cc.tick, marginTop:'-10px', opacity:0.6}}>
+              Nota: le linee indicano la dispersione dei costi per ogni categoria.
+            </div>
+          </div>
+
+          {/* 2. Bar Chart Semplice (Base User) */}
+          <div className="chart-card">
+            <ChartHeader 
+              title="Classifica Categorie (Semplice)" 
+              infoTitle="Dove spendi di più?"
+              infoBody="Una vista semplificata delle tue uscite totali per categoria questo mese. Le barre più lunghe indicano le categorie che stanno assorbendo la maggior parte delle tue risorse."
+            />
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={sortedCats} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} horizontal={false} />
+                <XAxis type="number" tick={{ fill: cc.tick, fontSize: 10 }} />
+                <YAxis dataKey="category" type="category" tick={{ fill: cc.tick, fontSize: 11 }} width={80} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="total" fill="var(--accent)" radius={[0, 6, 6, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          {/* 3. Radial Bar Chart (Budget Pacing) */}
           <div className="chart-card">
-            <h3>Trend Giornaliero (30gg)</h3>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={data.daily_trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
-                <XAxis dataKey="date" tickFormatter={v => v.slice(-2)} tick={{fill: cc.tick}} />
-                <YAxis tick={{fill: cc.tick}} />
-                <Tooltip contentStyle={{background: cc.tooltipBg, border: 'none', color: cc.tick, borderRadius: 8}} />
-                <Line type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={3} dot={{ r: 4, fill: 'var(--accent)' }} />
-              </LineChart>
+            <ChartHeader 
+              title="Pressione Budget" 
+              infoTitle="Consumo delle Risorse"
+              infoBody="Ogni cerchio è una categoria. Quando il cerchio si chiude, hai esaurito il budget. I colori cambiano (Verde > Arancio > Rosso) per aiutarti a capire subito dove devi rallentare le spese."
+            />
+            <ResponsiveContainer width="100%" height={300}>
+              <RadialBarChart 
+                cx="50%" cy="50%" 
+                innerRadius="20%" outerRadius="90%" 
+                barSize={15} 
+                data={budgetStatus.map(b => ({
+                  name: b.category,
+                  fill: b.percentage > 90 ? cc.danger : b.percentage > 70 ? cc.warning : cc.success,
+                  value: b.percentage
+                }))}
+              >
+                <RadialBar background={{ fill: cc.neutral }} dataKey="value" cornerRadius={10} />
+                <Tooltip content={<CustomTooltip type="budget" />} cursor={{ fill: 'transparent' }} />
+                <Legend iconSize={10} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '10px' }} />
+              </RadialBarChart>
             </ResponsiveContainer>
           </div>
+
+          <div className="chart-card">
+            <ChartHeader 
+              title="Evoluzione Mensile" 
+              infoTitle="Trend nel Tempo"
+              infoBody="Confronta il totale speso nei mesi passati. La linea rossa indica la variazione e ti aiuta a visualizzare se la tua spesa media sta salendo o scendendo nel lungo periodo."
+            />
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={monthlyHistory}>
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: cc.tick, fontSize: 10 }} />
+                <YAxis tick={{ fill: cc.tick, fontSize: 10 }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="total" fill="rgba(79, 142, 247, 0.4)" radius={[4, 4, 0, 0]} barSize={30} />
+                <Line type="monotone" dataKey="total" stroke="var(--danger)" strokeWidth={2} dot={{ r: 4, fill: 'white' }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
         </div>
       </section>
 
@@ -190,38 +327,29 @@ export default function Dashboard() {
       {/* MODAL - Riprogettato per Leggibilità e Glassmorphism */}
       {modalContent && (
         <div className="modal-overlay" onClick={() => setModalContent(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--glass-border)' }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ color: 'var(--text)' }}>{modalContent.title}</h3>
+              <h3>{modalContent.title}</h3>
               <button className="btn-icon" onClick={() => setModalContent(null)}><X size={18}/></button>
             </div>
             <div style={{padding: '0.5rem 1.2rem 1.2rem'}}>
               {modalContent.type === 'anomalies' && anomalies.map((a, i) => {
                 const diff = ((a.amount - a.avg_category) / a.avg_category * 100).toFixed(0);
                 return (
-                  <div key={i} className="tx-row" style={{
-                    background: 'var(--glass-1)', // Ritorna l'effetto "pillola", ma segue il tema
-                    border: '1px solid var(--glass-border)',
-                    borderRadius: '12px',
-                    padding: '12px 16px',
-                    marginBottom: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}>
+                  <div key={i} className="tx-row tx-row-modal">
                     <div className="tx-info">
-                      <span style={{color: 'var(--text)', fontWeight: 500, display: 'block'}}>{a.description || a.category}</span>
-                      <small style={{color:'var(--text-dim)'}}>Media: €{a.avg_category.toFixed(0)}</small>
+                      <span className="tx-desc">{a.description || a.category}</span>
+                      <small className="tx-date">Media: €{a.avg_category.toFixed(0)}</small>
                     </div>
-                    <div style={{textAlign: 'right'}}>
-                      <div className="negative" style={{fontWeight:700, fontSize: '1.1rem'}}>€{a.amount}</div>
+                    <div className="anomaly-amount">
+                      <div className="anomaly-val">€{a.amount}</div>
                       <span className="tx-variation-badge variation-up">+{diff}%</span>
                     </div>
                   </div>
                 );
               })}
               {modalContent.type === 'forecast' && (
-                <div style={{color: 'var(--text)', paddingTop: '10px'}}>
+                <div style={{paddingTop: '10px'}}>
                   <p>Burn Rate: <strong>€{forecast?.daily_burn_rate.toFixed(2)}/gg</strong></p>
                   <p style={{marginTop: '10px'}}>Confidenza AI: <span className="badge info">{forecast?.confidence}</span></p>
                 </div>

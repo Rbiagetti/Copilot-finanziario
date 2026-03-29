@@ -1,7 +1,9 @@
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { createTransaction, parseNatural } from "../../api/client";
 import { PlusCircle, Mic, MicOff, MessageSquare, Keyboard } from "lucide-react";
 import toast from "react-hot-toast";
+import { useAppStore } from "../../store/appStore";
+import { voiceService } from "../../utils/voiceService";
 
 const CATEGORIES = [
   { value: "cibo", emoji: "🍕", label: "Cibo" },
@@ -31,7 +33,26 @@ export default function TransactionForm({ onAdded }: Props) {
   const [nlText, setNlText] = useState("");
   const [recording, setRecording] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  
+  const { autoStartVoice, setAutoStartVoice } = useAppStore();
+
+  useEffect(() => {
+    if (autoStartVoice) {
+      setMode("smart");
+      setAutoStartVoice(false);
+      // Piccolo debounce per permettere il mount della view corretta
+      setTimeout(() => {
+        if (!recording) toggleVoice();
+      }, 100);
+    }
+  }, [autoStartVoice]);
+
+  // CLEANUP PRIVACY: Assicura che il mic si spenga se l'utente cambia pagina o chiude il componente
+  useEffect(() => {
+    return () => {
+      voiceService.stop();
+    };
+  }, []);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +82,9 @@ export default function TransactionForm({ onAdded }: Props) {
 
   const handleSmartSubmit = async () => {
     if (!nlText.trim()) return;
+    if (voiceService.isListening()) {
+      voiceService.stop();
+    }
     setSubmitting(true);
     try {
       const res = await parseNatural(nlText.trim());
@@ -77,39 +101,28 @@ export default function TransactionForm({ onAdded }: Props) {
   };
 
   const toggleVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Il tuo browser non supporta il riconoscimento vocale");
-      return;
-    }
-
-    if (recording) {
-      recognitionRef.current?.stop();
+    if (voiceService.isListening()) {
+      voiceService.stop();
       setRecording(false);
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "it-IT";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    voiceService.start({
+      onResult: (transcript, isFinal) => {
+        setNlText(transcript);
+        if (isFinal) {
+          // Opzionale: gestire autosubmit se la frase è completa
+        }
+      },
+      onError: (err) => {
+        setRecording(false);
+        toast.error(`Errore vocale: ${err}`);
+      },
+      onEnd: () => {
+        setRecording(false);
+      }
+    });
 
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setNlText(transcript);
-      setRecording(false);
-      toast.success(`Trascritto: "${transcript}"`);
-    };
-
-    recognition.onerror = () => {
-      setRecording(false);
-      toast.error("Errore nel riconoscimento vocale");
-    };
-
-    recognition.onend = () => setRecording(false);
-
-    recognitionRef.current = recognition;
-    recognition.start();
     setRecording(true);
   };
 

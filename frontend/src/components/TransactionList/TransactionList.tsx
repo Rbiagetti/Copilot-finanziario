@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat } from "lucide-react";
@@ -30,8 +30,8 @@ export default function TransactionList() {
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [daysRange, setDaysRange] = useState<number>(30); // da 1 a 365
+  const [sortBy, setSortBy] = useState<string>("date_desc");
   const [summary, setSummary] = useState<{ count: number; total: number } | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,10 +40,13 @@ export default function TransactionList() {
     const params: Record<string, string> = {};
     if (filter) params.category = filter;
     if (search) params.search = search;
-    if (dateFrom) params.date_from = dateFrom;
-    if (dateTo) params.date_to = dateTo;
+    if (daysRange < 365) {
+      const d = new Date();
+      d.setDate(d.getDate() - daysRange);
+      params.date_from = d.toISOString().slice(0, 10);
+    }
     return params;
-  }, [filter, search, dateFrom, dateTo]);
+  }, [filter, search, daysRange]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -64,9 +67,21 @@ export default function TransactionList() {
   }, [searchInput]);
 
   const clearFilters = () => {
-    setFilter(""); setSearch(""); setSearchInput(""); setDateFrom(""); setDateTo("");
+    setFilter(""); setSearch(""); setSearchInput(""); setDaysRange(365); setSortBy("date_desc");
   };
-  const hasFilters = filter || search || dateFrom || dateTo;
+  const hasFilters = filter || search || daysRange < 365 || sortBy !== "date_desc";
+
+  const sortedTxs = useMemo(() => {
+    const arr = [...txs];
+    arr.sort((a, b) => {
+      if (sortBy === "date_desc") return new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (sortBy === "date_asc") return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (sortBy === "amount_desc") return b.amount - a.amount;
+      if (sortBy === "amount_asc") return a.amount - b.amount;
+      return 0;
+    });
+    return arr;
+  }, [txs, sortBy]);
 
   const handleDelete = async (id: number) => {
     if (!confirm("Eliminare questa transazione?")) return;
@@ -149,17 +164,33 @@ export default function TransactionList() {
             )}
           </div>
 
-          <div className="filter-row">
+          <div className="filter-row" style={{alignItems: 'center', gap: '1rem', flexWrap: 'wrap'}}>
             <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select">
-              <option value="">Tutte le categorie</option>
+              <option value="">Tutte Categorie</option>
               {Object.entries(EMOJI_MAP).map(([k, v]) => (
                 <option key={k} value={k}>{v} {k}</option>
               ))}
             </select>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="filter-date" title="Da" />
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="filter-date" title="A" />
+            
+            <select value={daysRange} onChange={(e) => setDaysRange(Number(e.target.value))} className="filter-select">
+              <option value="365">Periodo: Tutto</option>
+              <option value="1">Oggi</option>
+              <option value="7">Ultimi 7 gg</option>
+              <option value="30">Ultimi 30 gg</option>
+              <option value="90">Ultimi 90 gg</option>
+            </select>
+
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="filter-select">
+              <option value="date_desc">Più recenti</option>
+              <option value="date_asc">Meno recenti</option>
+              <option value="amount_desc">Importo più alto</option>
+              <option value="amount_asc">Importo più basso</option>
+            </select>
+
             {hasFilters && (
-              <button className="btn-clear-filters" onClick={clearFilters}><X size={14} /> Rimuovi</button>
+              <button className="btn-clear-filters" onClick={clearFilters} title="Resetta filtri">
+                <X size={14} />
+              </button>
             )}
           </div>
 
@@ -177,7 +208,7 @@ export default function TransactionList() {
           <div className="empty">Nessuna transazione trovata</div>
         ) : (
           <div className="tx-table">
-            {txs.map((tx) => (
+            {sortedTxs.map((tx) => (
               <div key={tx.id} className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""}`}>
                 <span className="tx-emoji">{EMOJI_MAP[tx.category] || "❓"}</span>
                 <div className="tx-info">
