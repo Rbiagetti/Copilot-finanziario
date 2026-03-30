@@ -1,0 +1,413 @@
+import { useEffect, useState, useMemo } from "react";
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, PieChart, Pie, Cell, LineChart, Line,
+  ScatterChart, Scatter, ZAxis, Legend
+} from "recharts";
+import { 
+  getForecast, getAnomalies, getFullHistory
+} from "../../api/client";
+import type { 
+  ForecastData, Anomaly, FullHistoryTransaction 
+} from "../../api/client";
+import { useChartColors } from "../../hooks/useTheme";
+import { useAppStore } from "../../store/appStore";
+import {
+  TrendingUp, Euro, AlertTriangle, Target, 
+  X, HelpCircle, Calendar, Filter, Tag
+} from "lucide-react";
+import { 
+  getMonthlyTrend, getCategoryData, getCalendarData, 
+  getCategoryVolatility, getRecurringData, getTimeOfDayData 
+} from "../../utils/analyticsUtils";
+
+const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
+
+// ── ChartHeader Component ───────────────────────────────────────────────────
+function ChartHeader({ title, infoTitle, infoBody }: { title: string; infoTitle: string; infoBody: string }) {
+  const [showInfo, setShowInfo] = useState(false);
+  return (
+    <>
+      <div className="chart-header">
+        <h3>{title}</h3>
+        <button className="btn-chart-info" onClick={() => setShowInfo(true)}>
+          <HelpCircle size={14} />
+        </button>
+      </div>
+      {showInfo && (
+        <div className="chart-info-overlay" onClick={() => setShowInfo(false)}>
+          <div className="info-content">
+            <h4>{infoTitle}</h4>
+            <p>{infoBody}</p>
+            <button className="btn-primary" style={{padding: '8px 20px', fontSize: '0.8rem'}}>Ho capito</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function Dashboard() {
+  const [rawHistory, setRawHistory] = useState<FullHistoryTransaction[]>([]);
+  const [forecast, setForecast] = useState<ForecastData | null>(null);
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [modalContent, setModalContent] = useState<{title: string, type: 'anomalies' | 'forecast'} | null>(null);
+
+  // Filtri Locali
+  const [dateFrom, setDateFrom] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+
+  const { setView, setDashboardFilter } = useAppStore();
+  const cc = useChartColors();
+
+  const loadAll = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const [hist, fore, anom] = await Promise.all([
+        getFullHistory(), getForecast(), getAnomalies()
+      ]);
+      setRawHistory(hist.data);
+      setForecast(fore.data);
+      setAnomalies(anom.data.anomalies || []);
+    } catch (e: any) { 
+      console.error("Errore Dashboard:", e); 
+      setErrorMsg("Errore di caricamento dati analitici.");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { 
+    loadAll(); 
+    // Timeout di sicurezza per evitare caricamenti infiniti
+    const timer = setTimeout(() => {
+      setLoading(curr => {
+        if (curr) {
+          setErrorMsg("Il caricamento sta impiegando troppo tempo. Verifica la chiave JWT e la connessione.");
+        }
+        return false;
+      });
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // ── Filtro & Aggregazione Memoizzata ───────────────────────────────────────
+  const filteredData = useMemo(() => {
+    return rawHistory.filter(t => {
+      if (dateFrom && t.date < dateFrom) return false;
+      if (catFilter && t.category !== catFilter) return false;
+      if (tagFilter && !t.tags?.toLowerCase().includes(tagFilter.toLowerCase())) return false;
+      return true;
+    });
+  }, [rawHistory, dateFrom, catFilter, tagFilter]);
+
+  const monthlyTrend = useMemo(() => getMonthlyTrend(filteredData), [filteredData]);
+  const categoryData = useMemo(() => getCategoryData(filteredData), [filteredData]);
+  const calendarData = useMemo(() => getCalendarData(filteredData), [filteredData]);
+  const volatilityData = useMemo(() => getCategoryVolatility(filteredData).slice(0, 5), [filteredData]);
+  const recurringData = useMemo(() => getRecurringData(filteredData), [filteredData]);
+  const timeOfDayData = useMemo(() => getTimeOfDayData(filteredData), [filteredData]);
+
+  // Totali KPI
+  const stats = useMemo(() => {
+    const total = filteredData.reduce((s, t) => s + t.amount, 0);
+    const count = filteredData.length;
+    return { total, count };
+  }, [filteredData]);
+
+  const handleDrilldown = (cat?: string, tags?: string) => {
+    setDashboardFilter({ category: cat, tags: tags });
+    setView("transactions");
+  };
+
+  const CustomTooltip = ({ active, payload, label, prefix = "€" }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="custom-tooltip">
+          <p style={{ fontWeight: 700, marginBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px' }}>
+            {label || payload[0].payload.name || payload[0].payload.category || payload[0].payload.day || (payload[0].payload.hour !== undefined ? `${payload[0].payload.day} ore ${payload[0].payload.hour}:00` : payload[0].payload.date) || ""}
+          </p>
+          {payload.map((p: any, i: number) => (
+            <p key={i} style={{ color: p.color || 'white', fontSize: '0.85rem' }}>
+              {p.name}: <strong>{prefix}{Number(p.value).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</strong>
+            </p>
+          ))}
+          {payload[0].payload.count !== undefined && (
+            <p style={{ fontSize: '0.75rem', opacity: 0.7, marginTop: '4px' }}>
+              Transazioni: {payload[0].payload.count}
+            </p>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-col" style={{ height: '80vh', gap: '1rem', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spin" style={{ width: '40px', height: '40px', border: '3px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%' }}></div>
+        <span>Analisi quantitativa in corso...</span>
+        <p className="text-dim" style={{ fontSize: '0.8rem' }}>Se persiste, controlla la chiave JWT nel backend o riavvia il server.</p>
+      </div>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="flex-col" style={{ height: '80vh', gap: '1.5rem', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="text-danger" style={{ textAlign: 'center', maxWidth: '400px' }}>{errorMsg}</div>
+        <button onClick={loadAll} className="btn-primary" style={{ padding: '0.6rem 1.5rem' }}>
+          Riprova Caricamento
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard animate-in">
+      <header className="dashboard-hero">
+        <div className="flex-row" style={{justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:'1rem'}}>
+          <div>
+            <h2>Data Intelligence</h2>
+            <p className="dashboard-subtitle">Analisi avanzata del comportamento di spesa.</p>
+          </div>
+          
+          {/* Global Filter Bar */}
+          <div className="card-glass flex-row" style={{padding:'8px 16px', gap:'16px', borderRadius:'16px'}}>
+            <div className="flex-row" style={{gap:'8px'}}>
+              <Calendar size={14} className="text-dim" />
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input-minimal" style={{fontSize:'0.75rem'}} />
+            </div>
+            <div className="flex-row" style={{gap:'8px'}}>
+              <Filter size={14} className="text-dim" />
+              <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-minimal" style={{fontSize:'0.75rem'}}>
+                <option value="">Tutte</option>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex-row" style={{gap:'8px'}}>
+              <Tag size={14} className="text-dim" />
+              <input type="text" placeholder="Tags..." value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="input-minimal" style={{fontSize:'0.75rem', width:'80px'}} />
+            </div>
+            {(dateFrom || catFilter || tagFilter) && (
+              <button className="btn-icon" onClick={() => {setDateFrom(""); setCatFilter(""); setTagFilter("");}}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* KPI GRID */}
+      <div className="kpi-grid" style={{marginBottom:'2rem'}}>
+        <div className="kpi-card">
+          <div className="kpi-icon"><Euro size={20} /></div>
+          <div className="kpi-content">
+            <span className="kpi-label">Volume Totale</span>
+            <span className="kpi-value">€{stats.total.toLocaleString('it-IT', { maximumFractionDigits:0 })}</span>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{color:'var(--accent)'}}><TrendingUp size={20} /></div>
+          <div className="kpi-content">
+            <span className="kpi-label">Transazioni</span>
+            <span className="kpi-value">{stats.count}</span>
+          </div>
+        </div>
+        <div className="kpi-card has-drilldown" onClick={() => setModalContent({title: 'Forecast AI', type: 'forecast'})}>
+          <div className="kpi-icon" style={{color:'var(--warning)'}}><Target size={20} /></div>
+          <div className="kpi-content">
+            <span className="kpi-label">Target Mese</span>
+            <span className="kpi-value">€{forecast?.projected_total.toFixed(0) || "---"}</span>
+          </div>
+        </div>
+        <div className="kpi-card has-drilldown" onClick={() => setModalContent({title: 'Anomalie', type: 'anomalies'})}>
+          <div className="kpi-icon" style={{color:'var(--danger)'}}><AlertTriangle size={20} /></div>
+          <div className="kpi-content">
+            <span className="kpi-label">Eventi Anomali</span>
+            <span className="kpi-value">{anomalies.length} Rilevati</span>
+          </div>
+        </div>
+      </div>
+
+      <main className="charts-grid" style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(400px, 1fr))', gap:'1.5rem'}}>
+        
+        {/* 1. Monthly Spending Trend */}
+        <div className="chart-card card-glass">
+          <ChartHeader 
+            title="Andamento Mensile Spese" 
+            infoTitle="Andamento Mensile"
+            infoBody="Visualizza l'evoluzione delle tue spese nel tempo. La linea mostra il totale mensile e la media giornaliera."
+          />
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={monthlyTrend}>
+              <defs>
+                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+              <XAxis dataKey="label" tick={{fill:cc.tick, fontSize:10}} />
+              <YAxis tick={{fill:cc.tick, fontSize:10}} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="total" name="Spesa Totale" stroke="var(--accent)" fillOpacity={1} fill="url(#colorTotal)" strokeWidth={3} />
+              <Line type="monotone" dataKey="avg_daily" name="Media/g" stroke="var(--warning)" strokeDasharray="5 5" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 2. Spending by Category */}
+        <div className="chart-card card-glass" onClick={() => handleDrilldown(undefined)}>
+          <ChartHeader 
+            title="Spese per Categoria" 
+            infoTitle="Mix Categorie"
+            infoBody="Distribuzione percentuale delle spese nelle varie categorie. Clicca per approfondire."
+          />
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={categoryData}
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={5}
+                dataKey="value"
+                nameKey="name"
+                onClick={(data) => handleDrilldown(data.name)}
+              >
+                {categoryData.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={['#6366f1','#f43f5e','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#14b8a6','#f97316','#64748b'][index % 10]} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend verticalAlign="bottom" height={36}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 3. Spending Calendar Heatmap */}
+        <div className="chart-card card-glass">
+          <ChartHeader 
+            title="Attività per Giorno" 
+            infoTitle="Pattern Temporali"
+            infoBody="Mostra l'intensità della spesa per ogni giorno dell'anno. Quadretti più luminosi indicano spese elevate."
+          />
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={["Dom","Lun","Mar","Mer","Gio","Ven","Sab"].map((day, i) => ({
+              day,
+              total: parseFloat(calendarData.filter(d => new Date(d.date).getDay() === i).reduce((s, d) => s + d.total, 0).toFixed(2)),
+              count: calendarData.filter(d => new Date(d.date).getDay() === i).length,
+            }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+              <XAxis dataKey="day" tick={{fill:cc.tick, fontSize:11}} />
+              <YAxis tick={{fill:cc.tick, fontSize:10}} tickFormatter={(v) => `€${v}`} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="total" name="Spesa" radius={[6,6,0,0]}>
+                {["Dom","Lun","Mar","Mer","Gio","Ven","Sab"].map((_, i) => <Cell key={i} fill={["#6366f1","#f43f5e","#10b981","#f59e0b","#8b5cf6","#06b6d4","#ec4899"][i % 7]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 4. Category Volatility Chart */}
+        <div className="chart-card card-glass">
+          <ChartHeader 
+            title="Volatilità per Categoria" 
+            infoTitle="Stabilità Spese"
+            infoBody="Mostra la variabilità dei costi per categoria (StdDev/Mean). Più alta è la volatilità, più la categoria è imprevedibile."
+          />
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={volatilityData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+              <XAxis dataKey="category" tick={{fill:cc.tick, fontSize:10}} />
+              <YAxis tick={{fill:cc.tick, fontSize:10}} />
+              <Tooltip content={<CustomTooltip />} />
+              <Line type="monotone" dataKey="mean" name="Spesa Media" stroke="var(--accent)" strokeWidth={2} />
+              <Line type="step" dataKey="stdDev" name="Varianza" stroke="var(--danger)" strokeDasharray="3 3" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div >
+
+        {/* 5. Recurring vs Variable Spending */}
+        <div className="chart-card card-glass">
+          <ChartHeader 
+            title="Costi Fissi vs Variabili" 
+            infoTitle="Costi Fissi vs Variabili"
+            infoBody="Confronta quanto spendi per costi fissi (abbonamenti, affitto) rispetto a spese variabili lifestyle."
+          />
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={recurringData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+              <XAxis dataKey="label" tick={{fill:cc.tick, fontSize:10}} />
+              <YAxis tick={{fill:cc.tick, fontSize:10}} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="recurring" stackId="1" name="Ricorrenti" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
+              <Area type="monotone" dataKey="variable" stackId="1" name="Variabili" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.6} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 6. Spending Time-of-Day Behavior */}
+        <div className="chart-card card-glass">
+          <ChartHeader 
+            title="Abitudini Orarie" 
+            infoTitle="Abitudini Orarie"
+            infoBody="Mappa le tue spese su una griglia 24h x 7 giorni. Identifica picchi nel weekend o spese notturne."
+          />
+          <ResponsiveContainer width="100%" height={300}>
+            <ScatterChart margin={{top:10, right:30, bottom:20, left:0}}>
+              <XAxis type="number" dataKey="hour" name="Ora" domain={[0, 23]} tickCount={12} tick={{fill:cc.tick, fontSize:10}} />
+              <YAxis type="category" dataKey="day" name="Giorno" tick={{fill:cc.tick, fontSize:10}} />
+              <ZAxis type="number" dataKey="total" range={[20, 400]} />
+              <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+              <Scatter name="Behavior" data={timeOfDayData.filter(d => d.total > 0)}>
+                {timeOfDayData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.total > 0 ? 'var(--accent)' : 'transparent'} fillOpacity={0.6} />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+
+      </main>
+
+      {/* MODALS */}
+      {modalContent && (
+        <div className="modal-overlay" onClick={() => setModalContent(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{modalContent.title}</h3>
+              <button className="btn-icon" onClick={() => setModalContent(null)}><X size={18}/></button>
+            </div>
+            <div style={{padding: '1.5rem'}}>
+              {modalContent.type === 'anomalies' && (
+                <div className="flex-col" style={{gap:'12px'}}>
+                  {anomalies.map((a, i) => (
+                    <div key={i} className="tx-row" style={{padding:'12px', background:'rgba(255,255,255,0.03)', borderRadius:'12px', border:'1px solid rgba(255,255,255,0.05)'}}>
+                      <div className="flex-col">
+                        <span style={{fontWeight:600}}>{a.description || a.category}</span>
+                        <small className="text-dim">{a.date} • Eccede la media di €{a.avg_category.toFixed(0)}</small>
+                      </div>
+                      <div className="text-danger" style={{fontWeight:700}}>€{a.amount}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {modalContent.type === 'forecast' && (
+                <div className="flex-col" style={{gap:'2rem', textAlign:'center'}}>
+                   <div style={{fontSize:'3rem', fontWeight:800, color:'var(--accent)'}}>€{forecast?.projected_total.toFixed(0)}</div>
+                   <p className="text-dim">Proiezione fine mese basata su burn-rate attuale di €{forecast?.daily_burn_rate}/g.</p>
+                   <div className="badge info" style={{alignSelf:'center'}}>Confidenza: {forecast?.confidence.toUpperCase()}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

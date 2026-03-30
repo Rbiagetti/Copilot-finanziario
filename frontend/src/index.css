@@ -271,7 +271,7 @@ html.theme-transitioning * {
 }
 .section-head h3 { margin: 0; }
 .section-kicker {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -1436,7 +1436,8 @@ button:active,
     height: 60px;
     padding: 0 !important;
     box-shadow: 0 8px 20px rgba(255, 77, 109, 0.5) !important;
-    color: white !important;
+    color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     border: none !important; /* Rimossa line di bordo ridondante */
     z-index: 1000;
   }
@@ -1758,7 +1759,7 @@ button:active,
 .empty-state {
   padding: 2rem;
   text-align: center;
-  color: var(--text-dim);
+  color: var(--text);
   background: var(--glass-1);
   border-radius: 12px;
   border: 1px dashed var(--glass-border);
@@ -1776,13 +1777,17 @@ button:active,
   padding: 12px 16px;
   border-radius: 14px;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
-  color: white !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
   z-index: 10000;
   pointer-events: none;
 }
 
+.custom-tooltip strong { color: white !important; }
+
 .custom-tooltip p {
-  color: white !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
   margin: 0;
   font-size: 0.88rem;
   font-weight: 500;
@@ -1862,7 +1867,7 @@ button:active,
 .info-content p {
   font-size: 0.85rem;
   line-height: 1.5;
-  color: var(--text-dim);
+  color: var(--text);
   margin-bottom: 1.5rem;
 }
 

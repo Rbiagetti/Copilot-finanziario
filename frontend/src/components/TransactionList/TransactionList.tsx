@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat } from "lucide-react";
@@ -69,15 +69,16 @@ export default function TransactionList() {
 
   // DRILLDOWN: Carica filtri dalla Dashboard
   const { dashboardFilter, setDashboardFilter } = useAppStore();
+  const drilldownApplied = useRef(false);
   useEffect(() => {
-    if (Object.keys(dashboardFilter).length > 0) {
+    if (Object.keys(dashboardFilter).length > 0 && !drilldownApplied.current) {
+      drilldownApplied.current = true;
       if (dashboardFilter.category) setFilter(dashboardFilter.category);
       if (dashboardFilter.tags) setSearchInput(dashboardFilter.tags);
-      // Trasformazione date in daysRange approssimativo (o gestiamo date_from direttamente)
-      // Per semplicità usiamo i campi esistenti se possibile
-      
-      // Resetta il filtro globale dopo l'applicazione per permettere navigazioni pulite successive
       setDashboardFilter({});
+    }
+    if (Object.keys(dashboardFilter).length === 0) {
+      drilldownApplied.current = false;
     }
   }, [dashboardFilter, setDashboardFilter]);
 
