@@ -66,7 +66,11 @@ async def get_dashboard(db: Session = Depends(get_db)):
         .order_by(Transaction.date)
         .all()
     )
-    daily_trend = [{"date": d, "total": round(t, 2)} for d, t in daily_rows]
+    daily_map = {d: round(t, 2) for d, t in daily_rows}
+    daily_trend = [
+        {"date": (today - timedelta(days=29-i)).isoformat(), "total": daily_map.get((today - timedelta(days=29-i)).isoformat(), 0.0)}
+        for i in range(30)
+    ]
 
     return DashboardResponse(
         total_month=round(total_month, 2),

@@ -239,7 +239,7 @@ export default function Dashboard() {
         {/* 1. Monthly Spending Trend */}
         <div className="chart-card card-glass">
           <ChartHeader 
-            title="Monthly Spending Trend" 
+            title="Andamento Mensile Spese" 
             infoTitle="Andamento Mensile"
             infoBody="Visualizza l'evoluzione delle tue spese nel tempo. La linea mostra il totale mensile e la media giornaliera."
           />
@@ -262,9 +262,9 @@ export default function Dashboard() {
         </div>
 
         {/* 2. Spending by Category */}
-        <div className="chart-card card-glass" onClick={() => handleDrilldown(catFilter)}>
+        <div className="chart-card card-glass" onClick={() => handleDrilldown(undefined)}>
           <ChartHeader 
-            title="Spending by Category" 
+            title="Spese per Categoria" 
             infoTitle="Mix Categorie"
             infoBody="Distribuzione percentuale delle spese nelle varie categorie. Clicca per approfondire."
           />
@@ -280,7 +280,7 @@ export default function Dashboard() {
                 onClick={(data) => handleDrilldown(data.name)}
               >
                 {categoryData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={index === 0 ? 'var(--accent)' : `rgba(255, 255, 255, ${0.1 + (1 / (index + 1))})`} />
+                  <Cell key={`cell-${index}`} fill={['#6366f1','#f43f5e','#10b981','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#14b8a6','#f97316','#64748b'][index % 10]} />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
@@ -292,7 +292,7 @@ export default function Dashboard() {
         {/* 3. Spending Calendar Heatmap */}
         <div className="chart-card card-glass">
           <ChartHeader 
-            title="Calendar Activity Heatmap" 
+            title="Attività per Giorno" 
             infoTitle="Pattern Temporali"
             infoBody="Mostra l'intensità della spesa per ogni giorno dell'anno. Quadretti più luminosi indicano spese elevate."
           />
@@ -318,7 +318,7 @@ export default function Dashboard() {
         {/* 4. Category Volatility Chart */}
         <div className="chart-card card-glass">
           <ChartHeader 
-            title="Category Volatility Index" 
+            title="Volatilità per Categoria" 
             infoTitle="Stabilità Spese"
             infoBody="Mostra la variabilità dei costi per categoria (StdDev/Mean). Più alta è la volatilità, più la categoria è imprevedibile."
           />
@@ -337,7 +337,7 @@ export default function Dashboard() {
         {/* 5. Recurring vs Variable Spending */}
         <div className="chart-card card-glass">
           <ChartHeader 
-            title="Recurring vs Variable" 
+            title="Costi Fissi vs Variabili" 
             infoTitle="Costi Fissi vs Variabili"
             infoBody="Confronta quanto spendi per costi fissi (abbonamenti, affitto) rispetto a spese variabili lifestyle."
           />
@@ -356,7 +356,7 @@ export default function Dashboard() {
         {/* 6. Spending Time-of-Day Behavior */}
         <div className="chart-card card-glass">
           <ChartHeader 
-            title="Time-of-Day Behavior" 
+            title="Abitudini Orarie" 
             infoTitle="Abitudini Orarie"
             infoBody="Mappa le tue spese su una griglia 24h x 7 giorni. Identifica picchi nel weekend o spese notturne."
           />

@@ -27,7 +27,7 @@ export const getMonthlyTrend = (transactions: FullHistoryTransaction[]) => {
       label: val.label,
       total: parseFloat(val.total.toFixed(2)),
       count: val.count,
-      avg_daily: parseFloat((val.total / 30).toFixed(2)) // Approssimato
+      avg_daily: parseFloat((val.total / new Date(parseInt(key.split('-')[0]), parseInt(key.split('-')[1]), 0).getDate()).toFixed(2))
     }));
 };
 
@@ -145,8 +145,8 @@ export const getTimeOfDayData = (transactions: FullHistoryTransaction[]) => {
   const weekdays = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
 
   transactions.forEach(t => {
-    if (!t.time) return;
-    const hour = parseInt(t.time.split(':')[0]);
+    const timeStr = t.time || "12:00"; // skip se no time
+    const hour = parseInt(timeStr.split(':')[0]);
     const day = new Date(t.date).getDay();
     const key = `${day}-${hour}`;
 
