@@ -1,61 +1,39 @@
 import os
-import jwt
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
 
-# Configurazione JWT Supabase
-JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
-ALGORITHM = "HS256"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
 security = HTTPBearer()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """
-    Verifica il JWT di Supabase fornito nell'header Authorization.
-    Restituisce lo user_id (sub) se valido.
-    """
-    if not JWT_SECRET:
-        print("⚠️ [AUTH] SUPABASE_JWT_SECRET non configurata. Accesso libero abilitato.")
+    if not SUPABASE_URL:
+        print("⚠️ [AUTH] SUPABASE_URL non configurata. Accesso libero abilitato.")
         return "anonymous_dev_user"
 
     token = credentials.credentials
     try:
-        # Decodifica il JWT usando il secret di Supabase
-        payload = jwt.decode(
-            token, 
-            JWT_SECRET, 
-            algorithms=[ALGORITHM], 
-            audience="authenticated" 
-        )
-        
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            print("❌ [AUTH] Token decodificato ma 'sub' mancante.")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token non valido: user_id mancante",
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "apikey": SUPABASE_ANON_KEY,
+                },
+                timeout=5.0,
             )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token non valido")
         
-        # Log di successo (minimale per privacy)
+        data = resp.json()
+        user_id = data.get("id", "unknown")
         print(f"✅ [AUTH] Utente verificato: {user_id[:8]}...")
         return user_id
-        
-    except jwt.ExpiredSignatureError:
-        print("❌ [AUTH] Token scaduto.")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token scaduto",
-        )
-    except jwt.InvalidTokenError as e:
-        print(f"❌ [AUTH] Errore decodifica JWT: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token non valido: {str(e)}",
-        )
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ [AUTH] Errore generico Auth: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Errore durante l'autenticazione",
-        )
+        print(f"❌ [AUTH] Errore verifica token: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Errore autenticazione")

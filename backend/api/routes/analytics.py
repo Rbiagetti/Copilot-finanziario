@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, timedelta
+from typing import List, Optional, Dict
 import calendar
 
 from backend.core.database import get_db, Transaction
