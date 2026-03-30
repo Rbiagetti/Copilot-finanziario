@@ -42,7 +42,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<{title: string; type: "anomalies" | "forecast"} | null>(null);
-  const [dateFrom, setDateFrom] = useState("");
+  const [daysBack, setDaysBack] = useState(90);
   const [catFilter, setCatFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
 
@@ -76,11 +76,15 @@ export default function Dashboard() {
   }, []);
 
   const filteredData = useMemo(() => rawHistory.filter(t => {
-    if (dateFrom && t.date < dateFrom) return false;
+    if (daysBack < 9999) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - daysBack);
+      if (t.date < cutoff.toISOString().slice(0,10)) return false;
+    }
     if (catFilter && t.category !== catFilter) return false;
     if (tagFilter && !t.tags?.toLowerCase().includes(tagFilter.toLowerCase())) return false;
     return true;
-  }), [rawHistory, dateFrom, catFilter, tagFilter]);
+  }), [rawHistory, daysBack, catFilter, tagFilter]);
 
   const monthlyTrend   = useMemo(() => getMonthlyTrend(filteredData), [filteredData]);
   const categoryData   = useMemo(() => getCategoryData(filteredData), [filteredData]);
@@ -195,9 +199,16 @@ export default function Dashboard() {
             <p className="dashboard-subtitle">Analisi avanzata del comportamento di spesa.</p>
           </div>
           <div className="card-glass flex-row" style={{padding:"8px 16px", gap:"16px", borderRadius:"16px"}}>
-            <div className="flex-row" style={{gap:8}}>
+            <div className="flex-row" style={{gap:8, alignItems:"center"}}>
               <Calendar size={14} className="text-dim" />
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="input-minimal" style={{fontSize:"0.75rem"}} />
+              <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal" style={{fontSize:"0.75rem"}}>
+                <option value={7}>Ultima settimana</option>
+                <option value={30}>Ultimo mese</option>
+                <option value={90}>Ultimi 3 mesi</option>
+                <option value={180}>Ultimi 6 mesi</option>
+                <option value={365}>Ultimo anno</option>
+                <option value={9999}>Tutto</option>
+              </select>
             </div>
             <div className="flex-row" style={{gap:8}}>
               <Filter size={14} className="text-dim" />
@@ -210,8 +221,8 @@ export default function Dashboard() {
               <Tag size={14} className="text-dim" />
               <input type="text" placeholder="Tags..." value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="input-minimal" style={{fontSize:"0.75rem", width:80}} />
             </div>
-            {(dateFrom || catFilter || tagFilter) && (
-              <button className="btn-icon" onClick={() => { setDateFrom(""); setCatFilter(""); setTagFilter(""); }}><X size={14} /></button>
+            {(daysBack !== 90 || catFilter || tagFilter) && (
+              <button className="btn-icon" onClick={() => { setDaysBack(90); setCatFilter(""); setTagFilter(""); }}><X size={14} /></button>
             )}
           </div>
         </div>
