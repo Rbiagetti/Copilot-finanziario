@@ -1086,7 +1086,7 @@ button:active,
   border-radius: var(--radius-xl);
   padding: 1.5rem;
   max-width: 560px; width: 100%;
-  max-height: 80vh; overflow-y: auto;
+  max-height: calc(100dvh - 4rem); overflow-y: auto;
   box-shadow: 0 40px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
   animation: scaleUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -1369,8 +1369,8 @@ button:active,
     border-right: none;
     border-top: 1px solid var(--glass-border);
     background: rgba(8, 20, 40, 0.85) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    backdrop-filter: var(--blur-md) saturate(200%) !important;
+    -webkit-backdrop-filter: var(--blur-md) saturate(200%) !important;
     z-index: 2000;
   }
 
@@ -1639,9 +1639,7 @@ button:active,
 }
 
 /* 7. Animazione fluida globale per il cambio layout */
-.sidebar, .nav-item, .main-content {
-  transition: all var(--duration-base) var(--ease-spring-soft) !important;
-}
+
 
 /* --- Drill-down Card Styles --- */
 .kpi-card.has-drilldown {
@@ -1989,5 +1987,203 @@ button:active,
   font-weight: 600;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE SYSTEM — 4 breakpoint puliti
+   Desktop  > 1024px : sidebar 220px laterale
+   Tablet  768-1024px: sidebar 60px icon-only
+   Mobile   ≤ 767px  : bottom nav 62px
+   Small    ≤ 375px  : layout ulteriormente compresso
+   ═══════════════════════════════════════════════════════════════ */
 
+/* charts-grid — base desktop */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
 
+/* ── TABLET (768px – 1024px) ── */
+@media (max-width: 1024px) and (min-width: 768px) {
+  .sidebar { width: 60px; }
+  .sidebar-logo span, .nav-item span { display: none; }
+  .sidebar-logo { justify-content: center; padding: 0.75rem 0 1.5rem; }
+  .nav-item { justify-content: center; padding: 0.65rem; }
+  .nav-item svg { width: 22px; height: 22px; }
+  .sidebar-logo svg { width: 24px; height: 24px; }
+  .main-content { margin-left: 60px; padding: 1.5rem 1.25rem; }
+  .charts-grid { grid-template-columns: 1fr; gap: 1rem; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  h2 { font-size: 1.3rem; }
+}
+
+/* ── MOBILE (≤ 767px) — bottom nav ── */
+@media (max-width: 767px) {
+  /* Sidebar → bottom tab bar */
+  .sidebar {
+    position: fixed !important;
+    width: 100% !important;
+    height: 62px !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+    border-right: none !important;
+    border-top: 1px solid var(--glass-border) !important;
+    background: var(--glass-1) !important;
+    backdrop-filter: var(--blur-md) saturate(200%) !important;
+    -webkit-backdrop-filter: var(--blur-md) saturate(200%) !important;
+    z-index: 2000 !important;
+    border-radius: 0 !important;
+  }
+
+  .sidebar-logo { display: none !important; }
+  .sidebar-bottom { display: none !important; }
+
+  .sidebar-nav {
+    flex-direction: row !important;
+    justify-content: space-around !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    flex: 1 !important;
+    height: 100% !important;
+  }
+
+  .nav-item {
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.2rem !important;
+    padding: 0.35rem 0.25rem 0.3rem !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    flex: 1 !important;
+    height: 100% !important;
+    font-size: 0.58rem !important;
+    font-weight: 500 !important;
+  }
+
+  .nav-item span {
+    display: inline !important;
+    font-size: 0.58rem !important;
+    line-height: 1 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+  }
+
+  .nav-item svg { width: 20px !important; height: 20px !important; }
+
+  .nav-item:hover { transform: none !important; background: var(--glass-1) !important; }
+
+  .nav-item.active {
+    background: rgba(79,142,247,0.1) !important;
+    border-radius: 0 !important;
+    box-shadow: inset 0 2px 0 var(--accent) !important;
+  }
+
+  /* Main content */
+  .main-content {
+    margin-left: 0 !important;
+    padding: 1rem 0.875rem !important;
+    padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 1rem) !important;
+    max-width: 100% !important;
+  }
+
+  /* Charts: single column */
+  .charts-grid { grid-template-columns: 1fr !important; gap: 0.875rem !important; }
+  .chart-card { padding: 1rem !important; }
+  .chart-card:hover { transform: none !important; box-shadow: none !important; }
+
+  /* KPI grid */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.65rem !important; margin-bottom: 1.25rem !important; }
+  .kpi-card { padding: 0.75rem !important; gap: 0.55rem !important; }
+  .kpi-value { font-size: 1.05rem !important; }
+  .kpi-label { font-size: 0.68rem !important; }
+  .kpi-icon { padding: 0.45rem !important; }
+  .kpi-icon svg { width: 18px !important; height: 18px !important; }
+
+  /* Typography */
+  h2 { font-size: 1.15rem !important; margin-bottom: 0.875rem !important; }
+  h3 { font-size: 0.875rem !important; }
+
+  /* Filter bar dashboard */
+  .card-glass.flex-row { flex-wrap: wrap !important; gap: 8px !important; }
+
+  /* Transactions */
+  .transactions-list { padding: 1rem !important; }
+  .tx-row { padding: 0.6rem 0.5rem !important; gap: 0.4rem !important; flex-wrap: wrap !important; }
+  .tx-category { font-size: 0.82rem !important; }
+  .tx-date, .tx-desc { font-size: 0.7rem !important; }
+  .list-header { flex-wrap: wrap !important; gap: 0.5rem !important; }
+  .filter-row { flex-wrap: wrap !important; gap: 0.4rem !important; }
+  .filter-select { font-size: 0.78rem !important; padding: 0.4rem 0.5rem !important; flex: 1 !important; min-width: 90px !important; }
+
+  /* Transaction form */
+  .transaction-form { padding: 1rem !important; margin-bottom: 1.25rem !important; }
+  .form-tabs { gap: 0.3rem !important; flex-wrap: wrap !important; }
+  .smart-row { flex-wrap: wrap !important; }
+  .smart-row input { min-width: 0 !important; }
+  .category-grid { gap: 0.3rem !important; }
+  .cat-btn { padding: 0.35rem 0.55rem !important; font-size: 0.72rem !important; }
+
+  /* Budget */
+  .budget-card { padding: 1rem !important; }
+  .budget-form { flex-direction: column !important; width: 100% !important; }
+  .budget-form select, .budget-form input { width: 100% !important; }
+  .budget-form .btn-primary { width: 100% !important; }
+
+  /* Chat */
+  .chat-container { height: calc(100dvh - 2rem - 62px - env(safe-area-inset-bottom, 0px)) !important; }
+  .suggestions { flex-direction: column !important; align-items: stretch !important; gap: 0.35rem !important; }
+  .suggestion-btn { text-align: left !important; font-size: 0.78rem !important; }
+  .msg-content { max-width: 92% !important; }
+  .msg-text { font-size: 0.82rem !important; }
+  .chat-input input { font-size: 0.875rem !important; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 1rem !important;
+    z-index: 9999 !important;
+    background: rgba(0,0,0,0.6) !important;
+    backdrop-filter: blur(4px) !important;
+  }
+  .modal-box {
+    position: relative !important;
+    border-radius: var(--radius-xl) !important;
+    max-height: calc(100dvh - 62px - env(safe-area-inset-bottom, 0px) - 2rem) !important;
+    overflow-y: auto !important;
+    padding: 1.5rem 1.25rem !important;
+    width: 100% !important;
+    max-width: 500px !important;
+    margin: 0 !important;
+    margin-bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Voice FAB — nascosto nella bottom nav, appare come FAB sopra */ 
+  .nav-item.btn-sidebar-voice { display: none !important; }
+}
+
+/* ── SMALL PHONES (≤ 375px) ── */
+@media (max-width: 375px) {
+  .main-content { padding: 0.75rem 0.625rem !important; padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 0.75rem) !important; }
+  .kpi-grid { gap: 0.5rem !important; }
+  .kpi-card { padding: 0.65rem !important; }
+  .kpi-value { font-size: 0.95rem !important; }
+  .nav-item span { font-size: 0.52rem !important; }
+  .charts-grid { gap: 0.625rem !important; }
+}
+
+/* Elementi visibili solo su desktop */
+.desktop-only { display: flex; }
+@media (max-width: 767px) { .desktop-only { display: none !important; } }

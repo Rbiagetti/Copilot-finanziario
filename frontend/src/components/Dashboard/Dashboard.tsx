@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, LineChart, Line,
@@ -261,7 +262,7 @@ export default function Dashboard() {
       </div>
 
       {/* CHARTS */}
-      <main className="charts-grid" style={{display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(400px, 1fr))", gap:"1.5rem"}}>
+      <main className="charts-grid">
 
         {/* 1. Andamento Mensile */}
         <div className="chart-card card-glass">
@@ -362,8 +363,8 @@ export default function Dashboard() {
 
       </main>
 
-      {/* MODALS */}
-      {modalContent && (
+      {/* MODALS — montato su body via Portal per centratura corretta */}
+      {modalContent && createPortal(
         <div className="modal-overlay" onClick={() => setModalContent(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -394,7 +395,8 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

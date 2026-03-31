@@ -42,7 +42,7 @@ export default function Sidebar() {
         
         {/* Pulsante Inserimento Rapido Vocale */}
         <button
-          className="nav-item btn-sidebar-voice"
+          className="nav-item btn-sidebar-voice desktop-only"
           onClick={startVoiceTransaction}
           style={{ 
             marginTop: '1rem', 
@@ -56,7 +56,7 @@ export default function Sidebar() {
         </button>
       </nav>
 
-      <div className="sidebar-footer" style={{ marginTop: 'auto', padding: '1rem' }}>
+      <div className="sidebar-footer desktop-only" style={{ marginTop: 'auto', padding: '1rem' }}>
         <button className="nav-item text-dim" onClick={handleLogout} style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--text-dim)' }}>
           <LogOut size={20} />
           <span>Disconnetti</span>
