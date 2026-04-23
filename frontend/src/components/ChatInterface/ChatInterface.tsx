@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Component } from "react";
 import type { ReactNode } from "react";
 import { sendChat } from "../../api/client";
 import type { ChatResponse } from "../../api/client";
-import { Send, Bot, User, Sparkles, RefreshCw, Mic, MicOff } from "lucide-react";
+import { Send, Bot, User, RefreshCw, Mic, MicOff } from "lucide-react";
 import { voiceService } from "../../utils/voiceService";
 import { useChartColors } from "../../hooks/useTheme";
 import {
@@ -243,14 +243,6 @@ export default function ChatInterface() {
 
   return (
     <div className="chat-container animate-in">
-      <div className="chat-header">
-        <Sparkles size={22} />
-        <div>
-          <h3>Chat AI Finanziaria</h3>
-          <p>Fai domande sulle tue spese in linguaggio naturale</p>
-        </div>
-      </div>
-
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-welcome">

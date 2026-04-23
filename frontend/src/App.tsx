@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
+import TopBar from "./components/Layout/TopBar";
 import Dashboard from "./components/Dashboard/Dashboard";
 import TransactionList from "./components/TransactionList/TransactionList";
 import ChatInterface from "./components/ChatInterface/ChatInterface";
@@ -63,6 +64,7 @@ function App() {
         }}
       />
       <Sidebar />
+      <TopBar />
       <main className="main-content">
         {currentView === "dashboard" && <Dashboard />}
         {currentView === "transactions" && <TransactionList />}
