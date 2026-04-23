@@ -17,17 +17,17 @@ export function useIsDark() {
 export function useChartColors() {
   const isDark = useIsDark();
   return {
-    tick: isDark ? "rgba(160,190,230,0.55)" : "#555",
-    tooltipBg: isDark ? "rgba(8,20,40,0.95)" : "rgba(255,255,255,0.98)",
-    tooltipBorder: isDark ? "rgba(255,255,255,0.1)" : "rgba(79,142,247,0.2)",
-    tooltipText: isDark ? "#f0f8ff" : "#0a1628",
-    tooltipItem: isDark ? "rgba(240,248,255,0.75)" : "#334",
-    legendText: isDark ? "rgba(160,190,230,0.8)" : "#444",
-    gridStroke: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.06)",
-    cursorFill: isDark ? "rgba(255,255,255,0.04)" : "rgba(79,142,247,0.06)",
-    success: "#10b981",
-    warning: "#f59e0b",
-    danger: "#f43f5e",
-    neutral: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
+    tick: isDark ? "rgba(221,193,179,0.75)" : "#6b3100",
+    tooltipBg: isDark ? "rgba(22,12,7,0.95)" : "rgba(255,255,255,0.98)",
+    tooltipBorder: isDark ? "rgba(255,182,141,0.25)" : "rgba(255,140,66,0.25)",
+    tooltipText: isDark ? "#f5ded5" : "#331200",
+    tooltipItem: isDark ? "rgba(245,222,213,0.85)" : "#4d2600",
+    legendText: isDark ? "rgba(221,193,179,0.85)" : "#763300",
+    gridStroke: isDark ? "rgba(255,182,141,0.08)" : "rgba(118,51,0,0.08)",
+    cursorFill: isDark ? "rgba(255,140,66,0.07)" : "rgba(255,140,66,0.08)",
+    success: "#7dd992",
+    warning: "#ffb77d",
+    danger: "#ffb4ab",
+    neutral: isDark ? "rgba(255,182,141,0.20)" : "rgba(118,51,0,0.14)",
   };
 }

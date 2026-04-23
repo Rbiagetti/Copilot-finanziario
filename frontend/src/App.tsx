@@ -51,7 +51,15 @@ function App() {
       <Toaster
         position="top-right"
         toastOptions={{
-          style: { background: "#1e1e2e", color: "#fff", border: "1px solid #333" },
+          style: {
+            background: "rgba(41,29,23,0.92)",
+            color: "#f5ded5",
+            border: "1px solid rgba(255,182,141,0.20)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            borderRadius: "18px",
+            fontFamily: "Plus Jakarta Sans, -apple-system, sans-serif",
+          },
         }}
       />
       <Sidebar />
