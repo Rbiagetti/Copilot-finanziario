@@ -326,7 +326,7 @@ export default function Dashboard() {
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="mean" name="Media" fill="var(--accent)" radius={[0,4,4,0]} />
               <Bar dataKey="stdDev" name="Varianza" fill="var(--danger)" radius={[0,4,4,0]} />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={10} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -342,7 +342,7 @@ export default function Dashboard() {
               <Tooltip content={<CustomTooltip />} />
               <Area type="monotone" dataKey="recurring" stackId="1" name="Fissi" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
               <Area type="monotone" dataKey="variable" stackId="1" name="Variabili" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.6} />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={10} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
