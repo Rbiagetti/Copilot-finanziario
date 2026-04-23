@@ -1790,8 +1790,12 @@ button:active,
 }
 
 /* Tooltip & Modal Theme Fix */
+.chart-card svg text,
+.chart-card svg tspan,
+.msg-chart-container svg text,
+.msg-chart-container svg tspan,
 .recharts-cartesian-axis-tick text,
-.recharts-cartesian-axis text,
+.recharts-cartesian-axis-tick-value,
 .recharts-text,
 .recharts-legend-item-text {
   fill: #fff3e6 !important;
