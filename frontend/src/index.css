@@ -1790,6 +1790,14 @@ button:active,
 }
 
 /* Tooltip & Modal Theme Fix */
+.recharts-cartesian-axis-tick text,
+.recharts-cartesian-axis text,
+.recharts-text,
+.recharts-legend-item-text {
+  fill: #fff3e6 !important;
+  color: #fff3e6 !important;
+}
+
 .recharts-tooltip-wrapper {
   outline: none;
 }
