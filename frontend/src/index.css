@@ -799,11 +799,9 @@ button:active,
 
 .chat-input {
   display: flex; gap: 0.5rem;
-  padding: 0.75rem 0.5rem;
-  border-top: 1px solid var(--glass-border);
-  background: rgba(22, 12, 7, 0.85);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  padding: 0.75rem 0;
+  background: transparent;
+  border-top: none;
   position: sticky;
   bottom: 0;
   z-index: 5;
@@ -813,6 +811,10 @@ button:active,
     position: static;
     padding: 0.6rem 0.75rem;
     flex-shrink: 0;
+    background: rgba(22, 12, 7, 0.85);
+    border-top: 1px solid var(--glass-border);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
   }
 }
 .chat-input input {
@@ -2230,10 +2232,10 @@ button:active,
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0 1.25rem;
-  background: rgba(22, 12, 7, 0.78);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  border-bottom: 1px solid rgba(255, 182, 141, 0.10);
+  background: rgba(22, 12, 7, 0.45);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 182, 141, 0.08);
   z-index: 40;
 }
 .topbar-left { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
@@ -2254,12 +2256,12 @@ button:active,
 }
 .topbar-title {
   font-family: "Plus Jakarta Sans", sans-serif;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--text);
-  font-size: 0.95rem;
-  letter-spacing: -0.01em;
-  flex: 1;
-  text-align: center;
+  font-size: 1rem;
+  letter-spacing: -0.015em;
+  margin-left: auto;
+  text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

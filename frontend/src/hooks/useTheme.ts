@@ -17,7 +17,7 @@ export function useIsDark() {
 export function useChartColors() {
   const isDark = useIsDark();
   return {
-    tick: isDark ? "rgba(221,193,179,0.75)" : "#6b3100",
+    tick: isDark ? "rgba(245,222,213,0.95)" : "#6b3100",
     tooltipBg: isDark ? "rgba(22,12,7,0.95)" : "rgba(255,255,255,0.98)",
     tooltipBorder: isDark ? "rgba(255,182,141,0.25)" : "rgba(255,140,66,0.25)",
     tooltipText: isDark ? "#f5ded5" : "#331200",
