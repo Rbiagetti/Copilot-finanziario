@@ -216,7 +216,7 @@ button:active,
   /* Sidebar → pillola floating centrata */
   .sidebar {
     position: fixed;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     left: 16px;
     right: 16px;
     top: auto;
