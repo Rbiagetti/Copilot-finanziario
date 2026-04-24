@@ -9,7 +9,7 @@ import { getForecast, getAnomalies, getFullHistory } from "../../api/client";
 import type { ForecastData, Anomaly, FullHistoryTransaction } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
-import { TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle, Calendar, Filter, Tag } from "lucide-react";
+import { TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle, Calendar, Filter } from "lucide-react";
 import { getMonthlyTrend, getCategoryData, getCalendarData, getCategoryVolatility, getRecurringData, getTimeOfDayData } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
@@ -45,7 +45,6 @@ export default function Dashboard() {
   const [modalContent, setModalContent] = useState<{title: string; type: "anomalies" | "forecast"} | null>(null);
   const [daysBack, setDaysBack] = useState(90);
   const [catFilter, setCatFilter] = useState("");
-  const [tagFilter, setTagFilter] = useState("");
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
@@ -95,9 +94,8 @@ export default function Dashboard() {
       if (t.date < cutoff.toISOString().slice(0,10)) return false;
     }
     if (catFilter && t.category !== catFilter) return false;
-    if (tagFilter && !t.tags?.toLowerCase().includes(tagFilter.toLowerCase())) return false;
     return true;
-  }), [rawHistory, daysBack, catFilter, tagFilter]);
+  }), [rawHistory, daysBack, catFilter]);
 
   const monthlyTrend   = useMemo(() => getMonthlyTrend(filteredData), [filteredData]);
   const categoryData   = useMemo(() => getCategoryData(filteredData), [filteredData]);
@@ -230,12 +228,8 @@ export default function Dashboard() {
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div className="flex-row" style={{gap:8}}>
-              <Tag size={14} className="text-dim" />
-              <input type="text" placeholder="Tags..." value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="input-minimal" style={{fontSize:"0.75rem", width:80}} />
-            </div>
-            {(daysBack !== 90 || catFilter || tagFilter) && (
-              <button className="btn-icon" onClick={() => { setDaysBack(90); setCatFilter(""); setTagFilter(""); }}><X size={14} /></button>
+            {(daysBack !== 90 || catFilter) && (
+              <button className="btn-icon" onClick={() => { setDaysBack(90); setCatFilter(""); }}><X size={14} /></button>
             )}
           </div>
         </div>
