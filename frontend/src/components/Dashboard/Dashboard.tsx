@@ -47,17 +47,29 @@ export default function Dashboard() {
   const [catFilter, setCatFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
 
-  const { setView, setDashboardFilter } = useAppStore();
+  const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
 
-  const loadAll = async () => {
+  const loadAll = async (force = false) => {
+    // Se cache valida (< 5 min) e non forzato, usa i dati in memoria
+    if (!force && dashboardCache.loadedAt && Date.now() - dashboardCache.loadedAt < 5 * 60 * 1000) {
+      setRawHistory(dashboardCache.rawHistory);
+      setForecast(dashboardCache.forecast);
+      setAnomalies(dashboardCache.anomalies);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setErrorMsg(null);
     try {
       const [hist, fore, anom] = await Promise.all([getFullHistory(), getForecast(), getAnomalies()]);
-      setRawHistory(hist.data);
-      setForecast(fore.data);
-      setAnomalies(anom.data.anomalies || []);
+      const rawHistory = hist.data;
+      const forecast = fore.data;
+      const anomalies = anom.data.anomalies || [];
+      setRawHistory(rawHistory);
+      setForecast(forecast);
+      setAnomalies(anomalies);
+      setDashboardCache({ rawHistory, forecast, anomalies });
     } catch (e: any) {
       console.error("Errore Dashboard:", e);
       setErrorMsg("Errore di caricamento dati analitici.");

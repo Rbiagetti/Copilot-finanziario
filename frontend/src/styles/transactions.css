@@ -1,0 +1,188 @@
+/* ═══════════════════════════════════════════════════════════════
+   FinCopilot — Transactions
+   Form · List · Filters · Edit
+   ═══════════════════════════════════════════════════════════════ */
+
+/* === TRANSACTION FORM === */
+.transaction-form {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
+.form-tab {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-0);
+  color: var(--text-muted);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.form-tab:hover { background: var(--glass-1); color: var(--text); }
+.form-tab.active {
+  border-color: rgba(255,140,66,0.4);
+  background: rgba(255,140,66,0.15);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 0 12px rgba(255,140,66,0.15);
+}
+
+.smart-input { display: flex; flex-direction: column; gap: 0.75rem; }
+.smart-hint { font-size: 0.78rem; color: var(--text-muted); }
+.smart-row { display: flex; gap: 0.5rem; align-items: center; }
+.smart-row input {
+  flex: 1;
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.smart-row input:focus {
+  outline: none;
+  border-color: rgba(255,140,66,0.5);
+  box-shadow: 0 0 0 3px rgba(255,140,66,0.1);
+}
+
+.form-row { display: flex; gap: 1rem; }
+
+.category-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.cat-btn {
+  display: flex; align-items: center; gap: 0.3rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-0);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--spring);
+}
+.cat-btn span:first-child { font-size: 1rem; }
+.cat-btn:hover { border-color: rgba(255,140,66,0.35); color: var(--text); transform: scale(1.04); }
+.cat-btn.active {
+  border-color: rgba(255,140,66,0.4);
+  background: rgba(255,140,66,0.15);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.edit-form { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+
+/* === TRANSACTION LIST === */
+.transactions-page { display: flex; flex-direction: column; gap: 1.5rem; }
+.transactions-list {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+}
+.list-header {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 1rem;
+}
+.list-controls { display: flex; gap: 0.5rem; align-items: center; }
+.tx-table { display: flex; flex-direction: column; gap: 0.4rem; }
+.tx-row {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: all var(--duration-fast) var(--ease-out);
+  background: var(--glass-0);
+}
+.tx-row:hover {
+  background: var(--glass-1);
+  border-color: var(--glass-border);
+  transform: translateX(2px);
+}
+.tx-emoji { font-size: 1.2rem; }
+.tx-info { flex: 1; display: flex; flex-direction: column; gap: 0.12rem; }
+.tx-info-top { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.tx-category { font-weight: 600; text-transform: capitalize; font-size: 0.875rem; }
+.tx-desc { font-size: 0.78rem; color: var(--text-muted); }
+.tx-date { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.tx-amount { font-weight: 700; min-width: 80px; text-align: right; white-space: nowrap; letter-spacing: -0.02em; }
+.tx-actions { display: flex; gap: 0.25rem; }
+.tx-recurring { border-color: rgba(255,140,66,0.2) !important; }
+
+/* === TX FILTERS === */
+.tx-filters { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem; }
+.search-box { position: relative; display: flex; align-items: center; }
+.search-icon { position: absolute; left: 0.75rem; color: var(--text-muted); pointer-events: none; }
+.search-input {
+  width: 100%;
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 2.5rem;
+  color: var(--text);
+  font-size: 0.875rem;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.search-input::placeholder { color: var(--text-muted); }
+.search-input:focus {
+  outline: none;
+  border-color: rgba(255,140,66,0.5);
+  box-shadow: 0 0 0 3px rgba(255,140,66,0.1);
+}
+.search-clear {
+  position: absolute; right: 0.75rem;
+  background: none; border: none;
+  color: var(--text-muted); cursor: pointer;
+  display: flex; align-items: center;
+}
+.filter-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.filter-select, .filter-date {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.7rem;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+.filter-date { color-scheme: dark; }
+
+.tx-summary {
+  display: flex; justify-content: space-between;
+  font-size: 0.80rem; color: var(--text-muted);
+  padding: 0.4rem 0.25rem;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-color: transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(255,182,141,0.28), transparent) 1;
+}
+.tx-summary-total strong { color: var(--text); }
+
+/* === TRANSACTIONS RESPONSIVE === */
+@media (max-width: 767px) {
+  .transactions-list { padding: 1rem; border-radius: var(--radius-md); }
+  .tx-row { padding: 0.6rem 0.5rem; gap: 0.4rem; flex-wrap: wrap; }
+  .tx-category { font-size: 0.82rem; }
+  .tx-date, .tx-desc { font-size: 0.7rem; }
+  .tx-actions .btn-icon { padding: 0.3rem; }
+  .list-header { flex-wrap: wrap; gap: 0.5rem; }
+  .list-controls { flex-wrap: wrap; gap: 0.4rem; }
+  .filter-row { flex-wrap: wrap; gap: 0.4rem; }
+  .filter-select, .filter-date {
+    font-size: 0.78rem; padding: 0.4rem 0.5rem;
+    flex: 1; min-width: 90px;
+  }
+  .transaction-form { padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem; }
+  .form-tabs { gap: 0.3rem; flex-wrap: wrap; }
+  .smart-hint { font-size: 0.72rem; }
+  .category-grid { gap: 0.3rem; }
+  .cat-btn { padding: 0.35rem 0.55rem; font-size: 0.72rem; }
+  .msg-content { max-width: 90%; }
+  .cat-rank-row { flex-wrap: wrap; }
+  .cat-rank-bar { min-width: 60px; }
+}

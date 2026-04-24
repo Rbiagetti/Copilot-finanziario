@@ -1,0 +1,72 @@
+/* ═══════════════════════════════════════════════════════════════
+   FinCopilot — Budget Panel
+   ═══════════════════════════════════════════════════════════════ */
+
+.budget-page h2 { margin-bottom: 1.5rem; }
+
+.budget-form {
+  display: flex; gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  align-items: flex-end;
+}
+.budget-form select, .budget-form input {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.85rem;
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.budget-form .btn-primary { width: auto; padding: 0.6rem 1.2rem; }
+
+.budget-list { display: flex; flex-direction: column; gap: 1rem; }
+
+.budget-card {
+  background: var(--surface-container);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.budget-card:hover { border-color: var(--glass-border-hi); }
+.budget-card.over { border-color: rgba(255,77,109,0.35); box-shadow: 0 0 20px rgba(255,77,109,0.08); }
+.budget-card.warning { border-color: rgba(245,166,35,0.35); }
+
+.budget-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.budget-cat { font-weight: 600; flex: 1; }
+.budget-pct { font-weight: 700; font-size: 1.05rem; }
+
+.budget-bar {
+  height: 6px; background: var(--glass-1);
+  border-radius: 3px; overflow: hidden; margin-bottom: 0.5rem;
+}
+.budget-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  transition: width 0.6s var(--ease-out);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.budget-card.warning .budget-fill {
+  background: linear-gradient(90deg, #ffb77d, #f99028);
+  box-shadow: 0 0 10px rgba(255, 183, 125, 0.28);
+}
+.budget-card.over .budget-fill {
+  background: linear-gradient(90deg, #ffb4ab, #e67216);
+  box-shadow: 0 0 10px rgba(255, 180, 171, 0.30);
+}
+
+.budget-details { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); }
+.budget-emoji { font-size: 1.15rem; }
+.budget-header .btn-icon { margin-left: auto; opacity: 0.4; transition: opacity var(--duration-fast); }
+.budget-card:hover .budget-header .btn-icon { opacity: 1; }
+
+.empty-budget { text-align: center; padding: 3rem; color: var(--text-muted); }
+.empty-hint { font-size: 0.78rem; margin-top: 0.5rem; opacity: 0.7; }
+
+/* === BUDGET RESPONSIVE === */
+@media (max-width: 767px) {
+  .budget-card { padding: 1rem; }
+  .budget-form { flex-direction: column; width: 100%; align-items: stretch; }
+  .budget-form select, .budget-form input { width: 100%; }
+  .budget-form .btn-primary { width: 100%; }
+}

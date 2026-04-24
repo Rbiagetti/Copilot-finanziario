@@ -68,7 +68,7 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { dashboardFilter, setDashboardFilter } = useAppStore();
+  const { dashboardFilter, setDashboardFilter, invalidateDashboardCache } = useAppStore();
   const drilldownApplied = useRef(false);
   useEffect(() => {
     if (Object.keys(dashboardFilter).length > 0 && !drilldownApplied.current) {
@@ -102,6 +102,7 @@ export default function TransactionList() {
   const handleDelete = async (id: number) => {
     if (!confirm("Eliminare questa transazione?")) return;
     try {
+      invalidateDashboardCache();
       await deleteTransaction(id);
       toast.success("Transazione eliminata");
       load();
@@ -124,6 +125,7 @@ export default function TransactionList() {
     if (!editState) return;
     setSaving(true);
     try {
+      invalidateDashboardCache();
       await updateTransaction(editState.tx.id, {
         amount: parseFloat(editState.amount),
         category: editState.category,

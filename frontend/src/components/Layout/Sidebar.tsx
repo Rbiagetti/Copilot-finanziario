@@ -1,5 +1,5 @@
 import { useAppStore } from "../../store/appStore";
-import { LayoutDashboard, MessageCircle, Wallet, List, Settings, Mic, LogOut } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut } from "lucide-react";
 import { signOut } from "../../lib/supabase";
 
 const NAV_ITEMS = [
@@ -11,12 +11,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const { currentView, setView, setAutoStartVoice } = useAppStore();
-
-  const startVoiceTransaction = () => {
-    setView("transactions");
-    setAutoStartVoice(true);
-  };
+  const { currentView, setView } = useAppStore();
 
   const handleLogout = async () => {
     await signOut();
@@ -39,25 +34,14 @@ export default function Sidebar() {
             <span>{label}</span>
           </button>
         ))}
-        
-        {/* Pulsante Inserimento Rapido Vocale */}
-        <button
-          className="nav-item btn-sidebar-voice desktop-only"
-          onClick={startVoiceTransaction}
-          style={{ 
-            marginTop: '1rem', 
-            background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.1), rgba(244, 63, 94, 0.05))',
-            borderColor: 'rgba(244, 63, 94, 0.25)',
-            color: 'var(--danger)'
-          }}
-        >
-          <Mic size={20} />
-          <span style={{fontWeight: 600}}>Voce Rapida</span>
-        </button>
       </nav>
 
-      <div className="sidebar-footer desktop-only" style={{ marginTop: 'auto', padding: '1rem' }}>
-        <button className="nav-item text-dim" onClick={handleLogout} style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--text-dim)' }}>
+      <div className="sidebar-footer desktop-only" style={{ marginTop: "auto", padding: "1rem" }}>
+        <button
+          className="nav-item"
+          onClick={handleLogout}
+          style={{ width: "100%", justifyContent: "flex-start", color: "var(--text-dim)" }}
+        >
           <LogOut size={20} />
           <span>Disconnetti</span>
         </button>

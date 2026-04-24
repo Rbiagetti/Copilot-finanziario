@@ -1,0 +1,208 @@
+/* ═══════════════════════════════════════════════════════════════
+   FinCopilot — Liquid Amber Design System
+   base.css: reset, tokens, body, typography, keyframes, scrollbar
+   ═══════════════════════════════════════════════════════════════ */
+
+/* === RESET === */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* === DESIGN TOKENS === */
+:root {
+  /* Palette — warm obsidian */
+  --navy-0: #1e130d;
+  --navy-1: #261911;
+  --navy-2: #2e2017;
+  --navy-3: #37271d;
+
+  --surface:              #261911;
+  --surface-container:    #37271d;
+  --surface-container-hi: #44322a;
+  --surface-bright:       #513e34;
+  --surface-variant:      #4a3a33;
+
+  --glass-0: rgba(74, 58, 51, 0.28);
+  --glass-1: rgba(74, 58, 51, 0.42);
+  --glass-2: rgba(74, 58, 51, 0.58);
+  --glass-3: rgba(74, 58, 51, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hi: rgba(255, 182, 141, 0.22);
+
+  --accent: #ff8c42;
+  --accent-glow: rgba(255, 140, 66, 0.38);
+  --accent-soft: #ffb68d;
+  --accent-cyan: #ffb77d;
+  --accent-cyan-glow: rgba(255, 183, 125, 0.28);
+  --accent-violet: #f99028;
+  --accent-violet-glow: rgba(249, 144, 40, 0.28);
+
+  --success: #7dd992;
+  --success-glow: rgba(125, 217, 146, 0.25);
+  --warning: #ffb77d;
+  --warning-glow: rgba(255, 183, 125, 0.28);
+  --danger: #ffb4ab;
+  --danger-glow: rgba(255, 180, 171, 0.28);
+
+  --text: rgba(245, 222, 213, 0.98);
+  --text-muted: rgba(221, 193, 179, 0.75);
+  --text-dim: rgba(164, 140, 127, 0.70);
+
+  --bg: var(--navy-1);
+  --bg-card: rgba(41, 29, 23, 0.75);
+  --bg-input: rgba(255, 255, 255, 0.04);
+  --border: var(--glass-border);
+  --primary: var(--accent);
+  --primary-hover: #ffb68d;
+
+  --sidebar-w: 220px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 9999px;
+
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --duration-fast: 180ms;
+  --duration-base: 280ms;
+  --duration-slow: 420ms;
+  --duration-theme: 520ms;
+  --duration-micro: 140ms;
+  --ease-spring-soft: cubic-bezier(0.22, 0.92, 0.24, 1);
+  --ease-spring-snappy: cubic-bezier(0.2, 1.1, 0.2, 1);
+
+  --blur-xs: blur(8px);
+  --blur-sm: blur(16px);
+  --blur-md: blur(28px);
+  --blur-lg: blur(48px);
+
+  /* Layout heights */
+  --topbar-h: 56px;
+  --bottomnav-h: 90px; /* pill nav clearance: ~56px pill + 20px margin + 14px breathing room */
+}
+
+/* === BODY & BACKGROUND ORB === */
+body {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  background: radial-gradient(circle at top right, #4a2712 0%, #2b1a11 55%, #1e130d 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+  scroll-behavior: smooth;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  width: 60vw; height: 45vh;
+  max-width: 700px; max-height: 520px;
+  background: radial-gradient(circle, rgba(255,140,66,0.08) 0%, transparent 70%);
+  top: -14%; right: -10%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+body::after { display: none; }
+
+html.theme-transitioning body::before,
+html.theme-transitioning body::after {
+  transition: opacity var(--duration-theme) var(--ease-spring-soft), filter var(--duration-theme) var(--ease-out);
+  filter: blur(8px);
+  opacity: 0.65;
+}
+
+html.theme-transitioning * {
+  transition:
+    background-color var(--duration-theme) var(--ease-spring-soft),
+    border-color var(--duration-theme) var(--ease-spring-soft),
+    color var(--duration-theme) var(--ease-spring-soft),
+    box-shadow var(--duration-theme) var(--ease-spring-soft),
+    fill var(--duration-theme) var(--ease-spring-soft),
+    stroke var(--duration-theme) var(--ease-spring-soft) !important;
+}
+
+/* === TYPOGRAPHY === */
+h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  margin-bottom: 1.5rem;
+  background: none !important;
+  -webkit-text-fill-color: var(--text) !important;
+  color: var(--text);
+}
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+}
+.loading, .empty, .error {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+}
+.capitalize { text-transform: capitalize; }
+
+/* === KEYFRAME ANIMATIONS === */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes scaleUpFade {
+  0% { opacity: 0; transform: scale(0.96) translateY(20px); filter: blur(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.6; }
+  40% { transform: translateY(-7px); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-voice {
+  0%, 100% { box-shadow: 0 0 0 0 var(--danger-glow); }
+  50% { box-shadow: 0 0 0 10px transparent; }
+}
+
+@keyframes pulse-border {
+  0% { border-color: var(--glass-border); }
+  50% { border-color: var(--accent); }
+  100% { border-color: var(--glass-border); }
+}
+
+@keyframes navPop {
+  0%   { transform: scale(0.90); }
+  60%  { transform: scale(1.06); }
+  100% { transform: scale(1.00); }
+}
+
+.spin { animation: spin 1s linear infinite; }
+
+/* === SCROLLBAR GLOBAL === */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-2) transparent;
+}
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--glass-2); border-radius: 3px; }
+
+/* === REDUCED MOTION === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+}

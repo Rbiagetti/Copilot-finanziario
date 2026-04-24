@@ -34,7 +34,7 @@ export default function TransactionForm({ onAdded }: Props) {
   const [recording, setRecording] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
-  const { autoStartVoice, setAutoStartVoice } = useAppStore();
+  const { autoStartVoice, setAutoStartVoice, invalidateDashboardCache } = useAppStore();
 
   useEffect(() => {
     if (autoStartVoice) {
@@ -63,6 +63,7 @@ export default function TransactionForm({ onAdded }: Props) {
     }
     setSubmitting(true);
     try {
+      invalidateDashboardCache();
       await createTransaction({
         amount: numAmount,
         category,
