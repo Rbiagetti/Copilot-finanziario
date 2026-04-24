@@ -115,11 +115,11 @@ button:active,
   top: 0;
   left: var(--sidebar-w);
   right: 0;
-  height: var(--topbar-h);
+  height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0 1.25rem;
+  padding: env(safe-area-inset-top, 0px) 1.25rem 0;
   background: rgba(22, 12, 7, 0.94);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -174,7 +174,7 @@ button:active,
   margin-left: var(--sidebar-w);
   flex: 1;
   padding: 2rem 2.5rem;
-  padding-top: calc(var(--topbar-h) + 1rem);
+  padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 1rem);
   max-width: 1240px;
 }
 
@@ -193,7 +193,7 @@ button:active,
   .main-content {
     margin-left: 60px;
     padding: 1.5rem 1.25rem;
-    padding-top: calc(var(--topbar-h) + 1rem);
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 1rem);
   }
   .topbar { left: 60px; }
 
@@ -316,7 +316,7 @@ button:active,
   .main-content {
     margin-left: 0;
     padding: 1rem 0.875rem;
-    padding-top: calc(var(--topbar-h) + 0.75rem);
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 0.75rem);
     padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
     max-width: 100%;
   }
@@ -338,7 +338,7 @@ button:active,
 @media (max-width: 375px) {
   .main-content {
     padding: 0.75rem 0.625rem;
-    padding-top: calc(var(--topbar-h) + 0.5rem);
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 0.5rem);
     padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px) + 0.75rem);
   }
 }
