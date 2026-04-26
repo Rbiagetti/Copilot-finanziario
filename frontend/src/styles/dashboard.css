@@ -504,6 +504,39 @@
   border-color: rgba(255,182,141,0.35);
 }
 
+/* === MOM SELECTS (header card confronto) === */
+.mom-header { flex-wrap: wrap; gap: 0.5rem; }
+.mom-selects {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mom-select {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+  font-family: inherit;
+}
+.mom-select:hover, .mom-select:focus {
+  border-color: rgba(255,182,141,0.4);
+  background: rgba(255,140,66,0.08);
+  color: var(--accent);
+}
+.mom-vs {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+
 /* === SKELETON LOADER === */
 .skeleton-icon {
   width: 40px; height: 40px;

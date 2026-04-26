@@ -15,7 +15,7 @@ import {
   Calendar, Filter, SlidersHorizontal, ChevronDown, PlusCircle,
   BarChart2, Wallet, ArrowRight, TrendingDown, Minus
 } from "lucide-react";
-import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData, getCategoryMoM } from "../../utils/analyticsUtils";
+import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData, getCategoryMoM, getAvailableMonths } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
 const PALETTE = ["#6366f1","#f43f5e","#10b981","#f59e0b","#8b5cf6","#06b6d4","#ec4899","#14b8a6","#f97316","#64748b"];
@@ -71,6 +71,8 @@ export default function Dashboard() {
   const [catFilter, setCatFilter] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [patternTab, setPatternTab] = useState<"orario" | "giornaliero">("giornaliero");
+  const [momA, setMomA] = useState<string>("");   // mese "corrente" (barra piena)
+  const [momB, setMomB] = useState<string>("");   // mese "precedente" (barra dim)
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
@@ -154,8 +156,21 @@ export default function Dashboard() {
     }));
   }, [filteredData]);
 
-  // Confronto categorie mese-su-mese
-  const momData = useMemo(() => getCategoryMoM(rawHistory), [rawHistory]);
+  // Mesi disponibili e selezione MoM
+  const availableMonths = useMemo(() => getAvailableMonths(rawHistory), [rawHistory]);
+
+  // Inizializza momA/momB ai due mesi più recenti quando i dati arrivano
+  useEffect(() => {
+    if (availableMonths.length >= 2 && !momA && !momB) {
+      setMomA(availableMonths[0].key);   // più recente
+      setMomB(availableMonths[1].key);   // secondo più recente
+    }
+  }, [availableMonths]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const momData = useMemo(
+    () => momA && momB ? getCategoryMoM(rawHistory, momA, momB) : { rows: [], currentLabel: "", prevLabel: "" },
+    [rawHistory, momA, momB]
+  );
 
   // Top 10 transazioni del periodo (ordinate per importo desc)
   const top10 = useMemo(() =>
@@ -664,37 +679,74 @@ export default function Dashboard() {
         </div>
 
         {/* 8. Confronto Mese-su-Mese per Categoria */}
-        {momData.rows.length > 0 && (
+        {availableMonths.length >= 2 && (
           <div className="chart-card card-glass chart-full">
-            <ChartHeader
-              title={`Categorie: ${momData.currentLabel} vs ${momData.prevLabel}`}
-              infoTitle="Confronto mensile"
-              infoBody="Confronta la spesa per categoria tra il mese corrente e il mese precedente. Le barre mostrano quanto hai speso in ciascun mese."
-            />
-            <ResponsiveContainer width="100%" height={Math.max(200, momData.rows.length * 44)}>
-              <BarChart data={momData.rows} layout="vertical" margin={{ left: 8, right: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} horizontal={false} />
-                <XAxis type="number" tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
-                <YAxis
-                  type="category"
-                  dataKey="category"
-                  tick={{ fill: cc.tick, fontSize: 10 }}
-                  width={90}
-                  tickFormatter={v => `${EMOJI_MAP[v] || "❓"} ${v}`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: "11px" }} iconSize={10} />
-                <Bar dataKey="previous" name={momData.prevLabel} fill="rgba(255,140,66,0.3)" radius={[0, 3, 3, 0]} />
-                <Bar dataKey="current" name={momData.currentLabel} fill="var(--accent)" radius={[0, 3, 3, 0]}>
-                  <LabelList
-                    dataKey="deltaPct"
-                    position="right"
-                    style={{ fill: "var(--text-dim)", fontSize: 10 }}
-                    formatter={(v: number | null) => v !== null ? (v > 0 ? `+${v}%` : `${v}%`) : ""}
+            {/* Header con selects inline */}
+            <div className="chart-header mom-header">
+              <h3>Confronto categorie</h3>
+              <div className="mom-selects">
+                <select
+                  className="mom-select"
+                  value={momA}
+                  onChange={e => setMomA(e.target.value)}
+                  aria-label="Mese A"
+                >
+                  {availableMonths.map(m => (
+                    <option key={m.key} value={m.key} disabled={m.key === momB}>{m.label}</option>
+                  ))}
+                </select>
+                <span className="mom-vs">vs</span>
+                <select
+                  className="mom-select"
+                  value={momB}
+                  onChange={e => setMomB(e.target.value)}
+                  aria-label="Mese B"
+                >
+                  {availableMonths.map(m => (
+                    <option key={m.key} value={m.key} disabled={m.key === momA}>{m.label}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn-chart-info"
+                  aria-label="Info: Confronto categorie"
+                  onClick={() => {/* info inline non serve, niente overlay */}}
+                  title="Confronta la spesa per categoria tra due mesi a scelta. Barra piena = mese A, barra trasparente = mese B. Il % a destra indica la variazione."
+                >
+                  <HelpCircle size={14} />
+                </button>
+              </div>
+            </div>
+
+            {momData.rows.length === 0 ? (
+              <div className="widget-empty">
+                <p>Nessun dato per i mesi selezionati</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(200, momData.rows.length * 44)}>
+                <BarChart data={momData.rows} layout="vertical" margin={{ left: 8, right: 44 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
+                  <YAxis
+                    type="category"
+                    dataKey="category"
+                    tick={{ fill: cc.tick, fontSize: 10 }}
+                    width={92}
+                    tickFormatter={v => `${EMOJI_MAP[v] || "❓"} ${v}`}
                   />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: "11px" }} iconSize={10} />
+                  <Bar dataKey="previous" name={momData.prevLabel} fill="rgba(255,140,66,0.28)" radius={[0, 3, 3, 0]} />
+                  <Bar dataKey="current" name={momData.currentLabel} fill="var(--accent)" radius={[0, 3, 3, 0]}>
+                    <LabelList
+                      dataKey="deltaPct"
+                      position="right"
+                      style={{ fill: "var(--text-dim)", fontSize: 10 }}
+                      formatter={(v: number | null) => v !== null ? (v > 0 ? `+${v}%` : `${v}%`) : "nuovo"}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         )}
 

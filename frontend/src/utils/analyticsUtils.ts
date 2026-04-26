@@ -150,11 +150,34 @@ export const getRecurringData = (transactions: FullHistoryTransaction[], groupBy
     }));
 };
 
+const fmtMonthKey = (key: string) => {
+  const [y, m] = key.split("-");
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("it-IT", { month: "short", year: "numeric" });
+};
+
 /**
- * Category Month-over-Month comparison
- * Returns categories with current month, previous month, delta and delta%
+ * Restituisce i mesi disponibili (ordinati dal più recente) con chiave e label
  */
-export const getCategoryMoM = (transactions: FullHistoryTransaction[]) => {
+export const getAvailableMonths = (transactions: FullHistoryTransaction[]) => {
+  const keys = new Set<string>();
+  transactions.forEach(t => {
+    const d = new Date(t.date);
+    keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  });
+  return Array.from(keys)
+    .sort((a, b) => b.localeCompare(a)) // più recente prima
+    .map(key => ({ key, label: fmtMonthKey(key) }));
+};
+
+/**
+ * Category Month-over-Month comparison — mesi selezionabili
+ * monthA = "mese corrente" (barra piena), monthB = "mese precedente" (barra dim)
+ */
+export const getCategoryMoM = (
+  transactions: FullHistoryTransaction[],
+  monthA: string,
+  monthB: string,
+) => {
   const monthly: Record<string, Record<string, number>> = {};
 
   transactions.forEach(t => {
@@ -164,32 +187,25 @@ export const getCategoryMoM = (transactions: FullHistoryTransaction[]) => {
     monthly[key][t.category] = (monthly[key][t.category] || 0) + t.amount;
   });
 
-  const months = Object.keys(monthly).sort();
-  if (months.length < 2) return { rows: [], currentLabel: "", prevLabel: "" };
-
-  const currentKey = months[months.length - 1];
-  const prevKey = months[months.length - 2];
-  const current = monthly[currentKey] || {};
-  const prev = monthly[prevKey] || {};
-
-  const fmt = (key: string) => {
-    const [y, m] = key.split("-");
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("it-IT", { month: "short", year: "numeric" });
-  };
-
-  const allCats = new Set([...Object.keys(current), ...Object.keys(prev)]);
+  const dataA = monthly[monthA] || {};
+  const dataB = monthly[monthB] || {};
+  const allCats = new Set([...Object.keys(dataA), ...Object.keys(dataB)]);
 
   const rows = Array.from(allCats).map(cat => ({
     category: cat,
-    current: parseFloat((current[cat] || 0).toFixed(2)),
-    previous: parseFloat((prev[cat] || 0).toFixed(2)),
-    delta: parseFloat(((current[cat] || 0) - (prev[cat] || 0)).toFixed(2)),
-    deltaPct: prev[cat]
-      ? parseFloat((((current[cat] || 0) - prev[cat]) / prev[cat] * 100).toFixed(1))
+    current: parseFloat((dataA[cat] || 0).toFixed(2)),
+    previous: parseFloat((dataB[cat] || 0).toFixed(2)),
+    delta: parseFloat(((dataA[cat] || 0) - (dataB[cat] || 0)).toFixed(2)),
+    deltaPct: dataB[cat]
+      ? parseFloat((((dataA[cat] || 0) - dataB[cat]) / dataB[cat] * 100).toFixed(1))
       : null,
   })).sort((a, b) => b.current - a.current);
 
-  return { rows, currentLabel: fmt(currentKey), prevLabel: fmt(prevKey) };
+  return {
+    rows,
+    currentLabel: fmtMonthKey(monthA),
+    prevLabel: fmtMonthKey(monthB),
+  };
 };
 
 /**
