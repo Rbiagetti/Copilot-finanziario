@@ -18,6 +18,19 @@ import {
 import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData, getCategoryMoM, getAvailableMonths } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
+
+const DASHBOARD_CARDS = [
+  { id: "trend",      label: "Andamento mensile",   emoji: "📈" },
+  { id: "category",   label: "Spese per categoria", emoji: "🍩" },
+  { id: "budget",     label: "Budget del mese",     emoji: "🎯" },
+  { id: "pacing",     label: "Pacing / Burn rate",  emoji: "⚡" },
+  { id: "recurring",  label: "Fissi vs Variabili",  emoji: "🔄" },
+  { id: "patterns",   label: "Pattern temporali",   emoji: "🕒" },
+  { id: "top10",      label: "Top 10 spese",         emoji: "🏆" },
+  { id: "mom",        label: "Confronto M vs M",    emoji: "📊" },
+  { id: "cumulative", label: "Curva cumulativa",    emoji: "📉" },
+  { id: "heatmap",    label: "Heatmap annuale",      emoji: "🗓️" },
+] as const;
 const PALETTE = ["#6366f1","#f43f5e","#10b981","#f59e0b","#8b5cf6","#06b6d4","#ec4899","#14b8a6","#f97316","#64748b"];
 const EMOJI_MAP: Record<string, string> = {
   cibo: "🍕", trasporti: "🚗", casa: "🏠", salute: "💊",
@@ -241,6 +254,24 @@ export default function Dashboard() {
   const [momA, setMomA] = useState<string>("");   // mese "corrente" (barra piena)
   const [momB, setMomB] = useState<string>("");   // mese "precedente" (barra dim)
   const [cumMonth, setCumMonth] = useState<string>("");  // curva cumulativa
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [hiddenCards, setHiddenCards] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("dashboard_hidden_cards");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  const toggleCard = (id: string) => {
+    setHiddenCards(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      localStorage.setItem("dashboard_hidden_cards", JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const isVisible = (id: string) => !hiddenCards.has(id);
+  const customizeRef = useFocusTrap(showCustomize);
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
@@ -288,6 +319,9 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, []);
 
+  // ── FILTRO PRIMARIO: daysBack + catFilter ──────────────────────────
+  // Usato da chart "Periodo selezionato": Andamento, Categorie,
+  // Fissi/Var, Pattern temporali, Top 10
   const filteredData = useMemo(() => rawHistory.filter(t => {
     if (daysBack < 9999) {
       const cutoff = new Date();
@@ -297,6 +331,15 @@ export default function Dashboard() {
     if (catFilter && t.category !== catFilter) return false;
     return true;
   }), [rawHistory, daysBack, catFilter]);
+
+  // ── FILTRO CATEGORIA SOLO ──────────────────────────────────────────
+  // Usato da chart con selettore mese proprio (MoM, Curva cumulativa)
+  // e dall'Heatmap (sempre 12 mesi): rispettano la categoria selezionata
+  // ma NON il periodo globale perché hanno il proprio controllo temporale
+  const catFilteredHistory = useMemo(
+    () => catFilter ? rawHistory.filter(t => t.category === catFilter) : rawHistory,
+    [rawHistory, catFilter]
+  );
 
   const monthlyTrend = useMemo(() => getMonthlyTrend(filteredData, "month"), [filteredData]);
   const categoryData = useMemo(() => getCategoryData(filteredData), [filteredData]);
@@ -324,18 +367,21 @@ export default function Dashboard() {
     }));
   }, [filteredData]);
 
-  // Mesi disponibili (ordinati dal più recente)
-  const availableMonths = useMemo(() => getAvailableMonths(rawHistory), [rawHistory]);
+  // Mesi disponibili basati su catFilteredHistory:
+  // così i selettori MoM/cumulativa mostrano solo mesi
+  // con dati reali per la categoria selezionata
+  const availableMonths = useMemo(() => getAvailableMonths(catFilteredHistory), [catFilteredHistory]);
 
   // Valori effettivi: se l'utente non ha ancora selezionato, usa i default
   const effectiveMomA = momA || availableMonths[0]?.key || "";
   const effectiveMomB = momB || availableMonths[1]?.key || "";
 
+  // MoM usa catFilteredHistory: rispetta la categoria ma ha i suoi selettori di mese
   const momData = useMemo(
     () => effectiveMomA && effectiveMomB
-      ? getCategoryMoM(rawHistory, effectiveMomA, effectiveMomB)
+      ? getCategoryMoM(catFilteredHistory, effectiveMomA, effectiveMomB)
       : { rows: [], currentLabel: "", prevLabel: "" },
-    [rawHistory, effectiveMomA, effectiveMomB]
+    [catFilteredHistory, effectiveMomA, effectiveMomB]
   );
 
   // Top 10 transazioni del periodo (ordinate per importo desc)
@@ -350,7 +396,8 @@ export default function Dashboard() {
     if (!effectiveCumMonth) return [];
     const [year, month] = effectiveCumMonth.split("-").map(Number);
     const daysInMonth = new Date(year, month, 0).getDate();
-    const monthTxs = rawHistory.filter(t => {
+    // usa catFilteredHistory: rispetta categoria selezionata, selettore mese gestisce il tempo
+    const monthTxs = catFilteredHistory.filter(t => {
       const d = new Date(t.date);
       return d.getFullYear() === year && d.getMonth() + 1 === month;
     });
@@ -376,7 +423,7 @@ export default function Dashboard() {
         pace,
       };
     });
-  }, [rawHistory, effectiveCumMonth, forecast]);
+  }, [catFilteredHistory, effectiveCumMonth, forecast]);
 
   // Pacing: calcolo burn rate mese corrente
   const pacing = useMemo(() => {
@@ -516,48 +563,67 @@ export default function Dashboard() {
             <h2>Data Intelligence</h2>
             <p className="dashboard-subtitle">Analisi avanzata del comportamento di spesa.</p>
           </div>
-          <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
+          {/* Wrapper con position:relative → il pannello si posiziona rispetto a questo */}
+          <div style={{ position: "relative", display: "flex", alignItems: "flex-start", gap: "0.5rem", flexWrap: "wrap" }}>
             <button
               className="filters-toggle"
-              onClick={() => setFiltersOpen(o => !o)}
-              aria-expanded={filtersOpen}
-              aria-label="Apri filtri"
+              onClick={() => setShowCustomize(true)}
+              aria-label="Personalizza dashboard"
             >
               <SlidersHorizontal size={14} />
-              <span>Filtri</span>
-              {(daysBack !== 90 || catFilter) && (
-                <span className="filters-badge">{(daysBack !== 90 ? 1 : 0) + (catFilter ? 1 : 0)}</span>
+              <span>Personalizza</span>
+              {hiddenCards.size > 0 && (
+                <span className="filters-badge">{hiddenCards.size}</span>
               )}
-              <ChevronDown size={14} className="filters-chevron" />
             </button>
-            {filtersOpen && (
-              <div className="filters-panel">
-                <div className="filter-row">
-                  <Calendar size={14} className="text-dim" />
-                  <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
-                    <option value={7}>Ultima settimana</option>
-                    <option value={30}>Ultimo mese</option>
-                    <option value={90}>Ultimi 3 mesi</option>
-                    <option value={180}>Ultimi 6 mesi</option>
-                    <option value={365}>Ultimo anno</option>
-                    <option value={9999}>Tutto</option>
-                  </select>
-                </div>
-                <div className="filter-row">
-                  <Filter size={14} className="text-dim" />
-                  <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-minimal">
-                    <option value="">Tutte le categorie</option>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+
+            <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
+              <button
+                className="filters-toggle"
+                onClick={() => setFiltersOpen(o => !o)}
+                aria-expanded={filtersOpen}
+                aria-label="Apri filtri"
+              >
+                <SlidersHorizontal size={14} />
+                <span>Filtri</span>
                 {(daysBack !== 90 || catFilter) && (
-                  <button className="filters-reset" onClick={() => { setDaysBack(90); setCatFilter(""); }}>
-                    <X size={12} /> Reset
-                  </button>
+                  <span className="filters-badge">{(daysBack !== 90 ? 1 : 0) + (catFilter ? 1 : 0)}</span>
                 )}
-              </div>
-            )}
-          </div>
+                <ChevronDown size={14} className="filters-chevron" />
+              </button>
+
+              {filtersOpen && (
+                <>
+                  <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
+                  <div className="filters-panel">
+                    <div className="filter-row">
+                      <Calendar size={14} className="text-dim" />
+                      <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
+                        <option value={7}>Ultima settimana</option>
+                        <option value={30}>Ultimo mese</option>
+                        <option value={90}>Ultimi 3 mesi</option>
+                        <option value={180}>Ultimi 6 mesi</option>
+                        <option value={365}>Ultimo anno</option>
+                        <option value={9999}>Tutto</option>
+                      </select>
+                    </div>
+                    <div className="filter-row">
+                      <Filter size={14} className="text-dim" />
+                      <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-minimal">
+                        <option value="">Tutte le categorie</option>
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    {(daysBack !== 90 || catFilter) && (
+                      <button className="filters-reset" onClick={() => { setDaysBack(90); setCatFilter(""); }}>
+                        <X size={12} /> Reset
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>{/* end wrapper pulsanti */}
         </div>
       </header>
 
@@ -597,7 +663,7 @@ export default function Dashboard() {
       <main className="charts-grid">
 
         {/* 1. Andamento Mensile */}
-        <div className="chart-card card-glass">
+        {isVisible("trend") && <div className="chart-card card-glass">
           <ChartHeader
             title="Andamento Mensile Spese"
             infoTitle="Andamento Mensile"
@@ -619,10 +685,10 @@ export default function Dashboard() {
               <Line type="monotone" dataKey="avg_daily" name="Media/giorno" stroke="var(--warning)" strokeDasharray="5 5" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
 
         {/* 2. Spese per Categoria */}
-        <div className="chart-card card-glass">
+        {isVisible("category") && <div className="chart-card card-glass">
           <ChartHeader
             title="Spese per Categoria"
             infoTitle="Mix Categorie"
@@ -655,15 +721,16 @@ export default function Dashboard() {
               <Legend verticalAlign="bottom" height={36} iconSize={10} wrapperStyle={{ fontSize: "12px" }} />
             </PieChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
 
         {/* 3. Budget del Mese */}
-        <div className="chart-card card-glass">
+        {isVisible("budget") && <div className="chart-card card-glass">
           <ChartHeader
             title="Budget del Mese"
             infoTitle="Budget per Categoria"
             infoBody="Avanzamento del budget mensile per ogni categoria. Verde = nei limiti, arancio = vicino al limite (>75%), rosso = sforato."
           />
+          <span className="card-scope-badge"><span>📅</span><span>Mese in corso</span></span>
           {budgets.length === 0 ? (
             <div className="widget-empty">
               <Wallet size={28} />
@@ -703,15 +770,16 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* 4. Pacing / Burn Rate */}
-        <div className="chart-card card-glass">
+        {isVisible("pacing") && <div className="chart-card card-glass">
           <ChartHeader
             title="Ritmo di Spesa"
             infoTitle="Pacing mensile"
             infoBody="Confronta quanto hai speso finora con quanto dovresti aver speso linearmente. Se la barra arancio supera il segnaposto dei giorni, stai spendendo più del previsto."
           />
+          <span className="card-scope-badge"><span>📅</span><span>Mese in corso</span></span>
           {pacing ? (
             <div className="pacing-widget">
               <div className="pacing-status">
@@ -771,10 +839,10 @@ export default function Dashboard() {
               <p>Dati insufficienti per il calcolo del ritmo</p>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* 5. Costi Fissi vs Variabili */}
-        <div className="chart-card card-glass">
+        {isVisible("recurring") && <div className="chart-card card-glass">
           <ChartHeader
             title="Costi Fissi vs Variabili"
             infoTitle="Fissi vs Variabili"
@@ -791,10 +859,10 @@ export default function Dashboard() {
               <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={10} />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </div>}
 
         {/* 6. Pattern Temporali — tab Giornaliero / Orario */}
-        <div className="chart-card card-glass">
+        {isVisible("patterns") && <div className="chart-card card-glass">
           <div className="chart-header">
             <h3>Pattern Temporali</h3>
             <div className="pattern-tabs">
@@ -839,10 +907,10 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </div>}
 
         {/* 7. Top 10 Spese del Periodo */}
-        <div className="chart-card card-glass">
+        {isVisible("top10") && <div className="chart-card card-glass">
           <ChartHeader
             title="Top Spese del Periodo"
             infoTitle="Transazioni più alte"
@@ -876,10 +944,10 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* 8. Confronto Mese-su-Mese per Categoria */}
-        {availableMonths.length >= 2 && (
+        {isVisible("mom") && availableMonths.length >= 2 && (
           <div className="chart-card card-glass chart-full">
             {/* Header con selects inline + ? in alto a destra */}
             <div className="chart-header mom-header">
@@ -937,7 +1005,7 @@ export default function Dashboard() {
         )}
 
         {/* 9. Curva Cumulativa di Spesa */}
-        {availableMonths.length > 0 && (
+        {isVisible("cumulative") && availableMonths.length > 0 && (
           <div className="chart-card card-glass chart-full">
             <ChartHeader
               title="Curva cumulativa"
@@ -997,14 +1065,14 @@ export default function Dashboard() {
         )}
 
         {/* 10. Calendar Heatmap — attività di spesa anno */}
-        {rawHistory.length > 0 && (
+        {isVisible("heatmap") && rawHistory.length > 0 && (
           <div className="chart-card card-glass chart-full">
             <ChartHeader
               title="Attività di spesa — anno"
               infoTitle="Heatmap annuale"
               infoBody="Mostra l'intensità di spesa giorno per giorno negli ultimi 12 mesi, come il grafico dei contributi su GitHub. Colori più scuri = spesa più alta quel giorno. Ideale per vedere pattern stagionali, periodi di spesa intensa o mesi tranquilli."
             />
-            <HeatmapCalendar transactions={rawHistory} />
+            <HeatmapCalendar transactions={catFilteredHistory} />
           </div>
         )}
 
@@ -1048,6 +1116,53 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODALE PERSONALIZZA */}
+      {showCustomize && createPortal(
+        <div className="modal-overlay" onClick={() => setShowCustomize(false)}>
+          <div
+            className="modal-box customize-panel"
+            ref={customizeRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Personalizza dashboard"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Personalizza dashboard</h3>
+              <button className="btn-icon" aria-label="Chiudi" onClick={() => setShowCustomize(false)}><X size={18} /></button>
+            </div>
+            <div className="customize-list">
+              {DASHBOARD_CARDS.map(card => (
+                <div key={card.id} className="customize-row">
+                  <span className="customize-label"><span>{card.emoji}</span><span>{card.label}</span></span>
+                  <button
+                    className={`toggle-switch ${!hiddenCards.has(card.id) ? "on" : ""}`}
+                    onClick={() => toggleCard(card.id)}
+                    aria-label={`${hiddenCards.has(card.id) ? "Mostra" : "Nascondi"} ${card.label}`}
+                    aria-checked={!hiddenCards.has(card.id)}
+                    role="switch"
+                  />
+                </div>
+              ))}
+            </div>
+            {hiddenCards.size > 0 && (
+              <div style={{ padding: "0 1.5rem 1.25rem", textAlign: "right" }}>
+                <button
+                  className="filters-reset"
+                  onClick={() => {
+                    setHiddenCards(new Set());
+                    localStorage.removeItem("dashboard_hidden_cards");
+                  }}
+                >
+                  <X size={12} /> Mostra tutto
+                </button>
+              </div>
+            )}
           </div>
         </div>,
         document.body
