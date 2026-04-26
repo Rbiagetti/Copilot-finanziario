@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { createPortal } from "react-dom";
 import {
@@ -24,6 +24,172 @@ const EMOJI_MAP: Record<string, string> = {
   svago: "🎭", abbigliamento: "👕", lavoro: "💼",
   abbonamenti: "📱", formazione: "🎓", altro: "❓",
 };
+
+/* ─── MOM BAR CHART — responsive Y-axis ─── */
+type MomRow = { category: string; current: number; previous: number; delta: number; deltaPct: number | null };
+function MomBarChart({ rows, currentLabel, prevLabel, cc }: {
+  rows: MomRow[];
+  currentLabel: string;
+  prevLabel: string;
+  cc: ReturnType<typeof useChartColors>;
+}) {
+  const sm = typeof window !== "undefined" && window.innerWidth < 520;
+  const yW   = sm ? 30 : 100;
+  const rowH = sm ? 36 : 44;
+  const yFmt = (v: string) => sm ? (EMOJI_MAP[v] || "❓") : `${EMOJI_MAP[v] || "❓"} ${v}`;
+
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(200, rows.length * rowH)}>
+      <BarChart data={rows} layout="vertical" margin={{ left: 4, right: sm ? 30 : 46, top: 4, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} horizontal={false} />
+        <XAxis
+          type="number"
+          tick={{ fill: cc.tick, fontSize: sm ? 9 : 10 }}
+          tickFormatter={v => `€${v}`}
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="category"
+          tick={{ fill: cc.tick, fontSize: sm ? 13 : 10 }}
+          width={yW}
+          tickFormatter={yFmt}
+          tickLine={false}
+          axisLine={false}
+        />
+        <Tooltip
+          contentStyle={{ background: "var(--surface-container-hi)", border: "1px solid var(--glass-border)", borderRadius: 10, fontSize: "0.8rem" }}
+          formatter={(value: any, name: string) => [`€${Number(value).toFixed(2)}`, name]}
+        />
+        <Legend wrapperStyle={{ fontSize: sm ? "10px" : "11px" }} iconSize={10} />
+        <Bar dataKey="previous" name={prevLabel} fill="rgba(255,140,66,0.28)" radius={[0, 3, 3, 0]} />
+        <Bar dataKey="current" name={currentLabel} fill="var(--accent)" radius={[0, 3, 3, 0]}>
+          <LabelList
+            dataKey="deltaPct"
+            position="right"
+            style={{ fill: "var(--text-dim)", fontSize: sm ? 9 : 10 }}
+            formatter={(v: number | null) => v !== null ? (v > 0 ? `+${v}%` : `${v}%`) : "new"}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ─── HEATMAP CALENDAR (GitHub-style) ─── */
+function HeatmapCalendar({ transactions }: { transactions: import("../../api/client").FullHistoryTransaction[] }) {
+  const CELL = 12, GAP = 3;
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll all'estrema destra: l'utente vede subito le date più recenti
+  useEffect(() => {
+    if (wrapRef.current) {
+      wrapRef.current.scrollLeft = wrapRef.current.scrollWidth;
+    }
+  }, [transactions]);
+
+  const map = useMemo(() => {
+    const m: Record<string, number> = {};
+    transactions.forEach(t => { m[t.date] = (m[t.date] || 0) + t.amount; });
+    return m;
+  }, [transactions]);
+
+  // Genera le settimane degli ultimi 364 giorni partendo da lunedì
+  const { weeks, monthLabels } = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - 364);
+    const dow0 = start.getDay(); // 0=Dom
+    start.setDate(start.getDate() - (dow0 === 0 ? 6 : dow0 - 1)); // arretra a lunedì
+
+    const weeks: { date: string; total: number; dow: number }[][] = [];
+    const cur = new Date(start);
+    const monthLabels: { label: string; wIdx: number }[] = [];
+
+    while (cur <= today) {
+      const raw = cur.getDay();
+      const dow = raw === 0 ? 6 : raw - 1; // 0=Lun … 6=Dom
+      if (dow === 0 || weeks.length === 0) weeks.push([]);
+      const dateStr = cur.toISOString().slice(0, 10);
+      const wIdx = weeks.length - 1;
+
+      // etichetta mese se è il primo giorno del mese
+      if (cur.getDate() === 1) {
+        monthLabels.push({
+          label: cur.toLocaleDateString("it-IT", { month: "short" }),
+          wIdx,
+        });
+      }
+      weeks[wIdx].push({ date: dateStr, total: map[dateStr] || 0, dow });
+      cur.setDate(cur.getDate() + 1);
+    }
+    return { weeks, monthLabels };
+  }, [map]);
+
+  const allTotals = Object.values(map).filter(v => v > 0);
+  const max = allTotals.length > 0 ? Math.max(...allTotals) : 1;
+  const getLevel = (v: number) => {
+    if (v === 0) return 0;
+    if (v < max * 0.25) return 1;
+    if (v < max * 0.5)  return 2;
+    if (v < max * 0.75) return 3;
+    return 4;
+  };
+  const fmt = (d: string) =>
+    new Date(d + "T12:00:00").toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
+
+  const totalCols = weeks.length;
+
+  return (
+    <div className="heatmap-wrap" ref={wrapRef}>
+      {/* Etichette mesi */}
+      <div className="heatmap-months-row" style={{ paddingLeft: 28, position: "relative", height: 16 }}>
+        {monthLabels.map((m, i) => (
+          <span
+            key={i}
+            style={{ position: "absolute", left: 28 + m.wIdx * (CELL + GAP), fontSize: "0.62rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}
+          >
+            {m.label}
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 4, alignItems: "flex-start" }}>
+        {/* Etichette giorni */}
+        <div className="heatmap-day-labels">
+          {["Lun","","Mer","","Ven","","Dom"].map((d, i) => (
+            <span key={i} style={{ fontSize: "0.58rem", color: "var(--text-dim)", height: CELL + GAP, display: "flex", alignItems: "center" }}>{d}</span>
+          ))}
+        </div>
+
+        {/* Griglia */}
+        <div
+          className="heatmap-grid"
+          style={{ gridTemplateRows: `repeat(7, ${CELL}px)`, gridTemplateColumns: `repeat(${totalCols}, ${CELL}px)`, gap: GAP }}
+        >
+          {weeks.map((week, wIdx) =>
+            week.map(day => (
+              <div
+                key={day.date}
+                className={`heatmap-cell l${getLevel(day.total)}`}
+                style={{ gridColumn: wIdx + 1, gridRow: day.dow + 1 }}
+                title={`${fmt(day.date)}\n€${day.total.toFixed(2)}`}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Legenda */}
+      <div className="heatmap-legend">
+        <span>Meno</span>
+        {[0,1,2,3,4].map(l => <div key={l} className={`heatmap-cell l${l}`} />)}
+        <span>Di più</span>
+      </div>
+    </div>
+  );
+}
 
 function ChartHeader({ title, infoTitle, infoBody }: { title: string; infoTitle: string; infoBody: string }) {
   const [showInfo, setShowInfo] = useState(false);
@@ -74,6 +240,7 @@ export default function Dashboard() {
   const [showMomInfo, setShowMomInfo] = useState(false);
   const [momA, setMomA] = useState<string>("");   // mese "corrente" (barra piena)
   const [momB, setMomB] = useState<string>("");   // mese "precedente" (barra dim)
+  const [cumMonth, setCumMonth] = useState<string>("");  // curva cumulativa
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
@@ -176,6 +343,40 @@ export default function Dashboard() {
     [...filteredData].sort((a, b) => b.amount - a.amount).slice(0, 10),
     [filteredData]
   );
+
+  // Curva cumulativa
+  const effectiveCumMonth = cumMonth || availableMonths[0]?.key || "";
+  const cumulativeData = useMemo(() => {
+    if (!effectiveCumMonth) return [];
+    const [year, month] = effectiveCumMonth.split("-").map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const monthTxs = rawHistory.filter(t => {
+      const d = new Date(t.date);
+      return d.getFullYear() === year && d.getMonth() + 1 === month;
+    });
+    const byDay: Record<number, number> = {};
+    monthTxs.forEach(t => {
+      const day = new Date(t.date).getDate();
+      byDay[day] = (byDay[day] || 0) + t.amount;
+    });
+    const today = new Date();
+    const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
+    const todayDay = today.getDate();
+    const monthTotal = monthTxs.reduce((s, t) => s + t.amount, 0);
+    const projectedTotal = isCurrentMonth && forecast ? forecast.projected_total : monthTotal;
+    let cumSum = 0;
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      cumSum += byDay[day] || 0;
+      const pace = parseFloat(((projectedTotal / daysInMonth) * day).toFixed(2));
+      const isFuture = isCurrentMonth && day > todayDay;
+      return {
+        day,
+        actual: isFuture ? null : parseFloat(cumSum.toFixed(2)),
+        pace,
+      };
+    });
+  }, [rawHistory, effectiveCumMonth, forecast]);
 
   // Pacing: calcolo burn rate mese corrente
   const pacing = useMemo(() => {
@@ -730,31 +931,80 @@ export default function Dashboard() {
                 <p>Nessun dato per i mesi selezionati</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={Math.max(200, momData.rows.length * 44)}>
-                <BarChart data={momData.rows} layout="vertical" margin={{ left: 8, right: 44 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
-                  <YAxis
-                    type="category"
-                    dataKey="category"
-                    tick={{ fill: cc.tick, fontSize: 10 }}
-                    width={92}
-                    tickFormatter={v => `${EMOJI_MAP[v] || "❓"} ${v}`}
+              <MomBarChart rows={momData.rows} currentLabel={momData.currentLabel} prevLabel={momData.prevLabel} cc={cc} />
+            )}
+          </div>
+        )}
+
+        {/* 9. Curva Cumulativa di Spesa */}
+        {availableMonths.length > 0 && (
+          <div className="chart-card card-glass chart-full">
+            <ChartHeader
+              title="Curva cumulativa"
+              infoTitle="Curva cumulativa"
+              infoBody="Mostra come la spesa si accumula giorno per giorno nel mese selezionato. La linea arancione è la spesa reale, quella tratteggiata è il ritmo lineare atteso (proiezione). Se la linea reale è sopra quella tratteggiata stai spendendo più velocemente del previsto."
+            />
+            <div style={{ marginTop: "-0.5rem", marginBottom: "0.75rem" }}>
+              <select
+                className="mom-select"
+                value={effectiveCumMonth}
+                onChange={e => setCumMonth(e.target.value)}
+                aria-label="Mese curva cumulativa"
+              >
+                {availableMonths.map(m => (
+                  <option key={m.key} value={m.key}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            {cumulativeData.length === 0 ? (
+              <p className="text-dim" style={{ textAlign: "center", padding: "2rem 0" }}>Nessun dato per questo mese.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={cumulativeData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="cumGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="var(--accent)" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fill: "var(--text-dim)", fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={4}
+                    tickFormatter={v => `${v}`}
                   />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} iconSize={10} />
-                  <Bar dataKey="previous" name={momData.prevLabel} fill="rgba(255,140,66,0.28)" radius={[0, 3, 3, 0]} />
-                  <Bar dataKey="current" name={momData.currentLabel} fill="var(--accent)" radius={[0, 3, 3, 0]}>
-                    <LabelList
-                      dataKey="deltaPct"
-                      position="right"
-                      style={{ fill: "var(--text-dim)", fontSize: 10 }}
-                      formatter={(v: number | null) => v !== null ? (v > 0 ? `+${v}%` : `${v}%`) : "nuovo"}
-                    />
-                  </Bar>
-                </BarChart>
+                  <YAxis
+                    tick={{ fill: "var(--text-dim)", fontSize: 11 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={v => `€${v}`}
+                    width={54}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: "var(--surface-container-hi)", border: "1px solid var(--glass-border)", borderRadius: 10, fontSize: "0.8rem" }}
+                    formatter={(value: any, name: string) => [`€${Number(value).toFixed(2)}`, name === "actual" ? "Spesa reale" : "Ritmo atteso"]}
+                    labelFormatter={l => `Giorno ${l}`}
+                  />
+                  <Area type="monotone" dataKey="actual" name="actual" stroke="var(--accent)" fill="url(#cumGrad)" strokeWidth={2} dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="pace" name="pace" stroke="rgba(255,182,141,0.45)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+                </AreaChart>
               </ResponsiveContainer>
             )}
+          </div>
+        )}
+
+        {/* 10. Calendar Heatmap — attività di spesa anno */}
+        {rawHistory.length > 0 && (
+          <div className="chart-card card-glass chart-full">
+            <ChartHeader
+              title="Attività di spesa — anno"
+              infoTitle="Heatmap annuale"
+              infoBody="Mostra l'intensità di spesa giorno per giorno negli ultimi 12 mesi, come il grafico dei contributi su GitHub. Colori più scuri = spesa più alta quel giorno. Ideale per vedere pattern stagionali, periodi di spesa intensa o mesi tranquilli."
+            />
+            <HeatmapCalendar transactions={rawHistory} />
           </div>
         )}
 
