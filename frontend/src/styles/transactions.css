@@ -221,11 +221,12 @@
   .tx-actions .btn-icon { padding: 0.3rem; }
   .list-header { flex-wrap: wrap; gap: 0.5rem; }
   .list-controls { flex-wrap: wrap; gap: 0.4rem; }
-  /* filters-panel su mobile: aperto verso il basso, larghezza tutta disponibile */
+  /* Pannello: ancorato al bordo DESTRO del bottone, si espande verso sinistra */
   .tx-filters-top .filters-panel {
-    left: 0;
     right: 0;
-    max-width: 100%;
+    left: auto;
+    width: calc(100vw - 2rem);
+    max-width: 320px;
   }
   .transaction-form { padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem; }
   .form-tabs { gap: 0.3rem; flex-wrap: wrap; }

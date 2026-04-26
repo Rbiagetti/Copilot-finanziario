@@ -190,7 +190,7 @@ export default function TransactionList() {
               <Search size={14} className="search-icon" />
               <input
                 type="text"
-                placeholder="Cerca per descrizione o categoria..."
+                placeholder="Cerca spesa..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="search-input"
