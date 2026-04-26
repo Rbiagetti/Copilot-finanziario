@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, Line,
-  Legend, Sector
+  BarChart, Bar, LabelList, Legend, Sector
 } from "recharts";
 import { getForecast, getAnomalies, getFullHistory, getBudgetStatus } from "../../api/client";
 import type { ForecastData, Anomaly, FullHistoryTransaction, BudgetStatus } from "../../api/client";
@@ -15,7 +15,7 @@ import {
   Calendar, Filter, SlidersHorizontal, ChevronDown, PlusCircle,
   BarChart2, Wallet, ArrowRight, TrendingDown, Minus
 } from "lucide-react";
-import { getMonthlyTrend, getCategoryData, getRecurringData } from "../../utils/analyticsUtils";
+import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
 const PALETTE = ["#6366f1","#f43f5e","#10b981","#f59e0b","#8b5cf6","#06b6d4","#ec4899","#14b8a6","#f97316","#64748b"];
@@ -70,6 +70,7 @@ export default function Dashboard() {
   const [daysBack, setDaysBack] = useState(90);
   const [catFilter, setCatFilter] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [patternTab, setPatternTab] = useState<"orario" | "giornaliero">("giornaliero");
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
@@ -130,6 +131,28 @@ export default function Dashboard() {
   const monthlyTrend = useMemo(() => getMonthlyTrend(filteredData, "month"), [filteredData]);
   const categoryData = useMemo(() => getCategoryData(filteredData), [filteredData]);
   const recurringData = useMemo(() => getRecurringData(filteredData, "month"), [filteredData]);
+
+  // Pattern temporali
+  const calendarData = useMemo(() => getCalendarData(filteredData), [filteredData]);
+  const calendarByDay = useMemo(() => ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"].map((day, i) => ({
+    day,
+    total: parseFloat(calendarData.filter(d => new Date(d.date + "T12:00:00").getDay() === i).reduce((s, d) => s + d.total, 0).toFixed(2)),
+    count: calendarData.filter(d => new Date(d.date + "T12:00:00").getDay() === i).length,
+  })), [calendarData]);
+  const timeByHour = useMemo(() => {
+    const raw = getTimeOfDayData(filteredData);
+    const hours: Record<number, { total: number; count: number }> = {};
+    raw.filter(d => d.total > 0).forEach(d => {
+      if (!hours[d.hour]) hours[d.hour] = { total: 0, count: 0 };
+      hours[d.hour].total += d.total;
+      hours[d.hour].count += d.count;
+    });
+    return Array.from({ length: 24 }, (_, h) => ({
+      ora: `${String(h).padStart(2, "0")}:00`,
+      total: parseFloat((hours[h]?.total || 0).toFixed(2)),
+      count: hours[h]?.count || 0,
+    }));
+  }, [filteredData]);
 
   // Top 10 transazioni del periodo (ordinate per importo desc)
   const top10 = useMemo(() =>
@@ -531,7 +554,55 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* 6. Top 10 Spese del Periodo */}
+        {/* 6. Pattern Temporali — tab Giornaliero / Orario */}
+        <div className="chart-card card-glass">
+          <div className="chart-header">
+            <h3>Pattern Temporali</h3>
+            <div className="pattern-tabs">
+              <button
+                className={`pattern-tab ${patternTab === "giornaliero" ? "active" : ""}`}
+                onClick={() => setPatternTab("giornaliero")}
+                aria-pressed={patternTab === "giornaliero"}
+              >
+                Per giorno
+              </button>
+              <button
+                className={`pattern-tab ${patternTab === "orario" ? "active" : ""}`}
+                onClick={() => setPatternTab("orario")}
+                aria-pressed={patternTab === "orario"}
+              >
+                Per ora
+              </button>
+            </div>
+          </div>
+
+          {patternTab === "giornaliero" ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={calendarByDay}>
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+                <XAxis dataKey="day" tick={{ fill: cc.tick, fontSize: 11 }} />
+                <YAxis tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="total" name="Spesa" radius={[6, 6, 0, 0]}>
+                  {calendarByDay.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                  <LabelList dataKey="total" position="top" style={{ fill: "var(--text-muted)", fontSize: 10 }} formatter={(v: number) => v > 0 ? `€${v}` : ""} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={timeByHour}>
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
+                <XAxis dataKey="ora" tick={{ fill: cc.tick, fontSize: 9 }} interval={3} />
+                <YAxis tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="total" name="Spesa" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* 7. Top 10 Spese del Periodo */}
         <div className="chart-card card-glass">
           <ChartHeader
             title="Top Spese del Periodo"
