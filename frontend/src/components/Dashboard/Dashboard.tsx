@@ -9,7 +9,7 @@ import { getForecast, getAnomalies, getFullHistory } from "../../api/client";
 import type { ForecastData, Anomaly, FullHistoryTransaction } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
-import { TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle, Calendar, Filter } from "lucide-react";
+import { TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle, Calendar, Filter, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { getMonthlyTrend, getCategoryData, getCalendarData, getCategoryVolatility, getRecurringData, getTimeOfDayData } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [modalContent, setModalContent] = useState<{title: string; type: "anomalies" | "forecast"} | null>(null);
   const [daysBack, setDaysBack] = useState(90);
   const [catFilter, setCatFilter] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
@@ -97,11 +98,12 @@ export default function Dashboard() {
     return true;
   }), [rawHistory, daysBack, catFilter]);
 
-  const monthlyTrend   = useMemo(() => getMonthlyTrend(filteredData), [filteredData]);
+  // Tutti i grafici temporali sono sempre raggruppati per mese (etichetta chiara, no giorni)
+  const monthlyTrend   = useMemo(() => getMonthlyTrend(filteredData, "month"), [filteredData]);
   const categoryData   = useMemo(() => getCategoryData(filteredData), [filteredData]);
   const calendarData   = useMemo(() => getCalendarData(filteredData), [filteredData]);
   const volatilityData = useMemo(() => getCategoryVolatility(filteredData).slice(0, 5), [filteredData]);
-  const recurringData  = useMemo(() => getRecurringData(filteredData), [filteredData]);
+  const recurringData  = useMemo(() => getRecurringData(filteredData, "month"), [filteredData]);
   const timeOfDayData  = useMemo(() => getTimeOfDayData(filteredData), [filteredData]);
 
   // Aggrega calendar per giorno settimana
@@ -131,6 +133,14 @@ export default function Dashboard() {
     count: filteredData.length,
   }), [filteredData]);
 
+  // ESC chiude il modale KPI
+  useEffect(() => {
+    if (!modalContent) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setModalContent(null); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [modalContent]);
+
   const handleDrilldown = (cat?: string) => {
     setDashboardFilter({ category: cat });
     setView("transactions");
@@ -141,34 +151,36 @@ export default function Dashboard() {
     const p = payload[0];
     const title = label || p?.payload?.ora || p?.payload?.day || p?.payload?.name || p?.payload?.category || "";
     const boxStyle: React.CSSProperties = {
-      background: "rgba(8,12,24,0.97)",
-      border: "1px solid rgba(99,102,241,0.6)",
+      background: "var(--surface-container-hi)",
+      border: "1px solid var(--glass-border-hi)",
       borderRadius: 12,
       padding: "10px 14px",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.8)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
       pointerEvents: "none" as const,
       minWidth: 140,
     };
     const titleStyle: React.CSSProperties = {
-      color: "#f0f4ff",
+      color: "var(--text)",
       fontWeight: 700,
       fontSize: "0.85rem",
       marginBottom: 6,
       paddingBottom: 6,
-      borderBottom: "1px solid rgba(255,255,255,0.12)",
+      borderBottom: "1px solid var(--glass-border)",
     };
     const rowStyle: React.CSSProperties = {
-      color: "#e2e8f0",
+      color: "var(--text-muted)",
       fontSize: "0.82rem",
       fontWeight: 500,
       margin: "3px 0",
     };
     const valueStyle: React.CSSProperties = {
-      color: "#ffffff",
+      color: "var(--accent)",
       fontWeight: 700,
     };
     const dimStyle: React.CSSProperties = {
-      color: "#94a3b8",
+      color: "var(--text-dim)",
       fontSize: "0.75rem",
       marginTop: 4,
     };
@@ -209,27 +221,48 @@ export default function Dashboard() {
             <h2>Data Intelligence</h2>
             <p className="dashboard-subtitle">Analisi avanzata del comportamento di spesa.</p>
           </div>
-          <div className="card-glass flex-row" style={{padding:"8px 16px", gap:"16px", borderRadius:"16px"}}>
-            <div className="flex-row" style={{gap:8, alignItems:"center"}}>
-              <Calendar size={14} className="text-dim" />
-              <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal" style={{fontSize:"0.75rem"}}>
-                <option value={7}>Ultima settimana</option>
-                <option value={30}>Ultimo mese</option>
-                <option value={90}>Ultimi 3 mesi</option>
-                <option value={180}>Ultimi 6 mesi</option>
-                <option value={365}>Ultimo anno</option>
-                <option value={9999}>Tutto</option>
-              </select>
-            </div>
-            <div className="flex-row" style={{gap:8}}>
-              <Filter size={14} className="text-dim" />
-              <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-minimal" style={{fontSize:"0.75rem"}}>
-                <option value="">Tutte</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            {(daysBack !== 90 || catFilter) && (
-              <button className="btn-icon" onClick={() => { setDaysBack(90); setCatFilter(""); }}><X size={14} /></button>
+          <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
+            <button
+              className="filters-toggle"
+              onClick={() => setFiltersOpen(o => !o)}
+              aria-expanded={filtersOpen}
+            >
+              <SlidersHorizontal size={14} />
+              <span>Filtri</span>
+              {(daysBack !== 90 || catFilter) && (
+                <span className="filters-badge">{(daysBack !== 90 ? 1 : 0) + (catFilter ? 1 : 0)}</span>
+              )}
+              <ChevronDown size={14} className="filters-chevron" />
+            </button>
+            {filtersOpen && (
+              <div className="filters-panel">
+                <div className="filter-row">
+                  <Calendar size={14} className="text-dim" />
+                  <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
+                    <option value={7}>Ultima settimana</option>
+                    <option value={30}>Ultimo mese</option>
+                    <option value={90}>Ultimi 3 mesi</option>
+                    <option value={180}>Ultimi 6 mesi</option>
+                    <option value={365}>Ultimo anno</option>
+                    <option value={9999}>Tutto</option>
+                  </select>
+                </div>
+                <div className="filter-row">
+                  <Filter size={14} className="text-dim" />
+                  <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-minimal">
+                    <option value="">Tutte le categorie</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                {(daysBack !== 90 || catFilter) && (
+                  <button
+                    className="filters-reset"
+                    onClick={() => { setDaysBack(90); setCatFilter(""); }}
+                  >
+                    <X size={12} /> Reset
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

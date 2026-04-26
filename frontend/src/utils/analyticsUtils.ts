@@ -1,34 +1,43 @@
 import type { FullHistoryTransaction } from "../api/client";
 
+export type GroupBy = "day" | "month";
+
 /**
- * Monthly Trend Data
+ * Trend Data — supporta raggruppamento per giorno o mese
  */
-export const getMonthlyTrend = (transactions: FullHistoryTransaction[]) => {
-  const months: Record<string, { total: number; count: number; label: string }> = {};
-  
+export const getMonthlyTrend = (transactions: FullHistoryTransaction[], groupBy: GroupBy = "month") => {
+  const buckets: Record<string, { total: number; count: number; label: string }> = {};
+
   transactions.forEach(t => {
     const d = new Date(t.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (!months[key]) {
-      months[key] = { 
-        total: 0, 
-        count: 0, 
-        label: d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }) 
-      };
+    let key: string;
+    let label: string;
+    if (groupBy === "day") {
+      key = t.date; // YYYY-MM-DD
+      label = d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+    } else {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      label = d.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' });
     }
-    months[key].total += t.amount;
-    months[key].count += 1;
+    if (!buckets[key]) buckets[key] = { total: 0, count: 0, label };
+    buckets[key].total += t.amount;
+    buckets[key].count += 1;
   });
 
-  return Object.entries(months)
+  return Object.entries(buckets)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, val]) => ({
-      month: key,
-      label: val.label,
-      total: parseFloat(val.total.toFixed(2)),
-      count: val.count,
-      avg_daily: parseFloat((val.total / new Date(parseInt(key.split('-')[0]), parseInt(key.split('-')[1]), 0).getDate()).toFixed(2))
-    }));
+    .map(([key, val]) => {
+      const avgDivisor = groupBy === "day"
+        ? 1
+        : new Date(parseInt(key.split('-')[0]), parseInt(key.split('-')[1]), 0).getDate();
+      return {
+        month: key,
+        label: val.label,
+        total: parseFloat(val.total.toFixed(2)),
+        count: val.count,
+        avg_daily: parseFloat((val.total / avgDivisor).toFixed(2))
+      };
+    });
 };
 
 /**
@@ -104,29 +113,33 @@ export const getCategoryVolatility = (transactions: FullHistoryTransaction[]) =>
 };
 
 /**
- * Recurring vs Variable
+ * Recurring vs Variable — supporta raggruppamento per giorno o mese
  */
-export const getRecurringData = (transactions: FullHistoryTransaction[]) => {
-  const months: Record<string, { recurring: number; variable: number; label: string }> = {};
+export const getRecurringData = (transactions: FullHistoryTransaction[], groupBy: GroupBy = "month") => {
+  const buckets: Record<string, { recurring: number; variable: number; label: string }> = {};
 
   transactions.forEach(t => {
     const d = new Date(t.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (!months[key]) {
-      months[key] = { 
-        recurring: 0, 
-        variable: 0, 
-        label: d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }) 
-      };
+    let key: string;
+    let label: string;
+    if (groupBy === "day") {
+      key = t.date;
+      label = d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+    } else {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      label = d.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' });
+    }
+    if (!buckets[key]) {
+      buckets[key] = { recurring: 0, variable: 0, label };
     }
     if (t.is_recurring) {
-      months[key].recurring += t.amount;
+      buckets[key].recurring += t.amount;
     } else {
-      months[key].variable += t.amount;
+      buckets[key].variable += t.amount;
     }
   });
 
-  return Object.entries(months)
+  return Object.entries(buckets)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, val]) => ({
       month: key,

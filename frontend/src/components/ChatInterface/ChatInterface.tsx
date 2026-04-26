@@ -246,9 +246,9 @@ export default function ChatInterface() {
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-welcome">
-            <Bot size={48} />
+            <div className="chat-welcome-icon"><Bot size={32} /></div>
             <h3>Ciao! Sono il tuo copilota finanziario</h3>
-            <p>Chiedimi qualsiasi cosa sulle tue spese. Ecco alcuni esempi:</p>
+            <p>Chiedimi qualsiasi cosa sulle tue spese.</p>
             <div className="suggestions">
               {[
                 "Analisi completa: dove vanno i miei soldi?",

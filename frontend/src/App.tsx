@@ -30,7 +30,7 @@ function App() {
 
   if (supabaseConfigured && session === undefined) {
     return (
-      <div className="loading-screen" style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+      <div className="loading-screen" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
         <div className="spin" style={{ width: '40px', height: '40px', border: '3px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%' }}></div>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>Verifica sessione in corso...</p>
       </div>
@@ -51,6 +51,10 @@ function App() {
     <div className="app">
       <Toaster
         position="top-right"
+        containerStyle={{
+          top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+          right: "calc(env(safe-area-inset-right, 0px) + 12px)",
+        }}
         toastOptions={{
           style: {
             background: "rgba(41,29,23,0.92)",

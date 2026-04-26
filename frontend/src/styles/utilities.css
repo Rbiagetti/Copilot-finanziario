@@ -43,9 +43,10 @@
 
 /* === LOGIN === */
 .login-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex; align-items: center;
-  justify-content: center; padding: 1.5rem;
+  justify-content: center;
+  padding: max(1.5rem, env(safe-area-inset-top, 0px)) 1.5rem max(1.5rem, env(safe-area-inset-bottom, 0px));
 }
 .login-card {
   background: rgba(41, 29, 23, 0.55);

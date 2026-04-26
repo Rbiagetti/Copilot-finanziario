@@ -73,6 +73,8 @@
   color: var(--text-muted);
   border-radius: var(--radius-sm);
   padding: 0.4rem;
+  min-width: 32px;
+  min-height: 32px;
   cursor: pointer;
   transition:
     transform var(--duration-fast) var(--ease-spring-snappy),
@@ -80,6 +82,23 @@
     color var(--duration-fast) var(--ease-out),
     background var(--duration-fast) var(--ease-out);
   display: flex; align-items: center; justify-content: center;
+}
+@media (max-width: 767px) {
+  .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.55rem;
+  }
+  .btn-chart-info {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  /* Non ridurre mai sotto 44px su mobile */
+  .tx-actions .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.55rem;
+  }
 }
 .btn-icon:hover { border-color: var(--glass-border-hi); color: var(--text); background: var(--glass-1); }
 .btn-icon:active { transform: scale(0.92); }
@@ -185,9 +204,9 @@
   border-radius: var(--radius-pill); padding: 0.1rem 0.45rem;
 }
 .badge.info {
-  background: rgba(99, 102, 241, 0.2) !important;
-  color: #818cf8 !important;
-  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+  background: rgba(255, 140, 66, 0.14) !important;
+  color: var(--accent) !important;
+  border: 1px solid rgba(255, 182, 141, 0.28) !important;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   font-size: 0.75rem;
@@ -330,9 +349,33 @@ select option { background: #291d17; color: var(--text); }
   border: 1px dashed var(--glass-border);
 }
 
+/* Focus visible — accessibilità tastiera */
+.btn-primary:focus-visible,
+.btn-icon:focus-visible,
+.btn-voice:focus-visible,
+.btn-send:focus-visible,
+.btn-chart-info:focus-visible,
+.btn-retry-text:focus-visible,
+.btn-clear-filters:focus-visible,
+.filters-toggle:focus-visible,
+.cat-btn:focus-visible,
+.form-tab:focus-visible,
+.suggestion-btn:focus-visible,
+.followup-btn:focus-visible,
+.groupby-btn:focus-visible,
+.filters-reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* touch-action: manipulation elimina il 300ms tap delay su Safari */
+button, a, [role="button"], input[type="submit"], input[type="button"] {
+  touch-action: manipulation;
+}
+
 /* === UX MOTION === */
 .animate-in {
-  animation: scaleUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: scaleUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .stagger-in > *:nth-child(1) { animation-delay: 0.05s; }
 .stagger-in > *:nth-child(2) { animation-delay: 0.12s; }
@@ -347,6 +390,18 @@ select option { background: #291d17; color: var(--text); }
 }
 
 /* Modal mobile */
+/* iOS Safari auto-zoom prevention: input font-size must be ≥ 16px on focus.
+   Accessibility preserved: no maximum-scale=1 in viewport meta. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea,
+  .input-minimal,
+  .chat-input input {
+    font-size: 16px !important;
+  }
+}
+
 @media (max-width: 767px) {
   .modal-overlay {
     position: fixed !important;

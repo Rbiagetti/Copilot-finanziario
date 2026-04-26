@@ -78,7 +78,7 @@
 
   /* Layout heights */
   --topbar-h: 56px;
-  --bottomnav-h: 90px; /* pill nav clearance: ~56px pill + 20px margin + 14px breathing room */
+  --bottomnav-h: 72px; /* pill nav clearance: ~56px pill + 8px margin + 8px breathing */
 }
 
 /* === BODY & BACKGROUND ORB === */

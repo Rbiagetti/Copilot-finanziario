@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut } from "lucide-react";
 import { signOut } from "../../lib/supabase";
+import toast from "react-hot-toast";
 
 const NAV_ITEMS = [
   { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
@@ -12,9 +14,17 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const { currentView, setView } = useAppStore();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    await signOut();
+    setLoggingOut(true);
+    try {
+      await signOut();
+      toast.success("Disconnesso");
+    } catch {
+      toast.error("Errore durante il logout");
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -40,10 +50,12 @@ export default function Sidebar() {
         <button
           className="nav-item"
           onClick={handleLogout}
+          disabled={loggingOut}
+          aria-label="Disconnetti"
           style={{ width: "100%", justifyContent: "flex-start", color: "var(--text-dim)" }}
         >
           <LogOut size={20} />
-          <span>Disconnetti</span>
+          <span>{loggingOut ? "Uscita..." : "Disconnetti"}</span>
         </button>
       </div>
     </aside>

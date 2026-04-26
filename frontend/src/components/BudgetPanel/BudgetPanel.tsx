@@ -26,14 +26,17 @@ interface BudgetStatusWithId extends BudgetStatus {
 export default function BudgetPanel() {
   const [budgets, setBudgets] = useState<BudgetStatusWithId[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [newCat, setNewCat] = useState("cibo");
   const [newAmount, setNewAmount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const load = () => {
     setLoading(true);
+    setErrorMsg(null);
     getBudgetStatus()
       .then((res) => setBudgets(res.data))
-      .catch(console.error)
+      .catch(() => setErrorMsg("Impossibile caricare i budget. Controlla la connessione e riprova."))
       .finally(() => setLoading(false));
   };
 
@@ -46,6 +49,7 @@ export default function BudgetPanel() {
       toast.error("Inserisci un budget di almeno \u20AC10");
       return;
     }
+    setSubmitting(true);
     try {
       await createBudget({ category: newCat, amount });
       toast.success(`Budget ${newCat}: \u20AC${amount}`);
@@ -53,6 +57,8 @@ export default function BudgetPanel() {
       load();
     } catch {
       toast.error("Errore nel salvataggio");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -92,13 +98,20 @@ export default function BudgetPanel() {
           onChange={(e) => setNewAmount(e.target.value)}
           required
         />
-        <button type="submit" className="btn-primary">
-          <PlusCircle size={16} /> Aggiungi
+        <button type="submit" className="btn-primary" disabled={submitting}>
+          <PlusCircle size={16} /> {submitting ? "Salvataggio..." : "Aggiungi"}
         </button>
       </form>
 
       {loading ? (
-        <div className="loading">Caricamento...</div>
+        <div className="loading">
+          <span className="spin" style={{ width: 24, height: 24, border: "2px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block" }} />
+        </div>
+      ) : errorMsg ? (
+        <div className="error" style={{ textAlign: "center", padding: "2rem", display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
+          <p>{errorMsg}</p>
+          <button className="btn-primary" style={{ width: "auto", padding: "0.6rem 1.5rem" }} onClick={load}>Riprova</button>
+        </div>
       ) : budgets.length === 0 ? (
         <div className="empty-budget">
           <p>Nessun budget impostato</p>

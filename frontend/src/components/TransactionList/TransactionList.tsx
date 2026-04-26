@@ -36,6 +36,7 @@ export default function TransactionList() {
   const [summary, setSummary] = useState<{ count: number; total: number } | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<number | null>(null);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string> = {};
@@ -109,6 +110,14 @@ export default function TransactionList() {
     } catch { toast.error("Errore nell'eliminazione"); }
   };
 
+  // ESC chiude il modale di edit
+  useEffect(() => {
+    if (!editState) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setEditState(null); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [editState]);
+
   const openEdit = (tx: Transaction) => {
     setEditState({
       tx,
@@ -123,6 +132,11 @@ export default function TransactionList() {
 
   const handleSave = async () => {
     if (!editState) return;
+    const num = parseFloat(editState.amount);
+    if (!num || num <= 0) {
+      toast.error("Inserisci un importo valido (> 0)");
+      return;
+    }
     setSaving(true);
     try {
       invalidateDashboardCache();
@@ -142,10 +156,13 @@ export default function TransactionList() {
   };
 
   const toggleRecurring = async (tx: Transaction) => {
+    if (toggling === tx.id) return;
+    setToggling(tx.id);
     try {
       await updateTransaction(tx.id, { is_recurring: !tx.is_recurring });
       load();
-    } catch { toast.error("Errore"); }
+    } catch { toast.error("Errore nell'aggiornamento"); }
+    finally { setToggling(null); }
   };
 
   return (
@@ -156,10 +173,10 @@ export default function TransactionList() {
         <div className="list-header">
           <h3>Transazioni</h3>
           <div className="list-controls">
-            <button className="btn-icon" onClick={() => exportTransactionsCsv(buildParams())} title="Esporta CSV">
+            <button className="btn-icon" aria-label="Esporta CSV" title="Esporta CSV" onClick={() => exportTransactionsCsv(buildParams())}>
               <Download size={16} />
             </button>
-            <button className="btn-icon" onClick={load} title="Aggiorna">
+            <button className="btn-icon" aria-label="Aggiorna lista" title="Aggiorna" onClick={load}>
               <RefreshCw size={16} />
             </button>
           </div>
@@ -242,14 +259,20 @@ export default function TransactionList() {
                 <span className="tx-date">{tx.date}</span>
                 <span className="tx-amount">€{tx.amount.toFixed(2)}</span>
                 <div className="tx-actions">
-                  <button className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`} onClick={() => toggleRecurring(tx)} title="Segna come ricorrente">
-                    <Repeat size={13} />
+                  <button
+                    className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`}
+                    aria-label={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
+                    title={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
+                    onClick={() => toggleRecurring(tx)}
+                    disabled={toggling === tx.id}
+                  >
+                    <Repeat size={14} />
                   </button>
-                  <button className="btn-icon" onClick={() => openEdit(tx)} title="Modifica">
-                    <Pencil size={13} />
+                  <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onClick={() => openEdit(tx)}>
+                    <Pencil size={14} />
                   </button>
-                  <button className="btn-icon danger" onClick={() => handleDelete(tx.id)} title="Elimina">
-                    <Trash2 size={13} />
+                  <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onClick={() => handleDelete(tx.id)}>
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -264,7 +287,7 @@ export default function TransactionList() {
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Modifica transazione</h3>
-              <button className="btn-icon" onClick={() => setEditState(null)}>✕</button>
+              <button className="btn-icon" aria-label="Chiudi" onClick={() => setEditState(null)}><X size={16} /></button>
             </div>
             <div className="edit-form">
               <div className="form-group">
@@ -287,6 +310,7 @@ export default function TransactionList() {
               <div className="form-group">
                 <label>Data</label>
                 <input type="date" value={editState.date}
+                  max={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setEditState({ ...editState, date: e.target.value })} />
               </div>
               <div className="form-group">
