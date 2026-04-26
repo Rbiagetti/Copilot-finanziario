@@ -504,6 +504,239 @@
   border-color: rgba(255,182,141,0.35);
 }
 
+/* === WIDGET EMPTY STATE (generico, usato da Budget Tracker, Top Spese, Pacing) === */
+.widget-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+.widget-empty svg { opacity: 0.5; }
+.widget-empty p { font-size: 0.85rem; margin: 0; }
+.widget-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid var(--glass-border);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+.widget-empty-cta:hover {
+  border-color: rgba(255,182,141,0.4);
+  background: rgba(255,140,66,0.08);
+}
+
+/* === BUDGET TRACKER === */
+.budget-tracker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+.budget-tracker-row {
+  cursor: pointer;
+  padding: 0.5rem 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast);
+}
+.budget-tracker-row:hover { background: var(--glass-0); }
+.budget-tracker-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.82rem;
+}
+.budget-tracker-label {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.budget-tracker-pct {
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+}
+.budget-tracker-amounts {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.budget-tracker-sep { opacity: 0.45; margin: 0 2px; }
+.budget-tracker-bar-wrap {
+  height: 5px;
+  background: var(--glass-1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.budget-tracker-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s var(--ease-out);
+}
+.budget-tracker-bar-fill.ok      { background: var(--success); box-shadow: 0 0 6px rgba(16,217,128,0.35); }
+.budget-tracker-bar-fill.warning { background: var(--warning); box-shadow: 0 0 6px rgba(245,166,35,0.35); }
+.budget-tracker-bar-fill.over    { background: var(--danger);  box-shadow: 0 0 6px rgba(255,77,109,0.35); }
+
+/* === PACING WIDGET === */
+.pacing-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-top: 0.25rem;
+}
+.pacing-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+.pacing-days {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.pacing-bar-container { display: flex; flex-direction: column; gap: 0.3rem; }
+.pacing-bar-track {
+  position: relative;
+  height: 10px;
+  background: var(--glass-1);
+  border-radius: 6px;
+  overflow: visible;
+}
+.pacing-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.7s var(--ease-out);
+}
+.pacing-bar-fill.ok   { background: linear-gradient(90deg, var(--success), rgba(16,217,128,0.7)); box-shadow: 0 0 10px rgba(16,217,128,0.3); }
+.pacing-bar-fill.over { background: linear-gradient(90deg, var(--accent), var(--danger)); box-shadow: 0 0 10px rgba(255,77,109,0.25); }
+.pacing-day-marker {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 18px;
+  background: var(--text-muted);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  opacity: 0.7;
+}
+.pacing-day-marker::after {
+  content: "oggi";
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pacing-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  padding: 0 2px;
+}
+.pacing-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.pacing-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--glass-0);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6rem;
+}
+.pacing-stat-label {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pacing-stat-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+/* === TOP TX WIDGET === */
+.top-tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-top: 0.1rem;
+}
+.top-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.4rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.top-tx-row:hover { background: var(--glass-0); }
+.top-tx-rank {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.top-tx-emoji { font-size: 1.05rem; flex-shrink: 0; }
+.top-tx-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.top-tx-cat {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-tx-meta {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.top-tx-amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
 /* === DASHBOARD EMPTY STATE === */
 .dashboard-empty-state {
   display: flex;
@@ -563,6 +796,14 @@
   .cat-rank-name { width: 70px; font-size: 0.74rem; }
   .cat-rank-amount { width: 58px; font-size: 0.78rem; }
   .cat-rank-pct { width: 28px; font-size: 0.68rem; }
+  /* Pacing: 2 colonne su mobile */
+  .pacing-stats { grid-template-columns: repeat(2, 1fr); }
+  .pacing-stat-value { font-size: 0.85rem; }
+  .pacing-stat-label { font-size: 0.62rem; }
+  /* Top TX */
+  .top-tx-row { gap: 0.45rem; padding: 0.4rem 0.2rem; }
+  .top-tx-cat { font-size: 0.78rem; }
+  .top-tx-amount { font-size: 0.82rem; }
 }
 
 @media (max-width: 375px) {
