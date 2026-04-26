@@ -199,6 +199,7 @@ export default function TransactionForm({ onAdded }: Props) {
               <input
                 type="date"
                 value={date}
+                max={new Date().toISOString().slice(0, 10)}
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>

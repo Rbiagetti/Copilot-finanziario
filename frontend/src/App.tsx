@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
@@ -11,9 +12,31 @@ import SettingsPanel from "./components/Settings/SettingsPanel";
 import LoginPage from "./components/Auth/LoginPage";
 import { supabase } from "./lib/supabase";
 
+type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
+const VALID_VIEWS: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
+
 function App() {
-  const { currentView } = useAppStore();
+  const { currentView, setView } = useAppStore();
   const [session, setSession] = useState<any>(undefined); // undefined = loading
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Sync URL → Zustand: on initial load and browser back/forward
+  useEffect(() => {
+    const segment = location.pathname.replace(/^\//, "") as View;
+    const view = VALID_VIEWS.includes(segment) ? segment : "dashboard";
+    if (view !== currentView) {
+      setView(view);
+    }
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync Zustand → URL: when setView() is called from anywhere in the app
+  useEffect(() => {
+    const expected = `/${currentView}`;
+    if (location.pathname !== expected) {
+      navigate(expected, { replace: location.pathname === "/" });
+    }
+  }, [currentView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     document.documentElement.setAttribute(

@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { createPortal } from "react-dom";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, LineChart, Line,
-  BarChart, Bar, Legend
+  BarChart, Bar, Legend, LabelList, Sector
 } from "recharts";
 import { getForecast, getAnomalies, getFullHistory } from "../../api/client";
 import type { ForecastData, Anomaly, FullHistoryTransaction } from "../../api/client";
@@ -21,14 +22,14 @@ function ChartHeader({ title, infoTitle, infoBody }: { title: string; infoTitle:
     <>
       <div className="chart-header">
         <h3>{title}</h3>
-        <button className="btn-chart-info" onClick={(e) => { e.stopPropagation(); setShowInfo(true); }}><HelpCircle size={14} /></button>
+        <button className="btn-chart-info" aria-label={`Info: ${title}`} onClick={(e) => { e.stopPropagation(); setShowInfo(true); }}><HelpCircle size={14} /></button>
       </div>
       {showInfo && (
         <div className="chart-info-overlay" onClick={(e) => { e.stopPropagation(); setShowInfo(false); }}>
           <div className="info-content">
             <h4>{infoTitle}</h4>
             <p>{infoBody}</p>
-            <button className="btn-primary" style={{padding:'8px 20px',fontSize:'0.8rem'}}>Ho capito</button>
+            <button className="btn-primary" aria-label="Chiudi info" style={{padding:'8px 20px',fontSize:'0.8rem'}} onClick={() => setShowInfo(false)}>Ho capito</button>
           </div>
         </div>
       )}
@@ -49,6 +50,7 @@ export default function Dashboard() {
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
   const cc = useChartColors();
+  const modalRef = useFocusTrap(!!modalContent);
 
   const loadAll = async (force = false) => {
     // Se cache valida (< 5 min) e non forzato, usa i dati in memoria
@@ -250,6 +252,7 @@ export default function Dashboard() {
               className="filters-toggle"
               onClick={() => setFiltersOpen(o => !o)}
               aria-expanded={filtersOpen}
+              aria-label="Apri filtri"
             >
               <SlidersHorizontal size={14} />
               <span>Filtri</span>
@@ -353,7 +356,25 @@ export default function Dashboard() {
           <ChartHeader title="Spese per Categoria" infoTitle="Mix Categorie" infoBody="Distribuzione percentuale per categoria. Clicca su una fetta per vedere le transazioni di quella categoria." />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie data={categoryData} innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" nameKey="name" onClick={d => handleDrilldown(d.name)}>
+              <Pie
+                data={categoryData}
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={5}
+                dataKey="value"
+                nameKey="name"
+                onClick={d => handleDrilldown(d.name)}
+                activeShape={(props: any) => (
+                  <Sector
+                    cx={props.cx} cy={props.cy}
+                    innerRadius={props.innerRadius}
+                    outerRadius={props.outerRadius + 8}
+                    startAngle={props.startAngle}
+                    endAngle={props.endAngle}
+                    fill={props.fill}
+                  />
+                )}
+              >
                 {categoryData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
@@ -373,6 +394,7 @@ export default function Dashboard() {
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="total" name="Spesa" radius={[6,6,0,0]}>
                 {calendarByDay.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                <LabelList dataKey="total" position="top" style={{fill:"var(--text-muted)", fontSize:10}} formatter={(v: number) => v > 0 ? `€${v}` : ""} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -387,7 +409,9 @@ export default function Dashboard() {
               <XAxis type="number" tick={{fill:cc.tick, fontSize:10}} tickFormatter={v => `€${v}`} />
               <YAxis type="category" dataKey="category" tick={{fill:cc.tick, fontSize:10}} width={80} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="mean" name="Media" fill="var(--accent)" radius={[0,4,4,0]} />
+              <Bar dataKey="mean" name="Media" fill="var(--accent)" radius={[0,4,4,0]}>
+                <LabelList dataKey="mean" position="right" style={{fill:"var(--text-muted)", fontSize:10}} formatter={(v: number) => `€${v.toFixed(0)}`} />
+              </Bar>
               <Bar dataKey="stdDev" name="Varianza" fill="var(--danger)" radius={[0,4,4,0]} />
               <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={10} />
             </BarChart>
@@ -429,10 +453,10 @@ export default function Dashboard() {
       {/* MODALS — montato su body via Portal per centratura corretta */}
       {modalContent && createPortal(
         <div className="modal-overlay" onClick={() => setModalContent(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <div className="modal-box" ref={modalRef} role="dialog" aria-modal="true" aria-label={modalContent.title} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{modalContent.title}</h3>
-              <button className="btn-icon" onClick={() => setModalContent(null)}><X size={18}/></button>
+              <button className="btn-icon" aria-label="Chiudi" onClick={() => setModalContent(null)}><X size={18}/></button>
             </div>
             <div style={{padding:"1.5rem"}}>
               {modalContent.type === "anomalies" && (

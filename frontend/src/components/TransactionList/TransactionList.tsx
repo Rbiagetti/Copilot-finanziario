@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, SlidersHorizontal, ChevronDown } from "lucide-react";
@@ -38,6 +39,7 @@ export default function TransactionList() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const modalRef = useFocusTrap(!!editState);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string> = {};
@@ -327,7 +329,7 @@ export default function TransactionList() {
       {/* EDIT MODAL */}
       {editState && (
         <div className="modal-overlay" onClick={() => setEditState(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-box" ref={modalRef} role="dialog" aria-modal="true" aria-label="Modifica transazione" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Modifica transazione</h3>
               <button className="btn-icon" aria-label="Chiudi" onClick={() => setEditState(null)}><X size={16} /></button>

@@ -341,6 +341,7 @@ export default function ChatInterface() {
           className={`btn-voice ${listening ? "recording" : ""}`}
           onClick={toggleVoice}
           title={listening ? "Ferma dettatura" : "Dettatura vocale"}
+          aria-label={listening ? "Ferma dettatura vocale" : "Avvia dettatura vocale"}
           disabled={loading}
         >
           {listening ? <MicOff size={16} /> : <Mic size={16} />}
@@ -348,6 +349,7 @@ export default function ChatInterface() {
         <button
           className="btn-send"
           onClick={() => handleSend()}
+          aria-label="Invia messaggio"
           disabled={loading || !input.trim()}
         >
           <Send size={18} />

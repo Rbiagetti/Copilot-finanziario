@@ -95,7 +95,16 @@ export default function BudgetPanel() {
           min="10"
           placeholder="es. 200"
           value={newAmount}
-          onChange={(e) => setNewAmount(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setNewAmount(v);
+            const num = parseFloat(v);
+            e.target.setCustomValidity(
+              !v ? "Inserisci un importo" :
+              isNaN(num) || num < 10 ? "Il budget minimo è €10" : ""
+            );
+          }}
+          onBlur={(e) => e.target.reportValidity()}
           required
         />
         <button type="submit" className="btn-primary" disabled={submitting}>
