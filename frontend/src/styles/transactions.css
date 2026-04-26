@@ -199,11 +199,16 @@
   .tx-actions .btn-icon { padding: 0.3rem; }
   .list-header { flex-wrap: wrap; gap: 0.5rem; }
   .list-controls { flex-wrap: wrap; gap: 0.4rem; }
-  .filter-row { flex-wrap: wrap; gap: 0.4rem; }
+  /* Filtri in colonna su mobile: uno per riga, leggibili senza troncature */
+  .filter-row { flex-direction: column; gap: 0.45rem; align-items: stretch; }
   .filter-select, .filter-date {
-    font-size: 0.78rem; padding: 0.4rem 0.5rem;
-    flex: 1; min-width: 90px;
+    width: 100%;
+    font-size: 16px; /* iOS no-zoom, anche leggibile */
+    padding: 0.55rem 0.75rem;
+    flex: none;
   }
+  /* Pulsante reset filtri full-width su mobile */
+  .btn-clear-filters { width: 100%; justify-content: center; }
   .transaction-form { padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem; }
   .form-tabs { gap: 0.3rem; flex-wrap: wrap; }
   .smart-hint { font-size: 0.72rem; }
