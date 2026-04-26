@@ -41,6 +41,6 @@ app.include_router(chat.router, dependencies=[Depends(get_current_user)])
 app.include_router(budgets.router, dependencies=[Depends(get_current_user)])
 app.include_router(ai.router, dependencies=[Depends(get_current_user)])
 
-@app.get("/api/v1/health")
+@app.api_route("/api/v1/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "ok", "version": "1.0.0"}
