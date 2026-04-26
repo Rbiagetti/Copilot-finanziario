@@ -512,6 +512,11 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+/* ? allineato a destra nell'header, separato dai selects */
+.mom-info-btn {
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
 .mom-select {
   background: var(--glass-1);
   border: 1px solid var(--glass-border);

@@ -680,7 +680,7 @@ export default function Dashboard() {
         {/* 8. Confronto Mese-su-Mese per Categoria */}
         {availableMonths.length >= 2 && (
           <div className="chart-card card-glass chart-full">
-            {/* Header con selects inline */}
+            {/* Header con selects inline + ? in alto a destra */}
             <div className="chart-header mom-header">
               <h3>Confronto categorie</h3>
               <div className="mom-selects">
@@ -705,14 +705,14 @@ export default function Dashboard() {
                     <option key={m.key} value={m.key} disabled={m.key === effectiveMomA}>{m.label}</option>
                   ))}
                 </select>
-                <button
-                  className="btn-chart-info"
-                  aria-label="Info: Confronto categorie"
-                  onClick={e => { e.stopPropagation(); setShowMomInfo(true); }}
-                >
-                  <HelpCircle size={14} />
-                </button>
               </div>
+              <button
+                className="btn-chart-info mom-info-btn"
+                aria-label="Info: Confronto categorie"
+                onClick={e => { e.stopPropagation(); setShowMomInfo(true); }}
+              >
+                <HelpCircle size={14} />
+              </button>
             </div>
 
             {showMomInfo && (
