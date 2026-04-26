@@ -334,7 +334,7 @@ export default function ChatInterface() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !loading && handleSend()}
-          placeholder={listening ? "Sto ascoltando..." : "Fai una domanda sulle tue spese..."}
+          placeholder={listening ? "Sto ascoltando..." : ""}
           disabled={loading}
         />
         <button
