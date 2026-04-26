@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
-import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat } from "lucide-react";
+import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, SlidersHorizontal, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
@@ -37,6 +37,7 @@ export default function TransactionList() {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string> = {};
@@ -183,50 +184,76 @@ export default function TransactionList() {
         </div>
 
         <div className="tx-filters">
-          <div className="search-box">
-            <Search size={14} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Cerca per descrizione o categoria..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="search-input"
-            />
-            {searchInput && (
-              <button className="search-clear" onClick={() => { setSearchInput(""); setSearch(""); }}>
-                <X size={12} />
+          {/* Search sempre visibile */}
+          <div className="tx-filters-top">
+            <div className="search-box">
+              <Search size={14} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Cerca per descrizione o categoria..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="search-input"
+              />
+              {searchInput && (
+                <button className="search-clear" aria-label="Cancella ricerca" onClick={() => { setSearchInput(""); setSearch(""); }}>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Filtri collassabili identici alla Dashboard */}
+            <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
+              <button
+                className="filters-toggle"
+                onClick={() => setFiltersOpen(o => !o)}
+                aria-expanded={filtersOpen}
+                aria-label="Apri filtri"
+              >
+                <SlidersHorizontal size={14} />
+                <span>Filtri</span>
+                {hasFilters && (
+                  <span className="filters-badge">
+                    {(filter ? 1 : 0) + (daysRange < 365 ? 1 : 0) + (sortBy !== "date_desc" ? 1 : 0)}
+                  </span>
+                )}
+                <ChevronDown size={14} className="filters-chevron" />
               </button>
-            )}
-          </div>
-
-          <div className="filter-row" style={{alignItems: 'center', gap: '1rem', flexWrap: 'wrap'}}>
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select">
-              <option value="">Tutte Categorie</option>
-              {Object.entries(EMOJI_MAP).map(([k, v]) => (
-                <option key={k} value={k}>{v} {k}</option>
-              ))}
-            </select>
-            
-            <select value={daysRange} onChange={(e) => setDaysRange(Number(e.target.value))} className="filter-select">
-              <option value="365">Periodo: Tutto</option>
-              <option value="1">Oggi</option>
-              <option value="7">Ultimi 7 gg</option>
-              <option value="30">Ultimi 30 gg</option>
-              <option value="90">Ultimi 90 gg</option>
-            </select>
-
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="filter-select">
-              <option value="date_desc">Più recenti</option>
-              <option value="date_asc">Meno recenti</option>
-              <option value="amount_desc">Importo più alto</option>
-              <option value="amount_asc">Importo più basso</option>
-            </select>
-
-            {hasFilters && (
-              <button className="btn-clear-filters" onClick={clearFilters} title="Resetta filtri">
-                <X size={14} />
-              </button>
-            )}
+              {filtersOpen && (
+                <div className="filters-panel">
+                  <div className="filter-row">
+                    <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select" aria-label="Categoria">
+                      <option value="">Tutte le categorie</option>
+                      {Object.entries(EMOJI_MAP).map(([k, v]) => (
+                        <option key={k} value={k}>{v} {k}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="filter-row">
+                    <select value={daysRange} onChange={(e) => setDaysRange(Number(e.target.value))} className="filter-select" aria-label="Periodo">
+                      <option value="365">Tutto il periodo</option>
+                      <option value="1">Oggi</option>
+                      <option value="7">Ultimi 7 giorni</option>
+                      <option value="30">Ultimi 30 giorni</option>
+                      <option value="90">Ultimi 90 giorni</option>
+                    </select>
+                  </div>
+                  <div className="filter-row">
+                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="filter-select" aria-label="Ordine">
+                      <option value="date_desc">Più recenti prima</option>
+                      <option value="date_asc">Meno recenti prima</option>
+                      <option value="amount_desc">Importo più alto</option>
+                      <option value="amount_asc">Importo più basso</option>
+                    </select>
+                  </div>
+                  {hasFilters && (
+                    <button className="filters-reset" onClick={() => { clearFilters(); setFiltersOpen(false); }}>
+                      <X size={12} /> Reset filtri
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {summary && (
