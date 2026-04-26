@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getBudgetStatus, createBudget, deleteBudget } from "../../api/client";
 import type { BudgetStatus } from "../../api/client";
-import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2, Wallet } from "lucide-react";
+import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 const CATEGORIES = [
@@ -116,17 +116,6 @@ export default function BudgetPanel() {
         <div className="empty-budget">
           <p>Nessun budget impostato</p>
           <p className="empty-hint">Imposta un budget per categoria per tenere sotto controllo le spese mensili.</p>
-          <button
-            className="btn-primary"
-            style={{width:"auto", padding:"0.6rem 1.4rem", marginTop:"0.75rem"}}
-            onClick={() => {
-              const input = document.querySelector<HTMLInputElement>(".budget-form input[type='number']");
-              input?.focus();
-              input?.scrollIntoView({behavior:"smooth", block:"center"});
-            }}
-          >
-            <PlusCircle size={16} /> Aggiungi il primo budget
-          </button>
         </div>
       ) : (
         <div className="budget-list">
