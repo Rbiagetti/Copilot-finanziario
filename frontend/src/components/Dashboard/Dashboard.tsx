@@ -9,7 +9,7 @@ import { getForecast, getAnomalies, getFullHistory } from "../../api/client";
 import type { ForecastData, Anomaly, FullHistoryTransaction } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
-import { TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle, Calendar, Filter, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle, Calendar, Filter, SlidersHorizontal, ChevronDown, PlusCircle, BarChart2 } from "lucide-react";
 import { getMonthlyTrend, getCategoryData, getCalendarData, getCategoryVolatility, getRecurringData, getTimeOfDayData } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
@@ -209,7 +209,31 @@ export default function Dashboard() {
   if (errorMsg) return (
     <div className="flex-col" style={{height:"80vh", gap:"1.5rem", alignItems:"center", justifyContent:"center"}}>
       <div className="text-danger" style={{textAlign:"center", maxWidth:400}}>{errorMsg}</div>
-      <button onClick={loadAll} className="btn-primary" style={{padding:"0.6rem 1.5rem"}}>Riprova</button>
+      <button onClick={loadAll} className="btn-primary" style={{padding:"0.6rem 1.5rem", width:"auto"}}>Riprova</button>
+    </div>
+  );
+
+  // Empty state: nessuna transazione nel sistema
+  if (!loading && rawHistory.length === 0) return (
+    <div className="dashboard animate-in">
+      <header className="dashboard-hero">
+        <h2>Data Intelligence</h2>
+        <p className="dashboard-subtitle">Analisi avanzata del comportamento di spesa.</p>
+      </header>
+      <div className="dashboard-empty-state">
+        <div className="dashboard-empty-icon">
+          <BarChart2 size={40} />
+        </div>
+        <h3>Nessun dato ancora</h3>
+        <p>Aggiungi la tua prima spesa per sbloccare grafici, forecast e analisi comportamentali.</p>
+        <button
+          className="btn-primary"
+          style={{width:"auto", padding:"0.7rem 1.75rem", marginTop:"0.5rem"}}
+          onClick={() => setView("transactions")}
+        >
+          <PlusCircle size={18} /> Aggiungi la prima spesa
+        </button>
+      </div>
     </div>
   );
 

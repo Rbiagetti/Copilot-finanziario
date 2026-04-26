@@ -163,6 +163,33 @@
 }
 .tx-summary-total strong { color: var(--text); }
 
+/* === TRANSACTIONS EMPTY STATE === */
+.tx-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+.tx-empty-title {
+  font-size: 0.9rem; font-weight: 600;
+  color: var(--text); margin: 0;
+}
+.tx-empty-hint {
+  font-size: 0.8rem; color: var(--text-muted); margin: 0;
+}
+.tx-empty-cta {
+  background: none; border: none;
+  color: var(--accent); font-size: 0.8rem;
+  font-weight: 600; cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0.1rem 0;
+  transition: opacity var(--duration-fast);
+}
+.tx-empty-cta:hover { opacity: 0.75; }
+
 /* === TRANSACTIONS RESPONSIVE === */
 @media (max-width: 767px) {
   .transactions-list { padding: 1rem; border-radius: var(--radius-md); }

@@ -26,7 +26,7 @@ export default function SettingsPanel() {
             <h3>Account</h3>
             <p className="settings-copy">Esci dal tuo account FinCopilot.</p>
           </div>
-          <button className="theme-switch-btn" onClick={handleLogout} type="button" disabled={loggingOut} aria-label="Disconnetti">
+          <button className="btn-logout" onClick={handleLogout} type="button" disabled={loggingOut} aria-label="Disconnetti">
             <LogOut size={16} />
             <span>{loggingOut ? "Uscita..." : "Disconnetti"}</span>
           </button>

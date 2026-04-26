@@ -238,9 +238,25 @@ export default function TransactionList() {
         </div>
 
         {loading ? (
-          <div className="loading">Caricamento...</div>
+          <div className="loading" style={{display:"flex", alignItems:"center", justifyContent:"center", gap:"0.75rem", padding:"3rem"}}>
+            <span className="spin" style={{width:24, height:24, border:"2px solid var(--accent)", borderTopColor:"transparent", borderRadius:"50%", flexShrink:0}} />
+            <span>Caricamento...</span>
+          </div>
         ) : txs.length === 0 ? (
-          <div className="empty">Nessuna transazione trovata</div>
+          <div className="tx-empty-state">
+            {hasFilters ? (
+              <>
+                <p className="tx-empty-title">Nessuna transazione trovata</p>
+                <p className="tx-empty-hint">Prova a modificare i filtri o</p>
+                <button className="tx-empty-cta" onClick={clearFilters}>rimuovi i filtri attivi</button>
+              </>
+            ) : (
+              <>
+                <p className="tx-empty-title">Nessuna spesa ancora</p>
+                <p className="tx-empty-hint">Inizia aggiungendo la tua prima transazione qui sopra ↑</p>
+              </>
+            )}
+          </div>
         ) : (
           <div className="tx-table">
             {sortedTxs.map((tx) => (

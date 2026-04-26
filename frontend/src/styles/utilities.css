@@ -21,25 +21,30 @@
   .settings-row { flex-direction: column; align-items: flex-start; }
 }
 
-.theme-switch-btn {
+/* btn-logout: outline danger — per azioni distruttive come disconnettersi */
+.btn-logout {
   display: inline-flex; align-items: center; gap: 0.45rem;
-  border: 1px solid var(--glass-border-hi);
+  border: 1px solid rgba(255, 180, 171, 0.35);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(255,140,66,0.14), var(--glass-1));
-  color: var(--text);
-  padding: 0.55rem 0.85rem;
+  background: rgba(255, 180, 171, 0.06);
+  color: var(--danger);
+  padding: 0.55rem 0.95rem;
   cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
   transition:
     transform var(--duration-fast) var(--ease-spring-snappy),
-    box-shadow var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
 }
-.theme-switch-btn:hover {
-  transform: translateY(-1px);
-  border-color: var(--glass-border-hi);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.18);
+.btn-logout:hover {
+  background: rgba(255, 180, 171, 0.14);
+  border-color: rgba(255, 180, 171, 0.55);
+  box-shadow: 0 4px 16px rgba(255, 180, 171, 0.12);
 }
-.theme-switch-btn:active { transform: scale(0.98); }
+.btn-logout:active { transform: scale(0.97); }
+.btn-logout:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* === LOGIN === */
 .login-page {

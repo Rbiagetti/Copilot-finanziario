@@ -43,8 +43,8 @@
   --danger-glow: rgba(255, 180, 171, 0.28);
 
   --text: rgba(245, 222, 213, 0.98);
-  --text-muted: rgba(221, 193, 179, 0.75);
-  --text-dim: rgba(164, 140, 127, 0.70);
+  --text-muted: rgba(221, 193, 179, 0.82);
+  --text-dim: rgba(200, 176, 160, 0.82);
 
   --bg: var(--navy-1);
   --bg-card: rgba(41, 29, 23, 0.75);
