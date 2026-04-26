@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [catFilter, setCatFilter] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [patternTab, setPatternTab] = useState<"orario" | "giornaliero">("giornaliero");
+  const [showMomInfo, setShowMomInfo] = useState(false);
   const [momA, setMomA] = useState<string>("");   // mese "corrente" (barra piena)
   const [momB, setMomB] = useState<string>("");   // mese "precedente" (barra dim)
 
@@ -707,13 +708,22 @@ export default function Dashboard() {
                 <button
                   className="btn-chart-info"
                   aria-label="Info: Confronto categorie"
-                  onClick={() => {/* info inline non serve, niente overlay */}}
-                  title="Confronta la spesa per categoria tra due mesi a scelta. Barra piena = mese A, barra trasparente = mese B. Il % a destra indica la variazione."
+                  onClick={e => { e.stopPropagation(); setShowMomInfo(true); }}
                 >
                   <HelpCircle size={14} />
                 </button>
               </div>
             </div>
+
+            {showMomInfo && (
+              <div className="chart-info-overlay" onClick={() => setShowMomInfo(false)}>
+                <div className="info-content">
+                  <h4>Confronto mensile categorie</h4>
+                  <p>Confronta la spesa per categoria tra due mesi a scelta. La barra piena è il mese A, quella trasparente il mese B. Il valore % a destra indica la variazione: <strong>+X%</strong> significa che hai speso di più, <strong>-X%</strong> di meno. "Nuovo" indica una categoria presente solo nel mese A.</p>
+                  <button className="btn-primary" aria-label="Chiudi info" style={{ padding: "8px 20px", fontSize: "0.8rem" }} onClick={() => setShowMomInfo(false)}>Ho capito</button>
+                </div>
+              </div>
+            )}
 
             {momData.rows.length === 0 ? (
               <div className="widget-empty">
