@@ -15,7 +15,7 @@ import {
   Calendar, Filter, SlidersHorizontal, ChevronDown, PlusCircle,
   BarChart2, Wallet, ArrowRight, TrendingDown, Minus
 } from "lucide-react";
-import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData } from "../../utils/analyticsUtils";
+import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData, getCategoryMoM } from "../../utils/analyticsUtils";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
 const PALETTE = ["#6366f1","#f43f5e","#10b981","#f59e0b","#8b5cf6","#06b6d4","#ec4899","#14b8a6","#f97316","#64748b"];
@@ -154,6 +154,9 @@ export default function Dashboard() {
     }));
   }, [filteredData]);
 
+  // Confronto categorie mese-su-mese
+  const momData = useMemo(() => getCategoryMoM(rawHistory), [rawHistory]);
+
   // Top 10 transazioni del periodo (ordinate per importo desc)
   const top10 = useMemo(() =>
     [...filteredData].sort((a, b) => b.amount - a.amount).slice(0, 10),
@@ -235,9 +238,30 @@ export default function Dashboard() {
   };
 
   if (loading) return (
-    <div className="flex-col" style={{ height: "80vh", gap: "1rem", alignItems: "center", justifyContent: "center" }}>
-      <div className="spin" style={{ width: 40, height: 40, border: "3px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%" }} />
-      <span>Analisi in corso...</span>
+    <div className="dashboard animate-in" aria-busy="true" aria-label="Caricamento dashboard">
+      <header className="dashboard-hero">
+        <div className="skeleton-line short" style={{ height: 28, width: 200 }} />
+        <div className="skeleton-line" style={{ height: 14, width: 280, marginTop: 6 }} />
+      </header>
+      <div className="kpi-grid" style={{ marginBottom: "2rem" }}>
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="kpi-card" style={{ pointerEvents: "none" }}>
+            <div className="skeleton-icon" />
+            <div style={{ flex: 1 }}>
+              <div className="skeleton-line short" style={{ marginBottom: 8 }} />
+              <div className="skeleton-line" style={{ height: 24 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="charts-grid">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="chart-card" style={{ pointerEvents: "none" }}>
+            <div className="skeleton-line short" style={{ marginBottom: 16 }} />
+            <div className="skeleton-chart" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -638,6 +662,41 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* 8. Confronto Mese-su-Mese per Categoria */}
+        {momData.rows.length > 0 && (
+          <div className="chart-card card-glass chart-full">
+            <ChartHeader
+              title={`Categorie: ${momData.currentLabel} vs ${momData.prevLabel}`}
+              infoTitle="Confronto mensile"
+              infoBody="Confronta la spesa per categoria tra il mese corrente e il mese precedente. Le barre mostrano quanto hai speso in ciascun mese."
+            />
+            <ResponsiveContainer width="100%" height={Math.max(200, momData.rows.length * 44)}>
+              <BarChart data={momData.rows} layout="vertical" margin={{ left: 8, right: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} horizontal={false} />
+                <XAxis type="number" tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
+                <YAxis
+                  type="category"
+                  dataKey="category"
+                  tick={{ fill: cc.tick, fontSize: 10 }}
+                  width={90}
+                  tickFormatter={v => `${EMOJI_MAP[v] || "❓"} ${v}`}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend wrapperStyle={{ fontSize: "11px" }} iconSize={10} />
+                <Bar dataKey="previous" name={momData.prevLabel} fill="rgba(255,140,66,0.3)" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="current" name={momData.currentLabel} fill="var(--accent)" radius={[0, 3, 3, 0]}>
+                  <LabelList
+                    dataKey="deltaPct"
+                    position="right"
+                    style={{ fill: "var(--text-dim)", fontSize: 10 }}
+                    formatter={(v: number | null) => v !== null ? (v > 0 ? `+${v}%` : `${v}%`) : ""}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
       </main>
 

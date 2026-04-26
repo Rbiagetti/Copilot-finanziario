@@ -212,6 +212,33 @@
 }
 .tx-empty-cta:hover { opacity: 0.75; }
 
+/* === GROUP BY DATE === */
+.tx-date-group { display: flex; flex-direction: column; }
+.tx-date-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.85rem 0.3rem;
+  margin-top: 0.5rem;
+}
+.tx-date-header:first-child { margin-top: 0; }
+.tx-date-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+.tx-date-total {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.tx-date-group + .tx-date-group .tx-date-header {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 0.75rem;
+}
+
 /* === TRANSACTIONS RESPONSIVE === */
 @media (max-width: 767px) {
   .transactions-list { padding: 1rem; border-radius: var(--radius-md); }

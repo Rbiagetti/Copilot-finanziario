@@ -151,6 +151,48 @@ export const getRecurringData = (transactions: FullHistoryTransaction[], groupBy
 };
 
 /**
+ * Category Month-over-Month comparison
+ * Returns categories with current month, previous month, delta and delta%
+ */
+export const getCategoryMoM = (transactions: FullHistoryTransaction[]) => {
+  const monthly: Record<string, Record<string, number>> = {};
+
+  transactions.forEach(t => {
+    const d = new Date(t.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!monthly[key]) monthly[key] = {};
+    monthly[key][t.category] = (monthly[key][t.category] || 0) + t.amount;
+  });
+
+  const months = Object.keys(monthly).sort();
+  if (months.length < 2) return { rows: [], currentLabel: "", prevLabel: "" };
+
+  const currentKey = months[months.length - 1];
+  const prevKey = months[months.length - 2];
+  const current = monthly[currentKey] || {};
+  const prev = monthly[prevKey] || {};
+
+  const fmt = (key: string) => {
+    const [y, m] = key.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("it-IT", { month: "short", year: "numeric" });
+  };
+
+  const allCats = new Set([...Object.keys(current), ...Object.keys(prev)]);
+
+  const rows = Array.from(allCats).map(cat => ({
+    category: cat,
+    current: parseFloat((current[cat] || 0).toFixed(2)),
+    previous: parseFloat((prev[cat] || 0).toFixed(2)),
+    delta: parseFloat(((current[cat] || 0) - (prev[cat] || 0)).toFixed(2)),
+    deltaPct: prev[cat]
+      ? parseFloat((((current[cat] || 0) - prev[cat]) / prev[cat] * 100).toFixed(1))
+      : null,
+  })).sort((a, b) => b.current - a.current);
+
+  return { rows, currentLabel: fmt(currentKey), prevLabel: fmt(prevKey) };
+};
+
+/**
  * Time-of-Day / Weekday Heatmap
  */
 export const getTimeOfDayData = (transactions: FullHistoryTransaction[]) => {

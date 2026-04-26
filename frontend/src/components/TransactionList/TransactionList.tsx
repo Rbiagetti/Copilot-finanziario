@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
-import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, SlidersHorizontal, ChevronDown, CalendarDays } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
@@ -26,6 +26,49 @@ interface EditState {
   is_recurring: boolean;
 }
 
+function TxRow({ tx, toggling, onEdit, onDelete, onToggle }: {
+  tx: Transaction;
+  toggling: number | null;
+  onEdit: (tx: Transaction) => void;
+  onDelete: (id: number) => void;
+  onToggle: (tx: Transaction) => void;
+}) {
+  return (
+    <div className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""}`}>
+      <span className="tx-emoji">{EMOJI_MAP[tx.category] || "❓"}</span>
+      <div className="tx-info">
+        <div className="tx-info-top">
+          <span className="tx-category">{tx.category}</span>
+          {tx.is_recurring && <span className="badge-recurring" title="Ricorrente"><Repeat size={11} /> ricorrente</span>}
+          {tx.tags && tx.tags.split(",").map(t => t.trim()).filter(Boolean).map(tag => (
+            <span key={tag} className="badge-tag">{tag}</span>
+          ))}
+        </div>
+        <span className="tx-desc">{tx.description || "—"}</span>
+      </div>
+      <span className="tx-date">{tx.date}</span>
+      <span className="tx-amount">€{tx.amount.toFixed(2)}</span>
+      <div className="tx-actions">
+        <button
+          className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`}
+          aria-label={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
+          title={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
+          onClick={() => onToggle(tx)}
+          disabled={toggling === tx.id}
+        >
+          <Repeat size={14} />
+        </button>
+        <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onClick={() => onEdit(tx)}>
+          <Pencil size={14} />
+        </button>
+        <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onClick={() => onDelete(tx.id)}>
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TransactionList() {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +82,7 @@ export default function TransactionList() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [groupByDate, setGroupByDate] = useState(false);
   const modalRef = useFocusTrap(!!editState);
 
   const buildParams = useCallback(() => {
@@ -102,6 +146,24 @@ export default function TransactionList() {
     });
     return arr;
   }, [txs, sortBy]);
+
+  // Raggruppa per data (usato solo quando groupByDate=true)
+  const groupedByDate = useMemo(() => {
+    if (!groupByDate) return [];
+    const groups: { date: string; label: string; total: number; txs: typeof sortedTxs }[] = [];
+    sortedTxs.forEach(tx => {
+      const last = groups[groups.length - 1];
+      if (last && last.date === tx.date) {
+        last.txs.push(tx);
+        last.total += tx.amount;
+      } else {
+        const d = new Date(tx.date + "T12:00:00");
+        const label = d.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+        groups.push({ date: tx.date, label, total: tx.amount, txs: [tx] });
+      }
+    });
+    return groups;
+  }, [sortedTxs, groupByDate]);
 
   const handleDelete = async (id: number) => {
     if (!confirm("Eliminare questa transazione?")) return;
@@ -176,6 +238,14 @@ export default function TransactionList() {
         <div className="list-header">
           <h3>Transazioni</h3>
           <div className="list-controls">
+            <button
+              className={`btn-icon ${groupByDate ? "active-recurring" : ""}`}
+              aria-label={groupByDate ? "Vista piatta" : "Raggruppa per data"}
+              title={groupByDate ? "Vista piatta" : "Raggruppa per data"}
+              onClick={() => setGroupByDate(g => !g)}
+            >
+              <CalendarDays size={16} />
+            </button>
             <button className="btn-icon" aria-label="Esporta CSV" title="Esporta CSV" onClick={() => exportTransactionsCsv(buildParams())}>
               <Download size={16} />
             </button>
@@ -286,41 +356,22 @@ export default function TransactionList() {
               </>
             )}
           </div>
+        ) : groupByDate ? (
+          <div className="tx-table">
+            {groupedByDate.map(group => (
+              <div key={group.date} className="tx-date-group">
+                <div className="tx-date-header">
+                  <span className="tx-date-label">{group.label}</span>
+                  <span className="tx-date-total">€{group.total.toFixed(2)}</span>
+                </div>
+                {group.txs.map(tx => <TxRow key={tx.id} tx={tx} toggling={toggling} onEdit={openEdit} onDelete={handleDelete} onToggle={toggleRecurring} />)}
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="tx-table">
             {sortedTxs.map((tx) => (
-              <div key={tx.id} className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""}`}>
-                <span className="tx-emoji">{EMOJI_MAP[tx.category] || "❓"}</span>
-                <div className="tx-info">
-                  <div className="tx-info-top">
-                    <span className="tx-category">{tx.category}</span>
-                    {tx.is_recurring && <span className="badge-recurring" title="Ricorrente"><Repeat size={11} /> ricorrente</span>}
-                    {tx.tags && tx.tags.split(",").map(t => t.trim()).filter(Boolean).map(tag => (
-                      <span key={tag} className="badge-tag">{tag}</span>
-                    ))}
-                  </div>
-                  <span className="tx-desc">{tx.description || "—"}</span>
-                </div>
-                <span className="tx-date">{tx.date}</span>
-                <span className="tx-amount">€{tx.amount.toFixed(2)}</span>
-                <div className="tx-actions">
-                  <button
-                    className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`}
-                    aria-label={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
-                    title={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
-                    onClick={() => toggleRecurring(tx)}
-                    disabled={toggling === tx.id}
-                  >
-                    <Repeat size={14} />
-                  </button>
-                  <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onClick={() => openEdit(tx)}>
-                    <Pencil size={14} />
-                  </button>
-                  <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onClick={() => handleDelete(tx.id)}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
+              <TxRow key={tx.id} tx={tx} toggling={toggling} onEdit={openEdit} onDelete={handleDelete} onToggle={toggleRecurring} />
             ))}
           </div>
         )}
