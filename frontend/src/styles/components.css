@@ -365,9 +365,13 @@ select option { background: #291d17; color: var(--text); }
   outline-offset: 2px;
 }
 
-/* touch-action: manipulation elimina il 300ms tap delay su Safari */
+/* touch-action: manipulation elimina il 300ms tap delay su Safari.
+   -webkit-tap-highlight-color: transparent rimuove il flash blu su Android/iOS.
+   Gli stili :hover su elementi interattivi sono scopati a (hover: hover) in layout.css
+   per evitare che su touchscreen il primo tap attivi hover invece del click. */
 button, a, [role="button"], input[type="submit"], input[type="button"] {
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* === UX MOTION === */

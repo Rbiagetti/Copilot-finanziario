@@ -156,20 +156,18 @@ export default function Dashboard() {
     }));
   }, [filteredData]);
 
-  // Mesi disponibili e selezione MoM
+  // Mesi disponibili (ordinati dal più recente)
   const availableMonths = useMemo(() => getAvailableMonths(rawHistory), [rawHistory]);
 
-  // Inizializza momA/momB ai due mesi più recenti quando i dati arrivano
-  useEffect(() => {
-    if (availableMonths.length >= 2 && !momA && !momB) {
-      setMomA(availableMonths[0].key);   // più recente
-      setMomB(availableMonths[1].key);   // secondo più recente
-    }
-  }, [availableMonths]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Valori effettivi: se l'utente non ha ancora selezionato, usa i default
+  const effectiveMomA = momA || availableMonths[0]?.key || "";
+  const effectiveMomB = momB || availableMonths[1]?.key || "";
 
   const momData = useMemo(
-    () => momA && momB ? getCategoryMoM(rawHistory, momA, momB) : { rows: [], currentLabel: "", prevLabel: "" },
-    [rawHistory, momA, momB]
+    () => effectiveMomA && effectiveMomB
+      ? getCategoryMoM(rawHistory, effectiveMomA, effectiveMomB)
+      : { rows: [], currentLabel: "", prevLabel: "" },
+    [rawHistory, effectiveMomA, effectiveMomB]
   );
 
   // Top 10 transazioni del periodo (ordinate per importo desc)
@@ -687,23 +685,23 @@ export default function Dashboard() {
               <div className="mom-selects">
                 <select
                   className="mom-select"
-                  value={momA}
+                  value={effectiveMomA}
                   onChange={e => setMomA(e.target.value)}
                   aria-label="Mese A"
                 >
                   {availableMonths.map(m => (
-                    <option key={m.key} value={m.key} disabled={m.key === momB}>{m.label}</option>
+                    <option key={m.key} value={m.key} disabled={m.key === effectiveMomB}>{m.label}</option>
                   ))}
                 </select>
                 <span className="mom-vs">vs</span>
                 <select
                   className="mom-select"
-                  value={momB}
+                  value={effectiveMomB}
                   onChange={e => setMomB(e.target.value)}
                   aria-label="Mese B"
                 >
                   {availableMonths.map(m => (
-                    <option key={m.key} value={m.key} disabled={m.key === momA}>{m.label}</option>
+                    <option key={m.key} value={m.key} disabled={m.key === effectiveMomA}>{m.label}</option>
                   ))}
                 </select>
                 <button

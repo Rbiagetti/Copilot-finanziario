@@ -67,6 +67,8 @@
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  touch-action: manipulation; /* elimina 300ms delay iOS + evita hover-ghost */
+  -webkit-tap-highlight-color: transparent;
   transition:
     background var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out),
@@ -75,11 +77,14 @@
   width: 100%;
   text-align: left;
 }
-.nav-item:hover {
-  background: var(--glass-1);
-  color: var(--text);
-  border-color: var(--glass-border);
-  transform: translateX(2px);
+/* Hover solo su device con mouse vero — non su touchscreen */
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover {
+    background: var(--glass-1);
+    color: var(--text);
+    border-color: var(--glass-border);
+    transform: translateX(2px);
+  }
 }
 .nav-item.active {
   background: rgba(255, 140, 66, 0.14);
@@ -289,9 +294,16 @@ button:active,
     transition: color var(--duration-fast);
   }
 
-  .nav-item:hover {
-    transform: scale(1.08);
-    background: var(--glass-1);
+  .nav-item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* hover solo mouse su mobile (tablet con mouse) */
+  @media (hover: hover) and (pointer: fine) {
+    .nav-item:hover {
+      transform: scale(1.08);
+      background: var(--glass-1);
+    }
   }
   .nav-item:active {
     transform: scale(0.88) !important;
