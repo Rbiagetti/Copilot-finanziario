@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { useAuthStore } from "./store/authStore";
 
 export default function AppInitializer({ children }: { children: React.ReactNode }) {
