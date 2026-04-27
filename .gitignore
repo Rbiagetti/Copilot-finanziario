@@ -1,16 +1,54 @@
+# Python
 __pycache__/
 *.pyc
-.env
-*.db
-node_modules/
-dist/
-.vite/
+*.pyo
+*.so
 *.egg-info/
-.pytest_cache/
+build/
 venv/
 .venv/
-*.png
+.pytest_cache/
+
+# DB locali (mai committare il DB di sviluppo)
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+
+# Env
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Frontend
+node_modules/
+dist/
+frontend/dist/
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Editor
+.idea/
+.vscode/settings.json
+*.code-workspace
+
+# Log e temporanei
+*.log
+*.bak
+*.tmp
+*.orig
+
+# Test artifacts
+backend/tests/backtest_report.html
+
+# Claude artifacts
+.claude/
+
+# Deployment / altri
 db_path
-.claude/
-.claude/
-.claude/

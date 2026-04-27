@@ -1,84 +1,181 @@
-# Copilota Finanziario
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.11x-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-Un'applicazione avanzata per la gestione delle finanze personali, potenziata dall'Intelligenza Artificiale. Il progetto ti aiuta a monitorare le spese, gestire i budget e fornisce analisi intelligenti dei tuoi dati finanziari grazie a un assistente integrato.
+# FinCopilot — Copilota Finanziario AI
 
-## Funzionalità Principali
-
-- **Gestione Transazioni:** Registrazione e tracciamento delle spese e delle entrate.
-- **Analisi e Reportistica:** Grafici interattivi e dashboard dettagliate per comprendere al meglio i propri flussi di cassa.
-- **Gestione Budget:** Impostazione di limiti di spesa e monitoraggio degli obiettivi.
-- **Assistente AI (Chat):** Un copilota basato su OpenAI in grado di analizzare i dati finanziari, rispondere a domande e fornire suggerimenti personalizzati.
-
-## Stack Tecnologico
-
-### Backend
-- **Framework:** FastAPI (Python)
-- **Database:** PostgreSQL gestito tramite SQLAlchemy
-- **Data Analysis & Visualization:** Pandas, Matplotlib, Plotly
-- **Intelligenza Artificiale:** Integrazione con OpenAI API
-
-### Frontend
-- **Framework:** React con Vite
-- **Gestione Stato:** Zustand
-- **Visualizzazione Dati:** Recharts
-- **Icone & UI:** Lucide React
-- **Auth/Backend-as-a-service:** Supabase
+Applicazione web per la gestione delle finanze personali con un assistente AI conversazionale.
+Registra spese, monitora budget, visualizza trend e interroga i tuoi dati in linguaggio naturale.
+Pensato per uso personale: si avvia in 5 minuti su qualsiasi macchina con Python e Node.
 
 ---
 
-## Come Avviare il Progetto
+## Stack
 
-Il progetto è diviso in due parti principali: `backend` e `frontend`. Segui questi passaggi per avviare l'ambiente di sviluppo locale.
-
-### 1. Configurazione del Backend
-
-Il backend è scritto in Python. Assicurati di avere Python installato e procedi come segue:
-
-1. Naviga nella directory principale del progetto.
-2. Crea e attiva l'ambiente virtuale (se non lo hai già fatto):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Su Windows usa: venv\Scripts\activate
-   ```
-3. Installa le dipendenze:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Configura le variabili d'ambiente (crea un file `.env` basato sulle necessità, per DB, OpenAI, ecc.).
-5. Avvia il server FastAPI:
-   ```bash
-   export PYTHONPATH=$PYTHONPATH:.
-   uvicorn backend.main:app --reload
-   ```
-Il server backend sarà disponibile all'indirizzo `http://localhost:8000`. Puoi esplorare la documentazione interattiva dell'API all'indirizzo `http://localhost:8000/docs`.
-
-### 2. Configurazione del Frontend
-
-L'interfaccia utente è sviluppata con React.
-
-1. Apri un nuovo terminale e naviga nella cartella `frontend`:
-   ```bash
-   cd frontend
-   ```
-2. Installa le dipendenze Node.js:
-   ```bash
-   npm install
-   ```
-3. Configura le variabili d'ambiente (crea o usa il file `.env` a partire da `.env.example`).
-4. Avvia il server di sviluppo:
-   ```bash
-   npm run dev
-   ```
-L'applicazione web sarà accessibile all'indirizzo indicato dal terminale, tipicamente `http://localhost:5173`.
+| Layer | Tecnologia |
+|---|---|
+| Backend | FastAPI · SQLAlchemy · SQLite (dev) |
+| AI | Groq API · Llama 3.3 70B · prompt engineering custom |
+| Frontend | React 18 · Vite · TypeScript |
+| Stato | Zustand |
+| Grafici | Recharts |
+| Auth | Supabase (JWT) |
+| Deploy | Render.com (backend) · Vercel (frontend) |
 
 ---
 
-## Struttura del Progetto
+## Prerequisiti
 
-- `/backend/`: Contiene il codice sorgente per le API, modelli DB e logica di business.
-- `/frontend/`: Contiene il codice dell'applicazione React in Vite.
-- `/data/`: File e dati usati per test o importazioni.
+- Python >= 3.11
+- Node >= 18
+- Account [Groq](https://console.groq.com) gratuito per la API key
+- Account [Supabase](https://supabase.com) gratuito per l'autenticazione
 
-## Script Utili
+---
 
-- Per testare i dati iniziali sul base dati (seeds), puoi far riferimento a `backend/seed_test_data.py`.
+## Setup in 5 minuti
+
+```bash
+# 1. Clone
+git clone https://github.com/Rbiagetti/Copilot-finanziario.git
+cd Copilot-finanziario
+
+# 2. Backend
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+cp .env.example .env              # poi edita con le tue chiavi (vedi sezione Env)
+uvicorn backend.main:app --reload
+# API disponibile su http://localhost:8000
+# Docs interattive su http://localhost:8000/docs
+
+# 3. Frontend (nuovo terminale)
+cd frontend
+cp .env.example .env              # già preconfigurato per localhost
+npm install
+npm run dev
+# App disponibile su http://localhost:5173
+```
+
+---
+
+## Variabili d'ambiente
+
+### Backend — `.env` (root)
+
+```env
+# Obbligatoria — ottienila su https://console.groq.com
+GROQ_API_KEY=gsk_...
+
+# DB locale (default: SQLite, non modificare per sviluppo)
+DATABASE_URL=sqlite:///./data/fincopilot.db
+
+# Supabase — per validare i JWT in arrivo dal frontend
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+
+# Debug opzionali
+AI_DEBUG_ROUTING=0      # 1 = log routing AI in console
+AI_DISABLE_LLM=0        # 1 = disabilita chiamate Groq (mock responses)
+```
+
+### Frontend — `frontend/.env`
+
+```env
+VITE_API_URL=http://localhost:8000/api/v1
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+```
+
+Copia `frontend/.env.example` → `frontend/.env` e compila con le stesse credenziali Supabase.
+
+---
+
+## Come eseguire i test
+
+```bash
+# Attiva venv se non attivo
+source venv/bin/activate
+
+# Test deterministici — non richiedono GROQ_API_KEY
+pytest backend/tests/test_ai_routing.py -v
+
+# Backtesting conversazionale — richiede GROQ_API_KEY nel .env
+pytest backend/tests/test_chat_backtest.py -v -s
+
+# Report HTML del backtest (generato automaticamente dopo il run)
+open backend/tests/backtest_report.html
+```
+
+---
+
+## Reset del DB di sviluppo
+
+```bash
+# Elimina il DB locale e ricrealo da zero (SQLite)
+rm -f data/fincopilot.db
+uvicorn backend.main:app --reload   # le tabelle vengono ricreate all'avvio
+
+# Carica dati di test realistici (90 transazioni, 3 mesi)
+python -m backend.tests.seed_test_data
+```
+
+---
+
+## Struttura del progetto
+
+```
+fincopilot/
+├── backend/
+│   ├── api/
+│   │   ├── models/          # Pydantic schemas (request/response)
+│   │   └── routes/          # FastAPI routers: chat, transactions, analytics, budgets, ai
+│   ├── core/                # Logica di business: ai_engine, database, auth
+│   ├── tests/               # Test suite e seed data
+│   └── main.py              # Entry point FastAPI
+├── frontend/
+│   ├── src/
+│   │   ├── api/             # Client HTTP Axios + tipi TypeScript
+│   │   ├── components/      # Componenti React (una cartella per componente)
+│   │   ├── hooks/           # Custom hooks (useTheme, useFocusTrap)
+│   │   ├── lib/             # Client Supabase
+│   │   ├── store/           # Zustand global store
+│   │   ├── styles/          # CSS modulari per area
+│   │   └── utils/           # Utilities (voiceService, analyticsUtils)
+│   └── index.html
+├── data/                    # Solo schema SQL o seed statici — mai *.db
+├── docs/                    # Documentazione tecnica (ai_engine.md, repo_audit.md)
+├── .env.example             # Template variabili d'ambiente backend
+├── requirements.txt
+└── render.yaml              # Config deploy Render.com
+```
+
+---
+
+## Funzionalità
+
+- **Dashboard** — totale mese, trend giornaliero, top categorie, variazione mese precedente
+- **Transazioni** — inserimento manuale, parsing linguaggio naturale, import, tag, export CSV
+- **Budget** — limiti per categoria con alert visivi (ok / warning / over)
+- **Chat AI** — 12+ funzioni analitiche (statistiche, ricerca merchant, anomalie, previsione, what-if)
+- **Briefing giornaliero** — insight automatici all'apertura dell'app
+- **ThinkingTrace** — traccia i passi di ragionamento dell'AI nella chat (collassabile)
+
+---
+
+## Roadmap
+
+- [x] Fase 1 — Dashboard, inserimento manuale, budget
+- [x] Fase 1 — Chat AI con routing multi-funzione
+- [x] Fase 1 — Backtesting conversazionale (60 test case)
+- [ ] Fase 2 — Import bancario automatico (CSV OFX/CAMT)
+- [ ] Fase 2 — Multi-account e trasferimenti interni
+- [ ] Fase 2 — Notifiche push budget superato
+
+---
+
+## Licenza
+
+MIT © Roberto Biagetti
