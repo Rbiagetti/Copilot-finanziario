@@ -44,33 +44,7 @@ CATEGORIES: frozenset = frozenset({
     "formazione", "intrattenimento", "lavoro", "salute", "svago", "trasporti",
 })
 
-MACRO_INTENTS: dict = {
-    "full_monthly_review": {
-        "triggers": ["analisi completa", "riassunto del mese", "panoramica", "dimmi tutto", "come sto andando"],
-        "functions": [
-            ("month_vs_month",           {}),
-            ("spending_by_category",     {"period_days": 30}),
-            ("anomalies",                {}),
-            ("budget_status",            {}),
-        ],
-    },
-    "savings_audit": {
-        "triggers": ["dove posso risparmiare", "come tagliare", "ottimizzare spese", "ridurre spesa"],
-        "functions": [
-            ("subscriptions_audit",      {}),
-            ("category_volatility",      {"period_days": 180}),
-            ("concentration_risk",       {"period_days": 30}),
-        ],
-    },
-    "trend_overview": {
-        "triggers": ["come sto cambiando", "trend generale", "evoluzione spese", "andamento"],
-        "functions": [
-            ("daily_trend",              {"days": 60}),
-            ("momentum",                 {}),
-            ("month_vs_month",           {}),
-        ],
-    },
-}
+# MACRO_INTENTS rimossi — la selezione multi-funzione è ora delegata all'LLM router.
 
 _DEBUG_LOG_ROUTING  = os.getenv("AI_DEBUG_ROUTING",   "0") == "1"
 AI_DISABLE_LLM      = os.getenv("AI_DISABLE_LLM",    "0") == "1"   # salta LLM → OUT_OF_SCOPE in <10ms
@@ -1473,81 +1447,76 @@ def execute_prebuilt_function(name: str, params: dict) -> dict:
 
 # ─── PROMPTS ──────────────────────────────────────────────────────────────────
 
-FUNCTION_SELECTOR_PROMPT = """Sei un router finanziario. Classifica la domanda in uno dei tre casi.
+FUNCTION_SELECTOR_PROMPT = """Sei il router di FinCopilot. Analizza la domanda e scegli le funzioni da chiamare.
+
+REGOLA PRINCIPALE: puoi scegliere 1, 2 o 3 funzioni (max 3).
+- 1 funzione → domanda specifica ("quanto ho speso da Ikea?", "top 10 spese", "trend del cibo")
+- 2-3 funzioni → domanda genuinamente larga che richiede analisi combinate per una risposta ricca
+- 0 funzioni + in_perimeter=true → domanda finanziaria valida ma nessuna funzione la copre
+
+ESEMPI MULTI-FUNZIONE (2-3 funzioni):
+- "come sto andando?" → [spending_by_category(30), month_vs_month()]
+- "fammi un'analisi completa" → [spending_by_category(30), month_vs_month(), anomalies()]
+- "dove posso risparmiare?" → [subscriptions_audit(), concentration_risk()]
+- "analisi del trend generale" → [daily_trend(60), momentum(), month_vs_month()]
+- "panoramica finanziaria" → [spending_by_category(30), month_vs_month(), budget_status()]
+
+ESEMPI MONO-FUNZIONE (1 funzione):
+- "top 10 spese" → [top_transactions()]
+- "quanto ho speso da Ikea?" → [search_transactions(query="ikea")]
+- "trend del cibo" → [category_trend(category="cibo")]
+- "stato budget" → [budget_status()]
+- "quanto ho speso questo mese?" → [summary_stats(period_days=30)]
 
 SINONIMI CATEGORIA (normalizza sempre):
 ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
 libri/corso/udemy → formazione | netflix/spotify/prime → abbonamenti | bici/moto/aereo → trasporti
 
-REGOLA MERCHANT: se la domanda cita un brand/negozio/merchant SPECIFICO (nome proprio che NON è
-una delle categorie cibo/trasporti/casa/salute/svago/abbigliamento/lavoro/abbonamenti/formazione/altro),
-usa search_transactions con params.query = il nome del merchant in minuscolo.
-Esempi MERCHANT → search_transactions:
-- "quanto ho speso da IKEA?" → search_transactions(query="ikea")
-- "spese Amazon" → search_transactions(query="amazon")
-- "Starbucks questo mese" → search_transactions(query="starbucks", period_days=30)
-- "Uber" (da solo o con contesto) → search_transactions(query="uber")
-- "Esselunga sopra i 100€" → search_transactions(query="esselunga")
-- "Netflix pagamenti" → search_transactions(query="netflix")
-- "benzina Q8" → search_transactions(query="q8")
-- "palestra FitActive" → search_transactions(query="fitactive")
-- "McDonald's" → search_transactions(query="mcdonald")
-- "Trenitalia" → search_transactions(query="trenitalia")
+REGOLA MERCHANT: se la domanda cita un brand/negozio SPECIFICO (nome proprio NON uguale a una
+categoria), usa search_transactions con params.query = il nome in minuscolo.
+Esempi: "IKEA"→query="ikea", "Amazon"→query="amazon", "Starbucks"→query="starbucks",
+"Esselunga"→query="esselunga", "Q8"→query="q8", "FitActive"→query="fitactive",
+"McDonald's"→query="mcdonald", "Trenitalia"→query="trenitalia", "Netflix pagamenti"→query="netflix"
 
-ECCEZIONI — NON usare search_transactions se la domanda è GENERICA (senza merchant specifico):
+ECCEZIONI — NON usare search_transactions per domande GENERICHE (senza merchant specifico):
 - "quanto ho speso questo mese?" → summary_stats(period_days=30)
-- "quanto ho speso?" → summary_stats(period_days=30)
 - "totale spese" → summary_stats o spending_by_category
 - "spese di questa settimana" → summary_stats(period_days=7)
-- "quanto spendo al mese?" → summary_stats(period_days=30)
-- "dimmi quanto spendo" → summary_stats(period_days=30)
-REGOLA: se non c'è un nome di brand/negozio nella domanda, NON usare search_transactions.
 
-PERIODO IMPLICITO (mappa queste espressioni al valore period_days corretto):
-- "questa settimana" / "questa week" → period_days=7
-- "settimana scorsa" → period_days=14
-- "questo mese" / "ultimo mese" → period_days=30
-- "mese scorso" → usa month_vs_month oppure period_days=60
-- "ultimi 2 mesi" → period_days=60
-- "ultimi 3 mesi" → period_days=90
-- "ultimi 6 mesi" → period_days=180
-- "ieri" → period_days=1
-- "sempre" / "storico totale" / "da sempre" → period_days=365
-Se la domanda contiene "questa settimana" + merchant → search_transactions con period_days=7.
+PERIODO IMPLICITO:
+- "questa settimana" → period_days=7 | "questo mese" → period_days=30
+- "ultimi 2 mesi" → period_days=60 | "ultimi 3 mesi" → period_days=90
+- "ultimi 6 mesi" → period_days=180 | "ieri" → period_days=1
+- "sempre" / "storico" → period_days=365 | nessun periodo → usa il default
 
-FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
-- spending_by_category(period_days=30, range 1..365): "dove vanno i soldi", "analisi completa", "distribuzione spese", "per categoria"
-- daily_trend(days=30, range 1..365): "trend giornaliero", "grafico spese nel tempo", "giorno per giorno"
-- top_transactions(n=10 range 1..50, category=null, period_days=30 range 1..365): "spese piu' alte", "transazioni piu' costose", "top N"
-- month_vs_month(): "confronto mesi", "questo mese vs mese scorso", "variazione mensile"
-- spending_by_weekday(period_days=90, range 1..365): "weekend vs feriali", "giorno piu' costoso", "media per giorno settimana"
-- category_trend(category, months=6 range 1..24): "andamento [categoria] nel tempo", "storico [categoria] mesi"
-- summary_stats(period_days=30, range 1..365): "statistiche generali", "totale e media", "quante transazioni"
-- year_end_forecast(): "stima fine anno", "previsione annuale", "quanto spendero' entro dicembre"
-- anomalies(): "spese strane", "anomalie", "transazioni fuori dalla norma", "pagamenti insoliti"
-- budget_status(): "come vado coi budget", "sto sforando", "stato budget", "budget superato"
-- recurring_vs_variable(period_days=90, range 1..365): "fissi vs variabili", "quanto e' ricorrente", "spese fisse"
-- subscriptions_audit(): "lista abbonamenti", "audit subscription", "abbonamenti zombie", "ho abbonamenti attivi"
-- category_volatility(period_days=180, range 1..365): "variabilita'", "volatilita' di spesa", "categoria piu' imprevedibile", "quanto oscilla"
-- frequency_analysis(category=null, period_days=90, range 1..365): "ogni quanto spendo", "frequenza acquisti", "intervallo medio tra transazioni"
-- concentration_risk(period_days=30, range 1..365): "concentrazione spese", "dipendo da poche voci", "che concentrazione ho", "dove va la maggior parte"
-- period_compare(period_a_days=30 range 1..365, period_b_offset_days=30 range 1..365): "ultime N settimane vs N prima", "confronto due periodi", "come cambiato rispetto a", "delta tra periodi"
-- momentum(category=null, period_days=60, range 1..365): "spese in accelerazione", "sto aumentando", "tendenza recente", "il cibo e' in accelerazione"
-- search_transactions(query str max50, period_days=90, n=20): "quanto ho speso in [posto]", "trova transazioni con", "cerca [keyword]", "starbucks/esselunga/amazon"
-- category_drill(category str, period_days=90, range 1..365): "drilldown [categoria]", "dettaglio [categoria]", "analisi approfondita [categoria]", "breakdown [categoria]"
-- tag_analysis(tag=null, period_days=90, range 1..365): "spese taggate [tag]", "analisi tag", "tag [nome]", "cosa ho taggato come"
-- what_if(category=null, monthly_delta=0, monthly_target=null, percent_change=null, horizon_months=12): "se taglio X€/mese da [cat]" → {category:cat, monthly_delta:-X}; "se metto budget Y€ su [cat]" → {category:cat, monthly_target:Y}; "se riduco del K% [cat] per N mesi" → {category:cat, percent_change:-K, horizon_months:N}; "quanto risparmio se...", "simulazione"
+FUNZIONI DISPONIBILI (rispetta i range indicati):
+- spending_by_category(period_days=30, range 1..365): distribuzione spese per categoria (bar chart)
+- daily_trend(days=30, range 1..365): trend giornaliero delle spese (line chart)
+- top_transactions(n=10 range 1..50, category=null, period_days=30): N spese più alte
+- month_vs_month(): confronto mese corrente vs precedente per categoria
+- spending_by_weekday(period_days=90, range 1..365): media per giorno della settimana
+- category_trend(category str, months=6 range 1..24): andamento mensile di una categoria
+- summary_stats(period_days=30, range 1..365): totale, media, conteggio, categoria top
+- year_end_forecast(): proiezione spese fine anno da media giornaliera
+- anomalies(): transazioni anomale z-score > 1.5 (ultimi 60gg)
+- budget_status(): stato budget attivi con semaforo ok/warning/exceeded
+- recurring_vs_variable(period_days=90, range 1..365): fissi vs variabili per mese
+- subscriptions_audit(): abbonamenti ricorrenti con costo annualizzato
+- category_volatility(period_days=180, range 1..365): volatilità mensile per categoria (CV%)
+- frequency_analysis(category=null, period_days=90, range 1..365): frequenza e gap medio tra acquisti
+- concentration_risk(period_days=30, range 1..365): top3 categorie e top5 descrizioni per peso %
+- period_compare(period_a_days=30 range 1..365, period_b_offset_days=30 range 1..365): delta tra due finestre
+- momentum(category=null, period_days=60, range 1..365): regressione lineare settimanale — trend %/settimana
+- search_transactions(query str max50, period_days=90, n=20): ricerca LIKE su descrizione+tag
+- category_drill(category str, period_days=90, range 1..365): drilldown completo di una categoria
+- tag_analysis(tag=null, period_days=90, range 1..365): analisi per tag
+- what_if(category=null, monthly_delta=0, monthly_target=null, percent_change=null, horizon_months=12): simulazione risparmio
 
-CASO 1 — c'e' una funzione adatta:
-{"use_function": {"name": "nome", "params": {...}}, "in_perimeter": true}
+CASO OOS — domanda NON finanziaria (cucina, sport, meteo, codice, salute generica, meta-AI):
+{"use_functions": [], "in_perimeter": false}
 
-CASO 2 — domanda finanziaria/budget ma nessuna funzione la copre (consigli, simulazioni semplici, domande sul comportamento di spesa):
-{"use_function": null, "in_perimeter": true}
-
-CASO 3 — domanda NON finanziaria (cucina, sport, coding, ecc.):
-{"use_function": null, "in_perimeter": false}
-
-Rispondi SOLO JSON (no testo extra):"""
+Rispondi SOLO con JSON valido, niente testo extra:
+{"use_functions": [{"name": "...", "params": {...}}, ...], "in_perimeter": true}"""
 
 INTERPRET_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
 
@@ -1620,70 +1589,80 @@ _OUT_OF_SCOPE = {
 
 # ─── BLOCK B — ROUTER VALIDATION ─────────────────────────────────────────────
 
+def _sanitize_params(name: str, params: dict) -> dict:
+    """Sanitizza i parametri di una singola funzione prebuilt (clip + whitelist)."""
+    params = dict(params)
+    for key, lo, hi, default in [
+        ("period_days",          1,   365,   30),
+        ("days",                 1,   365,   30),
+        ("n",                    1,    50,   10),
+        ("months",               1,    24,    6),
+        ("period_a_days",        1,   365,   30),
+        ("period_b_offset_days", 1,   365,   30),
+        ("horizon_months",       1,    60,   12),
+    ]:
+        if key in params:
+            try:
+                params[key] = max(lo, min(hi, int(params[key])))
+            except (ValueError, TypeError):
+                params[key] = default
+    for key, lo, hi, default in [
+        ("monthly_delta",   -10000, 10000,    0),
+        ("monthly_target",       0, 50000, None),
+        ("percent_change",    -100,  1000, None),
+    ]:
+        if key in params and params[key] is not None:
+            try:
+                params[key] = max(lo, min(hi, float(params[key])))
+            except (ValueError, TypeError):
+                params[key] = default
+    if "chart_type" in params:
+        if params["chart_type"] not in ("bar", "line"):
+            params["chart_type"] = "bar"
+    if "category" in params and params["category"] is not None:
+        cat = params["category"]
+        if not isinstance(cat, str) or cat not in CATEGORIES:
+            params["category"] = None
+    if "query" in params and params["query"] is not None:
+        q = re.sub(r"[^a-z0-9\s]", "", str(params["query"]).lower()).strip()
+        params["query"] = q[:50] if q else None
+    if "tag" in params and params["tag"] is not None:
+        t = re.sub(r"[^a-z0-9_]", "", str(params["tag"]).lower()).strip()
+        params["tag"] = t[:30] if t else None
+    return params
+
+
 def _validate_router_output(parsed: dict) -> dict:
-    """Sanitizza e valida l'output del router: nomi funzione, parametri, flag in_perimeter."""
-    in_perimeter = bool(parsed.get("in_perimeter", True))
+    """Valida l'output del router LLM: produce use_functions (lista, max 3) + in_perimeter."""
+    # Retrocompatibilità: se il modello restituisce ancora la shape singola
+    if "use_function" in parsed and "use_functions" not in parsed:
+        uf = parsed.get("use_function")
+        parsed["use_functions"] = [uf] if uf else []
 
-    use_function = parsed.get("use_function")
-    if use_function is not None:
-        if not isinstance(use_function, dict):
-            use_function = None
-        else:
-            name = use_function.get("name", "")
-            if name not in FUNCTION_CATALOG:
-                if _DEBUG_LOG_ROUTING:
-                    logger.debug("ROUTER invalid function name=%r — discarded", name)
-                use_function = None
-            else:
-                params = dict(use_function.get("params") or {})
-                # Clip integer params to safe ranges
-                for key, lo, hi, default in [
-                    ("period_days",          1,   365,   30),
-                    ("days",                 1,   365,   30),
-                    ("n",                    1,    50,   10),
-                    ("months",               1,    24,    6),
-                    ("period_a_days",        1,   365,   30),
-                    ("period_b_offset_days", 1,   365,   30),
-                    ("horizon_months",       1,    60,   12),
-                ]:
-                    if key in params:
-                        try:
-                            params[key] = max(lo, min(hi, int(params[key])))
-                        except (ValueError, TypeError):
-                            params[key] = default
-                # Clip float params to safe ranges
-                for key, lo, hi, default in [
-                    ("monthly_delta",   -10000, 10000,    0),
-                    ("monthly_target",       0, 50000, None),
-                    ("percent_change",    -100,  1000, None),
-                ]:
-                    if key in params and params[key] is not None:
-                        try:
-                            params[key] = max(lo, min(hi, float(params[key])))
-                        except (ValueError, TypeError):
-                            params[key] = default
-                # chart_type enum
-                if "chart_type" in params:
-                    if params["chart_type"] not in ("bar", "line"):
-                        params["chart_type"] = "bar"
-                # category must be a known CATEGORIES value or None
-                if "category" in params and params["category"] is not None:
-                    cat = params["category"]
-                    if not isinstance(cat, str) or cat not in CATEGORIES:
-                        params["category"] = None
-                # query: max 50 chars, only alphanum+space
-                if "query" in params and params["query"] is not None:
-                    import re as _re
-                    q = _re.sub(r"[^a-z0-9\s]", "", str(params["query"]).lower()).strip()
-                    params["query"] = q[:50] if q else None
-                # tag: max 30 chars, only alphanum+underscore
-                if "tag" in params and params["tag"] is not None:
-                    import re as _re
-                    t = _re.sub(r"[^a-z0-9_]", "", str(params["tag"]).lower()).strip()
-                    params["tag"] = t[:30] if t else None
-                use_function = {"name": name, "params": params}
+    use_functions = parsed.get("use_functions", [])
+    in_perimeter  = bool(parsed.get("in_perimeter", True))
 
-    return {"use_function": use_function, "in_perimeter": in_perimeter}
+    if not isinstance(use_functions, list):
+        use_functions = []
+
+    validated = []
+    for fn in use_functions:
+        if not isinstance(fn, dict):
+            continue
+        name = fn.get("name", "")
+        if name not in _PREBUILT_FUNCTIONS:
+            if _DEBUG_LOG_ROUTING:
+                logger.debug("ROUTER invalid function name=%r — discarded", name)
+            continue
+        params = fn.get("params") or {}
+        if not isinstance(params, dict):
+            params = {}
+        validated.append({"name": name, "params": _sanitize_params(name, params)})
+
+    return {
+        "use_functions": validated[:3],
+        "in_perimeter":  in_perimeter,
+    }
 
 
 # ─── CORE AI FUNCTIONS ────────────────────────────────────────────────────────
@@ -1790,7 +1769,7 @@ def _select_function(question: str, history) -> dict:
         "router",
         messages=messages,
         temperature=0.0,
-        max_tokens=150,
+        max_tokens=350,
         seed=42,
         json_mode=True,
     )
@@ -1804,8 +1783,10 @@ def _select_function(question: str, history) -> dict:
     return validated
 
 
-def _interpret_results(question: str, data_summary: str) -> dict:
-    prompt = INTERPRET_PROMPT.format(question=question, data_summary=data_summary)
+def _interpret_results(question: str, data_summary: str,
+                       prompt_override: str = None) -> dict:
+    base = prompt_override or INTERPRET_PROMPT
+    prompt = base.format(question=question, data_summary=data_summary)
     raw = _llm_call(
         "interpret",
         messages=[
@@ -1820,17 +1801,7 @@ def _interpret_results(question: str, data_summary: str) -> dict:
     return _parse_ai_response(raw)
 
 
-# ─── MACRO-INTENT ORCHESTRATION ──────────────────────────────────────────────
-
-def _match_macro_intent(question: str) -> "str | None":
-    """Keyword match deterministico sui trigger di MACRO_INTENTS. Zero LLM."""
-    q = question.lower()
-    for intent_name, intent in MACRO_INTENTS.items():
-        for trigger in intent["triggers"]:
-            if re.search(r"\b" + re.escape(trigger) + r"\b", q):
-                return intent_name
-    return None
-
+# ─── MULTI-FUNCTION ORCHESTRATION ────────────────────────────────────────────
 
 def _build_multi_summary(blocks: list) -> str:
     """Concatena blocchi; tronca proporzionalmente se supera MAX_MULTI_SUMMARY_CHARS."""
@@ -1864,42 +1835,6 @@ def _interpret_multi_results(question: str, data_summary: str, n_blocks: int) ->
     return _parse_ai_response(raw)
 
 
-def _execute_macro_intent(question: str, intent_name: str, steps: list) -> dict:
-    intent = MACRO_INTENTS[intent_name]
-    blocks: list = []
-    first_chart = None
-    first_table = None
-
-    for fn_name, fn_params in intent["functions"]:
-        t = _time.time()
-        result = execute_prebuilt_function(fn_name, fn_params)
-        cd = result.get("chart_data")
-        td = result.get("table_data")
-        if first_chart is None and cd is not None:
-            first_chart = cd
-        if first_table is None and td is not None:
-            first_table = td
-        header = "## " + fn_name.replace("_", " ").title()
-        body   = _format_data_for_interpretation(cd, td)
-        blocks.append(f"{header}\n{body}")
-        rows = len((cd or {}).get("data", []) or (td or {}).get("rows", []))
-        _step(steps, "fn_execute", f"📊 Eseguita {fn_name}", f"{rows} righe DB", t)
-
-    t = _time.time()
-    data_summary = _build_multi_summary(blocks)
-    interp = _interpret_multi_results(question, data_summary, n_blocks=len(blocks))
-    _step(steps, "llm_interpret", "✍️ LLM interpreta i dati (multi)",
-          f"{len(data_summary)} char · {len(blocks)} blocchi", t)
-
-    return {
-        "answer":             interp.get("answer", "Analisi completata.").strip(),
-        "chart_data":         first_chart,
-        "data_table":         first_table,
-        "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
-        "reasoning_steps":    steps,
-    }
-
-
 # ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
 
 def chat_with_ai(question: str, history=None) -> dict:
@@ -1929,7 +1864,7 @@ def chat_with_ai(question: str, history=None) -> dict:
         }
     if _input_meaningless(question):
         _step(steps, "pre_filter", "⛔ Input non significativo",
-              f"< 2 caratteri alfabetici", t, "skipped")
+              "< 2 caratteri alfabetici", t, "skipped")
         return {
             "answer": _OUT_OF_SCOPE_PREFILTER["answer"],
             "chart_data": None,
@@ -1939,7 +1874,7 @@ def chat_with_ai(question: str, history=None) -> dict:
         }
     _step(steps, "pre_filter", "✓ Lunghezza input OK", f"{len(question)} char", t)
 
-    # PASSO 2 — Pre-filtro OOS deterministico
+    # PASSO 2 — Pre-filtro OOS deterministico (regex, zero LLM)
     t = _time.time()
     if _is_obviously_out_of_scope(question):
         _step(steps, "pre_filter", "⛔ Fuori perimetro (regex)",
@@ -1953,20 +1888,12 @@ def chat_with_ai(question: str, history=None) -> dict:
         }
     _step(steps, "pre_filter", "✓ In perimetro finanziario", "", t)
 
-    # PASSO 3 — Macro-intent matching (zero LLM)
+    # PASSO 3 — Router LLM: restituisce use_functions (lista 0..3)
     t = _time.time()
-    macro = _match_macro_intent(question)
-    if macro:
-        _step(steps, "macro_match", f"⚡ Macro-intent: {macro}",
-              f"trigger match → {len(MACRO_INTENTS[macro]['functions'])} funzioni", t)
-        return _execute_macro_intent(question, macro, steps)
-    _step(steps, "macro_match", "– Nessun macro-intent", "pass-through al router LLM", t)
+    selector      = _select_function(question, history)
+    use_functions = selector.get("use_functions", [])
+    in_perimeter  = selector.get("in_perimeter", True)
 
-    # PASSO 4 — Router LLM
-    t = _time.time()
-    selector = _select_function(question, history)
-    use_function = selector.get("use_function")
-    in_perimeter = selector.get("in_perimeter", True)
     if not in_perimeter:
         _step(steps, "llm_router", "⛔ LLM: fuori perimetro", "in_perimeter=false", t, "skipped")
         return {
@@ -1976,49 +1903,74 @@ def chat_with_ai(question: str, history=None) -> dict:
             "followup_questions": _OUT_OF_SCOPE["followup_questions"],
             "reasoning_steps": steps,
         }
-    if use_function and isinstance(use_function, dict):
-        fn_name    = use_function.get("name", "?")
-        fn_params_str = str(use_function.get("params") or {})[:80]
-        _step(steps, "llm_router", f"🔀 Router → {fn_name}", f"params: {fn_params_str}", t)
-    else:
-        _step(steps, "llm_router", "💬 Router → risposta testuale", "nessuna funzione adatta", t)
 
-    # PASSO 5 — Esecuzione funzione + interpret
-    if use_function and isinstance(use_function, dict):
+    if not use_functions:
+        # Nessuna funzione adatta → risposta testuale con contesto compatto
+        _step(steps, "llm_router", "💬 Router → risposta testuale",
+              "nessuna funzione selezionata", t)
         t = _time.time()
-        fn_result  = execute_prebuilt_function(
-            use_function.get("name", ""), use_function.get("params") or {})
-        chart_data = fn_result.get("chart_data")
-        table_data = fn_result.get("table_data")
-        rows = len((chart_data or {}).get("data", []) or (table_data or {}).get("rows", []))
-        _step(steps, "fn_execute", f"📊 Eseguita {use_function.get('name', '')}",
-              f"{rows} righe DB", t)
-
-        t = _time.time()
-        data_summary = _format_data_for_interpretation(chart_data, table_data)
-        interp = _interpret_results(question, data_summary)
-        _step(steps, "llm_interpret", "✍️ LLM interpreta i dati",
-              f"data_summary: {len(data_summary)} char", t)
-
+        compact_ctx = build_compact_context()
+        interp = _answer_in_perimeter(question, compact_ctx)
+        _step(steps, "text_answer", "✍️ LLM risposta testuale",
+              f"ctx: {len(compact_ctx)} char", t)
         return {
-            "answer":             interp.get("answer", "Analisi completata.").strip(),
-            "chart_data":         chart_data,
-            "data_table":         table_data,
+            "answer":             interp.get("answer", "").strip(),
+            "chart_data":         None,
+            "data_table":         None,
             "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
             "reasoning_steps":    steps,
         }
 
-    # PASSO 6 — Risposta testuale
+    # 1..3 funzioni selezionate dal router
+    fn_names = [f["name"] for f in use_functions]
+    n = len(use_functions)
+    _step(steps, "llm_router",
+          f"🔀 Router → {', '.join(fn_names)}",
+          f"{n} funzion{'e' if n == 1 else 'i'}",
+          t)
+
+    # PASSO 4 — Esecuzione di tutte le funzioni selezionate
+    results: list = []
+    first_chart = None
+    first_table = None
+    for fn in use_functions:
+        t = _time.time()
+        result = execute_prebuilt_function(fn["name"], fn["params"])
+        cd = result.get("chart_data")
+        td = result.get("table_data")
+        if first_chart is None and cd is not None:
+            first_chart = cd
+        if first_table is None and td is not None:
+            first_table = td
+        rows = len((cd or {}).get("data", []) or (td or {}).get("rows", []))
+        _step(steps, "fn_execute", f"📊 {fn['name']}", f"{rows} righe", t)
+        results.append((fn["name"], result))
+
+    # PASSO 5 — Interpretazione (singola o multi-blocco)
     t = _time.time()
-    compact_ctx = build_compact_context()
-    interp = _answer_in_perimeter(question, compact_ctx)
-    _step(steps, "text_answer", "✍️ LLM risposta testuale",
-          f"ctx: {len(compact_ctx)} char", t)
+    if len(results) == 1:
+        _, fn_result = results[0]
+        data_summary = _format_data_for_interpretation(
+            fn_result.get("chart_data"), fn_result.get("table_data")
+        )
+        interp = _interpret_results(question, data_summary)
+    else:
+        blocks = []
+        for name, res in results:
+            header = "## " + name.replace("_", " ").title()
+            body   = _format_data_for_interpretation(res.get("chart_data"), res.get("table_data"))
+            blocks.append(f"{header}\n{body}")
+        data_summary = _build_multi_summary(blocks)
+        interp = _interpret_multi_results(question, data_summary, n_blocks=len(results))
+
+    _step(steps, "llm_interpret",
+          f"✍️ LLM interpreta ({len(results)} blocch{'o' if len(results) == 1 else 'i'})",
+          f"{len(data_summary)} char", t)
 
     return {
-        "answer":             interp.get("answer", "").strip(),
-        "chart_data":         None,
-        "data_table":         None,
+        "answer":             interp.get("answer", "Analisi completata.").strip(),
+        "chart_data":         first_chart,
+        "data_table":         first_table,
         "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
         "reasoning_steps":    steps,
     }

@@ -23,7 +23,6 @@ from backend.core.ai_engine import (
     chat_with_ai,
     _is_obviously_out_of_scope,
     _input_too_long,
-    _match_macro_intent,
     get_llm_stats,
     _reset_llm_stats,
 )
@@ -56,13 +55,15 @@ class TC:
         "expected_function", "params_must_contain", "answer_must_contain",
         "answer_must_not_contain", "max_llm_calls", "chart_data_expected",
         "table_data_expected", "http_status_expected",
+        "min_functions", "functions_must_include",
     )
 
     def __init__(self, id, label, group, message, *, history=None,
                  expected_function=None, params_must_contain=None,
                  answer_must_contain=None, answer_must_not_contain=None,
                  max_llm_calls=None, chart_data_expected=None,
-                 table_data_expected=None, http_status_expected=None):
+                 table_data_expected=None, http_status_expected=None,
+                 min_functions=None, functions_must_include=None):
         self.id = id
         self.label = label
         self.group = group
@@ -76,6 +77,8 @@ class TC:
         self.chart_data_expected = chart_data_expected      # True/False/None
         self.table_data_expected = table_data_expected      # True/False/None
         self.http_status_expected = http_status_expected    # int | None
+        self.min_functions = min_functions                  # int | None — LLM deve selezionare >= N funzioni
+        self.functions_must_include = functions_must_include or []  # list[str]
 
 
 def _ef(*fns):
@@ -313,37 +316,42 @@ TEST_CASES: list[TC] = [
        expected_function=_ef("OOS", None),
        answer_must_not_contain=["acquista", "compra", "vendi"]),
 
-    # ── GROUP E: MACRO-INTENT (5) ─────────────────────────────────────────────
-    TC("TC-E01", "analisi completa del mese", "macro_intent",
+    # ── GROUP E: MULTI-FUNCTION (5) ───────────────────────────────────────────
+    # Il router LLM deve selezionare 2+ funzioni per domande "larghe"
+    TC("TC-E01", "analisi completa del mese", "multi_function",
        "fammi un'analisi completa del mese",
-       expected_function="MACRO:full_monthly_review",
-       max_llm_calls=1,
+       min_functions=2,
+       functions_must_include=["spending_by_category"],
+       max_llm_calls=2,
        answer_must_contain=["€"],
        chart_data_expected=True),
 
-    TC("TC-E02", "come sto andando", "macro_intent",
+    TC("TC-E02", "come sto andando", "multi_function",
        "come sto andando?",
-       expected_function="MACRO:full_monthly_review",
-       max_llm_calls=1,
+       min_functions=2,
+       functions_must_include=["spending_by_category"],
+       max_llm_calls=2,
        answer_must_contain=["€"]),
 
-    TC("TC-E03", "dove posso risparmiare", "macro_intent",
+    TC("TC-E03", "dove posso risparmiare", "multi_function",
        "dove posso risparmiare?",
-       expected_function="MACRO:savings_audit",
-       max_llm_calls=1,
+       min_functions=2,
+       functions_must_include=["subscriptions_audit"],
+       max_llm_calls=2,
        answer_must_contain=["€"],
        table_data_expected=True),
 
-    TC("TC-E04", "trend generale", "macro_intent",
+    TC("TC-E04", "trend generale", "multi_function",
        "fammi vedere il trend generale delle mie spese",
-       expected_function="MACRO:trend_overview",
-       max_llm_calls=1,
+       min_functions=2,
+       max_llm_calls=2,
        chart_data_expected=True),
 
-    TC("TC-E05", "panoramica finanziaria", "macro_intent",
+    TC("TC-E05", "panoramica finanziaria", "multi_function",
        "panoramica finanziaria",
-       expected_function="MACRO:full_monthly_review",
-       max_llm_calls=1,
+       min_functions=2,
+       functions_must_include=["spending_by_category"],
+       max_llm_calls=2,
        answer_must_contain=["€"]),
 
     # ── GROUP F: WHAT-IF (5) ──────────────────────────────────────────────────
@@ -499,9 +507,6 @@ def _extract_routing(result: dict) -> str:
     for step in steps:
         phase = step.get("phase", "")
         label = step.get("label", "")
-        if phase == "macro_match" and "Macro-intent:" in label:
-            intent = label.split("Macro-intent:")[-1].strip()
-            return f"MACRO:{intent}"
         if phase == "pre_filter" and "⛔ Fuori perimetro" in label:
             return "OOS"
         if phase == "pre_filter" and "Input troppo lungo" in label:
@@ -511,11 +516,21 @@ def _extract_routing(result: dict) -> str:
                 return "OOS"
             if "risposta testuale" in label:
                 return "null"
-            # "🔀 Router → fn_name"
+            # "🔀 Router → fn1, fn2, fn3"
             parts = label.split("→")
             if len(parts) >= 2:
                 return parts[-1].strip()
     return "unknown"
+
+
+def _extract_fn_names(result: dict) -> list[str]:
+    """Estrae la lista di nomi funzione dai fn_execute steps."""
+    steps = result.get("reasoning_steps", [])
+    return [
+        step.get("label", "").replace("📊 ", "").strip()
+        for step in steps
+        if step.get("phase") == "fn_execute"
+    ]
 
 
 def _run_tc(tc: TC) -> TestResult:
@@ -599,6 +614,29 @@ def _run_tc(tc: TC) -> TestResult:
                     r.first_failure = f"answer contiene vietato: '{s}'"
                     break
 
+        # ── Verifica min_functions ──────────────────────────────────────────
+        if tc.min_functions is not None and r.status == "pass":
+            fn_names = _extract_fn_names(result)
+            if len(fn_names) < tc.min_functions:
+                r.status = "warn"
+                r.first_failure = (
+                    r.first_failure or
+                    f"min_functions={tc.min_functions}, selezionate {len(fn_names)}: {fn_names}"
+                )
+
+        # ── Verifica functions_must_include ─────────────────────────────────
+        if tc.functions_must_include and r.status == "pass":
+            fn_names = _extract_fn_names(result)
+            fn_names_lower = [f.lower() for f in fn_names]
+            for required in tc.functions_must_include:
+                if not any(required.lower() in fn for fn in fn_names_lower):
+                    r.status = "warn"
+                    r.first_failure = (
+                        r.first_failure or
+                        f"Funzione richiesta '{required}' non trovata in {fn_names}"
+                    )
+                    break
+
         # ── Verifica chart/table ────────────────────────────────────────────
         if tc.chart_data_expected is True and r.status == "pass":
             if result.get("chart_data") is None:
@@ -629,14 +667,14 @@ def _run_tc(tc: TC) -> TestResult:
 
 
 def _fn_matches(actual: str, expected: str) -> bool:
-    """Confronto flessibile del routing."""
+    """Confronto flessibile del routing (supporta multi-funzione con virgola)."""
     if expected == "null":
         return actual in ("null", "—", "unknown")
     if expected == "OOS":
         return actual.upper() in ("OOS", "FUORI PERIMETRO")
-    if expected.startswith("MACRO:"):
-        return actual.startswith("MACRO:") and expected[6:] in actual
-    return actual.lower() == expected.lower()
+    # actual può essere "fn1, fn2, fn3" — basta che expected sia uno dei nomi
+    actual_parts = [p.strip().lower() for p in actual.split(",")]
+    return expected.lower() in actual_parts
 
 
 # ─────────────────────────────────────────────────────────────────────────────
