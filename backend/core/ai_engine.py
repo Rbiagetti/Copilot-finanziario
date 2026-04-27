@@ -1,6 +1,7 @@
 import os
+import re
 import json
-import io
+import logging
 from datetime import date, timedelta
 from collections import defaultdict
 
@@ -8,6 +9,8 @@ from sqlalchemy import text
 from openai import OpenAI
 
 from backend.core.database import engine
+
+logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 MODEL = "llama-3.3-70b-versatile"
@@ -17,6 +20,174 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
 )
 
+# ─── BLOCK A — CONSTANTS & PRE-FILTER ────────────────────────────────────────
+
+MAX_QUESTION_CHARS      = 500
+MAX_HISTORY_MESSAGES    = 4
+MAX_HISTORY_CHARS_PER_MSG = 300
+MAX_DATA_SUMMARY_ROWS   = 12
+MAX_FOLLOWUP_QUESTIONS  = 2
+
+_DEBUG_LOG_ROUTING = os.getenv("AI_DEBUG_ROUTING", "0") == "1"
+
+# Precompiled OOS patterns — 7 domains
+_OOS_PATTERNS: list = [
+    # cucina / ricette
+    re.compile(
+        r"\b(ricett[ae]|ingredienti\s+per|come\s+si\s+cucina|cuocere\s+(?:la|il|i|le)|carbonara|risotto\s+(?:al|alla)|pizza\s+(?:fatta|napoletana)|pane\s+(?:da|di|fatto))\b",
+        re.IGNORECASE,
+    ),
+    # sport
+    re.compile(
+        r"\b(partita\s+di\s+(?:calcio|basket|tennis)|campionato\s+di\s+(?:calcio|basket)|champions\s+league|formula\s+1\s+(?:gara|pilota|classifica)|motogp\s+(?:gara|classifica))\b",
+        re.IGNORECASE,
+    ),
+    # meteo
+    re.compile(
+        r"\b(previsioni\s+(?:del\s+)?meteo|come\s+sarà\s+il\s+tempo|temperatura\s+(?:domani|oggi\s+fuori)|pioverà\s+(?:domani|oggi)|allerta\s+meteo)\b",
+        re.IGNORECASE,
+    ),
+    # codice / programmazione
+    re.compile(
+        r"\b(scrivi\s+(?:un\s+)?codice|come\s+si\s+programma|in\s+(?:python|javascript|java|c\+\+)\s+(?:come|scrivi|crea)|algoritmo\s+di\s+(?:ordinamento|ricerca)|fare\s+(?:un\s+)?debug)\b",
+        re.IGNORECASE,
+    ),
+    # geopolitica
+    re.compile(
+        r"\b(guerra\s+(?:in|tra|di)\s+\w+|chi\s+ha\s+vinto\s+(?:la\s+)?(?:guerra|le\s+elezioni)|elezioni?\s+(?:politiche|presidenziali)\s+(?:in|di)\s+\w+|presidente\s+(?:degli\s+stati\s+uniti|della\s+russia|cinese))\b",
+        re.IGNORECASE,
+    ),
+    # meta-AI
+    re.compile(
+        r"\b(sei\s+un[a']?\s+(?:intelligenza\s+artificiale|robot|bot|ai\b|llm)|come\s+sei\s+stato\s+(?:creato|addestrato|programmato)|chi\s+ti\s+ha\s+(?:creato|fatto|programmato)|che\s+modello\s+sei)\b",
+        re.IGNORECASE,
+    ),
+    # salute
+    re.compile(
+        r"\b(quante\s+calorie\s+(?:ha|in)\s+\w+|dieta\s+per\s+(?:dimagrire|perdere\s+peso)|sintomi\s+(?:di|del)\s+\w+|quali?\s+farmaci?\s+(?:per|prendere)|come\s+si\s+cura\s+(?:il|la|un|una)\s+\w+)\b",
+        re.IGNORECASE,
+    ),
+]
+
+
+def _is_obviously_out_of_scope(question: str) -> bool:
+    """Ritorna True se la domanda corrisponde a un dominio OOS senza chiamare l'LLM."""
+    for pattern in _OOS_PATTERNS:
+        if pattern.search(question):
+            if _DEBUG_LOG_ROUTING:
+                logger.debug("PRE-FILTER OOS match pattern=%r question=%r", pattern.pattern, question[:80])
+            return True
+    return False
+
+
+def _input_too_long(question: str) -> bool:
+    """Ritorna True se la domanda supera i limiti di lunghezza."""
+    return len(question) > MAX_QUESTION_CHARS or question.count(" ") > 80
+
+
+_OUT_OF_SCOPE_PREFILTER = {
+    "answer": (
+        "Sono specializzato in analisi finanziarie personali e non posso rispondere "
+        "a domande su cucina, sport, meteo, programmazione o altri argomenti.\n\n"
+        "Posso aiutarti con:\n"
+        "• **Spese per categoria** — questo mese o periodo custom\n"
+        "• **Top transazioni** più costose (con filtro per categoria)\n"
+        "• **Trend giornaliero** delle spese\n"
+        "• **Confronto mese** corrente vs precedente\n"
+        "• **Statistiche** riassuntive (totale, media, conteggio)"
+    ),
+    "followup_questions": [
+        "Quali categorie hanno pesato di più questo mese?",
+        "Mostrami le 10 spese più alte degli ultimi 30 giorni",
+    ],
+}
+
+_INPUT_TOO_LONG = {
+    "answer": "La domanda è troppo lunga. Prova a riformularla in modo più conciso (massimo 500 caratteri).",
+    "followup_questions": [],
+}
+
+
+# ─── BLOCK C — TOKEN COUNTER & LLM WRAPPER ───────────────────────────────────
+
+_token_counter: dict = {"calls": 0, "by_phase": defaultdict(int)}
+
+# None = not yet tested, True = supported, False = not supported
+_llm_state: dict = {"response_format_supported": None}
+
+
+def _llm_call(
+    phase: str,
+    messages: list,
+    temperature: float,
+    max_tokens: int,
+    seed: int = None,
+    json_mode: bool = False,
+) -> str:
+    """Wrapper LLM centralizzato con contatore chiamate e json_mode con fallback."""
+    _token_counter["calls"] += 1
+    _token_counter["by_phase"][phase] += 1
+
+    kwargs: dict = {
+        "model": MODEL,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if seed is not None:
+        kwargs["seed"] = seed
+
+    if json_mode:
+        supported = _llm_state["response_format_supported"]
+        if supported is None or supported is True:
+            try:
+                kwargs["response_format"] = {"type": "json_object"}
+                response = client.chat.completions.create(**kwargs)
+                _llm_state["response_format_supported"] = True
+                return response.choices[0].message.content.strip()
+            except Exception:
+                # Log once that json_mode is not supported on this endpoint
+                if _llm_state["response_format_supported"] is None:
+                    logger.warning("response_format json_object not supported — falling back to plain text")
+                _llm_state["response_format_supported"] = False
+                kwargs.pop("response_format", None)
+                response = client.chat.completions.create(**kwargs)
+                return response.choices[0].message.content.strip()
+        # json_mode unsupported: proceed without it
+        response = client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content.strip()
+
+    response = client.chat.completions.create(**kwargs)
+    return response.choices[0].message.content.strip()
+
+
+def get_llm_stats() -> dict:
+    """Ritorna le statistiche sulle chiamate LLM dall'avvio del processo."""
+    return {
+        "total_calls": _token_counter["calls"],
+        "by_phase": dict(_token_counter["by_phase"]),
+        "json_mode_supported": _llm_state["response_format_supported"],
+    }
+
+
+# ─── BLOCK C — HISTORY SANITIZER ─────────────────────────────────────────────
+
+def _sanitize_history(history) -> list:
+    """Taglia la history a MAX_HISTORY_MESSAGES e trunca i messaggi lunghi."""
+    if not history:
+        return []
+    trimmed = list(history)[-MAX_HISTORY_MESSAGES:]
+    result = []
+    for msg in trimmed:
+        role = msg.get("role", "user")
+        content = str(msg.get("content", ""))
+        if len(content) > MAX_HISTORY_CHARS_PER_MSG:
+            content = content[:MAX_HISTORY_CHARS_PER_MSG] + "…"
+        result.append({"role": role, "content": content})
+    return result
+
+
+# ─── DB HELPERS ───────────────────────────────────────────────────────────────
 
 def _q(sql: str, params: dict = None):
     """Esegue una query e restituisce tutte le righe."""
@@ -222,7 +393,6 @@ def _fn_spending_by_weekday(db_path: str, params: dict) -> dict:
         "SELECT date, SUM(amount) FROM transactions WHERE date >= :d GROUP BY date",
         {"d": cutoff}
     )
-    # Raggruppa per giorno settimana in Python (0=Dom, 1=Lun, ... 6=Sab, conv. SQLite)
     dow_vals: dict = defaultdict(list)
     for date_str, total in rows:
         try:
@@ -346,7 +516,7 @@ def execute_prebuilt_function(name: str, params: dict) -> dict:
         return {"chart_data": None, "table_data": None}
 
 
-# ─── PROMPT: SELEZIONE FUNZIONE ────────────────────────────────────────────────
+# ─── PROMPTS ──────────────────────────────────────────────────────────────────
 
 FUNCTION_SELECTOR_PROMPT = """Sei un router finanziario. Classifica la domanda in uno dei tre casi.
 
@@ -361,17 +531,15 @@ FUNZIONI DISPONIBILI:
 - year_end_forecast(): "stima fine anno", "previsione annuale", "quanto spendero' entro dicembre"
 
 CASO 1 — c'e' una funzione adatta:
-{{"use_function": {{"name": "nome", "params": {{...}}}}, "in_perimeter": true}}
+{"use_function": {"name": "nome", "params": {...}}, "in_perimeter": true}
 
 CASO 2 — domanda finanziaria/budget ma nessuna funzione la copre (consigli, simulazioni semplici, domande sul comportamento di spesa):
-{{"use_function": null, "in_perimeter": true}}
+{"use_function": null, "in_perimeter": true}
 
 CASO 3 — domanda NON finanziaria (cucina, sport, coding, ecc.):
-{{"use_function": null, "in_perimeter": false}}
+{"use_function": null, "in_perimeter": false}
 
 Rispondi SOLO JSON (no testo extra):"""
-
-# ─── PROMPT: INTERPRETAZIONE RISULTATI ────────────────────────────────────────
 
 INTERPRET_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
 
@@ -393,8 +561,6 @@ NON includere suggerimenti di domande dentro il campo answer. Il campo answer co
 
 SOLO JSON: {{"answer": "...", "followup_questions": ["...", "..."]}}"""
 
-# ─── PROMPT: RISPOSTA TESTUALE IN-PERIMETER ────────────────────────────────────
-
 TEXT_ANSWER_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
 
 DATI UTENTE (ultimi 30gg):
@@ -411,8 +577,6 @@ Esempi corretti: "Mostrami il trend del cibo negli ultimi 3 mesi", "Qual e' la m
 NON includere suggerimenti di domande dentro il campo answer. Il campo answer contiene SOLO la risposta.
 
 SOLO JSON: {{"answer": "...", "followup_questions": ["...", "..."]}}"""
-
-# ─── RISPOSTA FUORI PERIMETRO ──────────────────────────────────────────────────
 
 _OUT_OF_SCOPE = {
     "answer": (
@@ -432,17 +596,62 @@ _OUT_OF_SCOPE = {
 }
 
 
+# ─── BLOCK B — ROUTER VALIDATION ─────────────────────────────────────────────
+
+def _validate_router_output(parsed: dict) -> dict:
+    """Sanitizza e valida l'output del router: nomi funzione, parametri, flag in_perimeter."""
+    in_perimeter = bool(parsed.get("in_perimeter", True))
+
+    use_function = parsed.get("use_function")
+    if use_function is not None:
+        if not isinstance(use_function, dict):
+            use_function = None
+        else:
+            name = use_function.get("name", "")
+            if name not in FUNCTION_CATALOG:
+                if _DEBUG_LOG_ROUTING:
+                    logger.debug("ROUTER invalid function name=%r — discarded", name)
+                use_function = None
+            else:
+                params = dict(use_function.get("params") or {})
+                # Clip integer params to safe ranges
+                for key, lo, hi, default in [
+                    ("period_days", 1, 365, 30),
+                    ("days", 1, 365, 30),
+                    ("n", 1, 50, 10),
+                    ("months", 1, 24, 6),
+                ]:
+                    if key in params:
+                        try:
+                            params[key] = max(lo, min(hi, int(params[key])))
+                        except (ValueError, TypeError):
+                            params[key] = default
+                # chart_type enum
+                if "chart_type" in params:
+                    if params["chart_type"] not in ("bar", "line"):
+                        params["chart_type"] = "bar"
+                # category must be str or None
+                if "category" in params and params["category"] is not None:
+                    if not isinstance(params["category"], str):
+                        params["category"] = None
+                use_function = {"name": name, "params": params}
+
+    return {"use_function": use_function, "in_perimeter": in_perimeter}
+
+
+# ─── CORE AI FUNCTIONS ────────────────────────────────────────────────────────
+
 def _format_data_for_interpretation(chart_data, table_data) -> str:
     parts = []
     if chart_data:
         parts.append(f"Grafico '{chart_data.get('title', '')}' ({chart_data.get('type', 'bar')}):")
-        for item in chart_data.get("data", [])[:15]:
+        for item in chart_data.get("data", [])[:MAX_DATA_SUMMARY_ROWS]:
             parts.append(f"  {item.get('name')}: €{item.get('value')}")
     if table_data:
         headers = table_data.get("headers", [])
         rows = table_data.get("rows", [])
         parts.append(f"Tabella ({len(rows)} righe) — colonne: {', '.join(headers)}:")
-        for row in rows[:15]:
+        for row in rows[:MAX_DATA_SUMMARY_ROWS]:
             parts.append("  " + " | ".join(str(c) for c in row))
     return "\n".join(parts) if parts else "Nessun dato trovato."
 
@@ -468,52 +677,11 @@ def build_compact_context() -> str:
     return f"Totale 30gg: €{total} ({count} tx, {trend} vs mese prec.) | Top categorie: {cats_str}"
 
 
-def _answer_in_perimeter(question: str, compact_context: str) -> dict:
-    prompt = TEXT_ANSWER_PROMPT.format(compact_context=compact_context)
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": question},
-        ],
-        temperature=0.3,
-        max_tokens=400,
-    )
-    return _parse_ai_response(response.choices[0].message.content.strip())
-
-
-def _select_function(question: str, history) -> dict:
-    messages = [{"role": "system", "content": FUNCTION_SELECTOR_PROMPT}]
-    if history:
-        for h in history[-2:]:
-            if h.get("role") == "user":
-                messages.append({"role": "user", "content": h.get("content", "")})
-    messages.append({"role": "user", "content": question})
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        temperature=0,
-        max_tokens=200,
-    )
-    return _parse_ai_response(response.choices[0].message.content.strip())
-
-
-def _interpret_results(question: str, data_summary: str) -> dict:
-    prompt = INTERPRET_PROMPT.format(question=question, data_summary=data_summary)
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": "Analizza."},
-        ],
-        temperature=0.3,
-        max_tokens=500,
-    )
-    return _parse_ai_response(response.choices[0].message.content.strip())
-
-
 def _parse_ai_response(raw: str) -> dict:
-    import re
+    # Fast-path: empty or no JSON object at all
+    if not raw or "{" not in raw:
+        return {"answer": raw or "", "followup_questions": []}
+
     cleaned = raw
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
@@ -521,16 +689,19 @@ def _parse_ai_response(raw: str) -> dict:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
         cleaned = cleaned.strip()
+
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
+
     match = re.search(r'\{[\s\S]*\}', cleaned)
     if match:
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
             pass
+
     answer_match = re.search(r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)"', cleaned)
     if answer_match:
         answer = answer_match.group(1).replace('\\"', '"').replace('\\n', '\n')
@@ -539,8 +710,129 @@ def _parse_ai_response(raw: str) -> dict:
         if fq_match:
             followups = re.findall(r'"((?:[^"\\]|\\.)*)"', fq_match.group(1))
         return {"answer": answer, "followup_questions": followups}
+
     return {"answer": raw, "followup_questions": []}
 
+
+def _answer_in_perimeter(question: str, compact_context: str) -> dict:
+    prompt = TEXT_ANSWER_PROMPT.format(compact_context=compact_context)
+    raw = _llm_call(
+        "answer",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": question},
+        ],
+        temperature=0.1,
+        max_tokens=400,
+        seed=42,
+        json_mode=True,
+    )
+    return _parse_ai_response(raw)
+
+
+def _select_function(question: str, history) -> dict:
+    messages = [{"role": "system", "content": FUNCTION_SELECTOR_PROMPT}]
+    clean_history = _sanitize_history(history)
+    # Pass only last 2 user turns for context
+    for h in clean_history[-2:]:
+        if h.get("role") == "user":
+            messages.append({"role": "user", "content": h.get("content", "")})
+    messages.append({"role": "user", "content": question})
+
+    raw = _llm_call(
+        "router",
+        messages=messages,
+        temperature=0.0,
+        max_tokens=150,
+        seed=42,
+        json_mode=True,
+    )
+
+    parsed = _parse_ai_response(raw)
+    validated = _validate_router_output(parsed)
+
+    if _DEBUG_LOG_ROUTING:
+        logger.debug("ROUTER raw=%r  validated=%r", raw[:200], validated)
+
+    return validated
+
+
+def _interpret_results(question: str, data_summary: str) -> dict:
+    prompt = INTERPRET_PROMPT.format(question=question, data_summary=data_summary)
+    raw = _llm_call(
+        "interpret",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Analizza."},
+        ],
+        temperature=0.1,
+        max_tokens=400,
+        seed=42,
+        json_mode=True,
+    )
+    return _parse_ai_response(raw)
+
+
+# ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
+
+def chat_with_ai(question: str, history=None) -> dict:
+    # ── Block A: Pre-filter (zero LLM calls) ──────────────────────────────────
+    if _input_too_long(question):
+        return {
+            "answer": _INPUT_TOO_LONG["answer"],
+            "chart_data": None,
+            "data_table": None,
+            "followup_questions": _INPUT_TOO_LONG["followup_questions"],
+        }
+
+    if _is_obviously_out_of_scope(question):
+        return {
+            "answer": _OUT_OF_SCOPE_PREFILTER["answer"],
+            "chart_data": None,
+            "data_table": None,
+            "followup_questions": _OUT_OF_SCOPE_PREFILTER["followup_questions"],
+        }
+
+    # ── Block B: Router with determinism & validation ─────────────────────────
+    selector = _select_function(question, history)
+    use_function = selector.get("use_function")
+    in_perimeter = selector.get("in_perimeter", True)
+
+    if not in_perimeter:
+        return {
+            "answer": _OUT_OF_SCOPE["answer"],
+            "chart_data": None,
+            "data_table": None,
+            "followup_questions": _OUT_OF_SCOPE["followup_questions"],
+        }
+
+    if use_function and isinstance(use_function, dict):
+        fn_result = execute_prebuilt_function(
+            use_function.get("name", ""),
+            use_function.get("params") or {},
+        )
+        chart_data = fn_result.get("chart_data")
+        table_data = fn_result.get("table_data")
+        data_summary = _format_data_for_interpretation(chart_data, table_data)
+        interp = _interpret_results(question, data_summary)
+        return {
+            "answer": interp.get("answer", "Analisi completata.").strip(),
+            "chart_data": chart_data,
+            "data_table": table_data,
+            "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
+        }
+
+    compact_ctx = build_compact_context()
+    interp = _answer_in_perimeter(question, compact_ctx)
+    return {
+        "answer": interp.get("answer", "").strip(),
+        "chart_data": None,
+        "data_table": None,
+        "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
+    }
+
+
+# ─── BRIEFING & ANOMALIES (unchanged logic, updated LLM calls) ───────────────
 
 BRIEFING_PROMPT = """Sei un analista finanziario AI. Hai accesso ai dati REALI dell'utente:
 
@@ -569,21 +861,20 @@ def generate_briefing() -> dict:
 
     context = build_context()
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
+        raw = _llm_call(
+            "briefing",
             messages=[
                 {"role": "system", "content": BRIEFING_PROMPT.format(context=context)},
                 {"role": "user", "content": "Dammi il briefing finanziario di oggi."},
             ],
             temperature=0.2,
             max_tokens=600,
+            json_mode=True,
         )
-        raw = response.choices[0].message.content.strip()
-        import re as _re
         try:
             result = json.loads(raw)
         except json.JSONDecodeError:
-            m = _re.search(r'\{[\s\S]*\}', raw)
+            m = re.search(r'\{[\s\S]*\}', raw)
             result = json.loads(m.group()) if m else None
 
         if result and "insights" in result:
@@ -641,42 +932,3 @@ def get_anomalies() -> list:
 
     anomalies.sort(key=lambda x: x["z_score"], reverse=True)
     return anomalies[:5]
-
-
-def chat_with_ai(question: str, history=None) -> dict:
-    selector = _select_function(question, history)
-    use_function = selector.get("use_function")
-    in_perimeter = selector.get("in_perimeter", True)
-
-    if not in_perimeter:
-        return {
-            "answer": _OUT_OF_SCOPE["answer"],
-            "chart_data": None,
-            "data_table": None,
-            "followup_questions": _OUT_OF_SCOPE["followup_questions"],
-        }
-
-    if use_function and isinstance(use_function, dict):
-        fn_result = execute_prebuilt_function(
-            use_function.get("name", ""),
-            use_function.get("params") or {},
-        )
-        chart_data = fn_result.get("chart_data")
-        table_data = fn_result.get("table_data")
-        data_summary = _format_data_for_interpretation(chart_data, table_data)
-        interp = _interpret_results(question, data_summary)
-        return {
-            "answer": interp.get("answer", "Analisi completata.").strip(),
-            "chart_data": chart_data,
-            "data_table": table_data,
-            "followup_questions": interp.get("followup_questions", [])[:2],
-        }
-
-    compact_ctx = build_compact_context()
-    interp = _answer_in_perimeter(question, compact_ctx)
-    return {
-        "answer": interp.get("answer", "").strip(),
-        "chart_data": None,
-        "data_table": None,
-        "followup_questions": interp.get("followup_questions", [])[:2],
-    }
