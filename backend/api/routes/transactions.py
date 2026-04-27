@@ -124,22 +124,43 @@ async def export_transactions_csv(
     q = q.order_by(desc(Transaction.date), desc(Transaction.id))
     txs = q.all()
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["id", "data", "ora", "importo", "categoria", "descrizione", "account", "tags", "ricorrente"])
+    parts = ["fincopilot"]
+    if category:
+        parts.append(category)
+    if date_from:
+        parts.append(f"dal_{date_from}")
+    if date_to:
+        parts.append(f"al_{date_to}")
+    parts.append(date.today().isoformat())
+    filename = "_".join(parts) + ".csv"
+
+    buf = io.BytesIO()
+    buf.write(b"\xef\xbb\xbf")  # BOM UTF-8 per Excel Windows
+    wrapper = io.TextIOWrapper(buf, encoding="utf-8", newline="")
+    writer = csv.writer(wrapper)
+    writer.writerow(["data", "ora", "categoria", "descrizione", "importo_eur", "account", "tags", "ricorrente", "id"])
     for t in txs:
         writer.writerow([
-            t.id, t.date, t.time or "", round(t.amount, 2),
-            t.category, t.description or "", t.account,
-            t.tags or "", "si" if t.is_recurring else "no",
+            t.date,
+            t.time or "",
+            t.category,
+            t.description or "",
+            str(round(t.amount, 2)),
+            t.account,
+            t.tags or "",
+            "sì" if t.is_recurring else "no",
+            t.id,
         ])
-
+    wrapper.flush()
     buf.seek(0)
-    filename = f"fincopilot_{date.today().isoformat()}.csv"
+
     return StreamingResponse(
         iter([buf.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        media_type="text/csv; charset=utf-8-sig",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
 
 

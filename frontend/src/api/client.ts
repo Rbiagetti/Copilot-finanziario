@@ -156,12 +156,66 @@ export const getFullHistory = () => api.get<FullHistoryTransaction[]>("/analytic
 export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>
   api.put<Transaction>(`/transactions/${id}`, data);
 
-export const exportTransactionsCsv = async (params?: Record<string, string>) => {
+export const exportTransactionsCsv = async (
+  params?: Record<string, string>
+): Promise<void> => {
   const token = await getToken();
-  const base = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
-  const p = new URLSearchParams(params);
-  if (token) p.set("token", token);
-  window.open(`${base}/transactions/export?${p.toString()}`, "_blank");
+  const base  = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+
+  const p = new URLSearchParams(params ?? {});
+  const url = `${base}/transactions/export?${p.toString()}`;
+
+  const response = await fetch(url, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Export fallito: ${response.status}`);
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match       = disposition.match(/filename="?([^";\n]+)"?/);
+  const filename    = match?.[1] ?? `fincopilot_${new Date().toISOString().slice(0, 10)}.csv`;
+
+  const blob    = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+
+  const a    = document.createElement("a");
+  a.href     = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+};
+
+export const downloadMonthlyReport = async (year: number, month: number): Promise<void> => {
+  const token = await getToken();
+  const base  = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+  const url   = `${base}/report/monthly?year=${year}&month=${month}`;
+
+  const response = await fetch(url, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+
+  if (!response.ok) throw new Error(`Report fallito: ${response.status}`);
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match       = disposition.match(/filename="?([^";\n]+)"?/);
+  const filename    = match?.[1] ?? `fincopilot_report_${year}_${String(month).padStart(2, "0")}.pdf`;
+
+  const blob    = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a       = document.createElement("a");
+  a.href        = blobUrl;
+  a.download    = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 };
 
 export const getBudgets = () => api.get("/budgets/");

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
@@ -81,6 +81,7 @@ export default function TransactionList() {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [groupByDate, setGroupByDate] = useState(false);
   const modalRef = useFocusTrap(!!editState);
@@ -116,19 +117,7 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { dashboardFilter, setDashboardFilter, invalidateDashboardCache } = useAppStore();
-  const drilldownApplied = useRef(false);
-  useEffect(() => {
-    if (Object.keys(dashboardFilter).length > 0 && !drilldownApplied.current) {
-      drilldownApplied.current = true;
-      if (dashboardFilter.category) setFilter(dashboardFilter.category);
-      if (dashboardFilter.tags) setSearchInput(dashboardFilter.tags);
-      setDashboardFilter({});
-    }
-    if (Object.keys(dashboardFilter).length === 0) {
-      drilldownApplied.current = false;
-    }
-  }, [dashboardFilter, setDashboardFilter]);
+  const { invalidateDashboardCache } = useAppStore();
 
   const clearFilters = () => {
     setFilter(""); setSearch(""); setSearchInput(""); setDaysRange(365); setSortBy("date_desc");
@@ -246,8 +235,25 @@ export default function TransactionList() {
             >
               <CalendarDays size={16} />
             </button>
-            <button className="btn-icon" aria-label="Esporta CSV" title="Esporta CSV" onClick={() => exportTransactionsCsv(buildParams())}>
-              <Download size={16} />
+            <button
+              className="btn-icon"
+              aria-label="Esporta CSV"
+              title="Esporta CSV"
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await exportTransactionsCsv(buildParams());
+                  toast.success("CSV scaricato");
+                } catch (err) {
+                  toast.error("Errore durante l'export");
+                  console.error(err);
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              {exporting ? <RefreshCw size={16} className="spin" /> : <Download size={16} />}
             </button>
             <button className="btn-icon" aria-label="Aggiorna lista" title="Aggiorna" onClick={load}>
               <RefreshCw size={16} />

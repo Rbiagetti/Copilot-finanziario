@@ -2,6 +2,7 @@ import { useState } from "react";
 import { signOut } from "../../lib/supabase";
 import { LogOut } from "lucide-react";
 import toast from "react-hot-toast";
+import MonthlyReport from "./MonthlyReport";
 
 export default function SettingsPanel() {
   const [loggingOut, setLoggingOut] = useState(false);
@@ -32,6 +33,8 @@ export default function SettingsPanel() {
           </button>
         </div>
       </div>
+
+      <MonthlyReport />
     </div>
   );
 }

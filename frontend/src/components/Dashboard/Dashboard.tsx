@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell, Line,
-  BarChart, Bar, LabelList, Legend, Sector
+  BarChart, Bar, LabelList, Legend
 } from "recharts";
 import { getForecast, getAnomalies, getFullHistory, getBudgetStatus } from "../../api/client";
 import type { ForecastData, Anomaly, FullHistoryTransaction, BudgetStatus } from "../../api/client";
@@ -692,7 +692,7 @@ export default function Dashboard() {
           <ChartHeader
             title="Spese per Categoria"
             infoTitle="Mix Categorie"
-            infoBody="Distribuzione percentuale per categoria. Clicca su una fetta per vedere le transazioni di quella categoria."
+            infoBody="Distribuzione percentuale delle spese per categoria nel periodo selezionato."
           />
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
@@ -703,17 +703,8 @@ export default function Dashboard() {
                 paddingAngle={5}
                 dataKey="value"
                 nameKey="name"
-                onClick={d => handleDrilldown(d.name)}
-                activeShape={(props: any) => (
-                  <Sector
-                    cx={props.cx} cy={props.cy}
-                    innerRadius={props.innerRadius}
-                    outerRadius={props.outerRadius + 8}
-                    startAngle={props.startAngle}
-                    endAngle={props.endAngle}
-                    fill={props.fill}
-                  />
-                )}
+                label={({ percent }) => percent > 0.04 ? `${(percent * 100).toFixed(0)}%` : ""}
+                labelLine={false}
               >
                 {categoryData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
               </Pie>
