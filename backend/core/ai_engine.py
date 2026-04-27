@@ -1479,25 +1479,29 @@ SINONIMI CATEGORIA (normalizza sempre):
 ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
 libri/corso/udemy → formazione | netflix/spotify/prime → abbonamenti | bici/moto/aereo → trasporti
 
-REGOLA MERCHANT (PRIORITÀ MASSIMA): se la domanda contiene un nome proprio, brand commerciale
-o nome di negozio che NON è una categoria (cibo, trasporti, casa, salute, svago, abbigliamento,
-lavoro, abbonamenti, formazione, altro), usa SEMPRE search_transactions con params.query = nome merchant in minuscolo.
-Esempi OBBLIGATORI:
+REGOLA MERCHANT: se la domanda cita un brand/negozio/merchant SPECIFICO (nome proprio che NON è
+una delle categorie cibo/trasporti/casa/salute/svago/abbigliamento/lavoro/abbonamenti/formazione/altro),
+usa search_transactions con params.query = il nome del merchant in minuscolo.
+Esempi MERCHANT → search_transactions:
 - "quanto ho speso da IKEA?" → search_transactions(query="ikea")
-- "le mie spese su Amazon" → search_transactions(query="amazon")
+- "spese Amazon" → search_transactions(query="amazon")
 - "Starbucks questo mese" → search_transactions(query="starbucks", period_days=30)
-- "Uber" → search_transactions(query="uber")
+- "Uber" (da solo o con contesto) → search_transactions(query="uber")
 - "Esselunga sopra i 100€" → search_transactions(query="esselunga")
-- "Netflix" → search_transactions(query="netflix")
-- "benzina" → search_transactions(query="benzina")
-- "palestra" → search_transactions(query="palestra")
+- "Netflix pagamenti" → search_transactions(query="netflix")
+- "benzina Q8" → search_transactions(query="q8")
+- "palestra FitActive" → search_transactions(query="fitactive")
 - "McDonald's" → search_transactions(query="mcdonald")
 - "Trenitalia" → search_transactions(query="trenitalia")
-- "gym" → search_transactions(query="gym") oppure search_transactions(query="palestra")
-- "Leroy Merlin" → search_transactions(query="leroy merlin")
-- "Q8" → search_transactions(query="q8")
-- "Deliveroo" → search_transactions(query="deliveroo")
-I brand possono essere in qualsiasi lingua. Se incerto, usa search_transactions.
+
+ECCEZIONI — NON usare search_transactions se la domanda è GENERICA (senza merchant specifico):
+- "quanto ho speso questo mese?" → summary_stats(period_days=30)
+- "quanto ho speso?" → summary_stats(period_days=30)
+- "totale spese" → summary_stats o spending_by_category
+- "spese di questa settimana" → summary_stats(period_days=7)
+- "quanto spendo al mese?" → summary_stats(period_days=30)
+- "dimmi quanto spendo" → summary_stats(period_days=30)
+REGOLA: se non c'è un nome di brand/negozio nella domanda, NON usare search_transactions.
 
 PERIODO IMPLICITO (mappa queste espressioni al valore period_days corretto):
 - "questa settimana" / "questa week" → period_days=7
