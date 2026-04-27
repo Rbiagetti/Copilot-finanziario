@@ -329,6 +329,40 @@ FUNCTION_CATALOG = {
         "desc": "Lista abbonamenti attivi (is_recurring=1, >=2 addebiti): importo medio, annualizzato.",
         "params": "(nessuno)",
     },
+    # ── Advanced analytics ──────────────────────────────────────────────────
+    "category_volatility": {
+        "desc": "Volatilità mensile per categoria: media, stdev, CV. Ordinate per imprevedibilità.",
+        "params": "period_days: int=180",
+    },
+    "frequency_analysis": {
+        "desc": "Frequenza transazioni per categoria: gap medio tra tx, media, mediana.",
+        "params": "category: str=null, period_days: int=90",
+    },
+    "concentration_risk": {
+        "desc": "Concentrazione spese: top 3 categorie, top 5 descrizioni, top 5 giorni più cari.",
+        "params": "period_days: int=30",
+    },
+    "period_compare": {
+        "desc": "Confronto due finestre temporali arbitrarie per categoria: delta€ e delta%.",
+        "params": "period_a_days: int=30, period_b_offset_days: int=30",
+    },
+    "momentum": {
+        "desc": "Regressione lineare settimanale: trend %/settimana, classificazione accelerazione/stabile/decelerazione.",
+        "params": "category: str=null, period_days: int=60",
+    },
+    # ── Ricerca e drilldown ─────────────────────────────────────────────────
+    "search_transactions": {
+        "desc": "Ricerca LIKE case-insensitive su description+tags, con trend giornaliero del subset.",
+        "params": "query: str, period_days: int=90, n: int=20",
+    },
+    "category_drill": {
+        "desc": "Drilldown completo di una categoria: statistiche, top 5 descrizioni, top 5 giorni.",
+        "params": "category: str, period_days: int=90",
+    },
+    "tag_analysis": {
+        "desc": "Analisi tag: tag specificato → transazioni e trend; tag null → top 10 tag per spesa.",
+        "params": "tag: str=null, period_days: int=90",
+    },
 }
 
 _CATALOG_WIKI = "\n".join(
@@ -714,6 +748,523 @@ def _fn_subscriptions_audit(db_path: str, params: dict) -> dict:
     }
 
 
+# ─── ADVANCED ANALYTICS ──────────────────────────────────────────────────────
+
+def _fn_category_volatility(db_path: str, params: dict) -> dict:
+    import statistics as _stats
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 180))))
+    cutoff = _dates(period_days)
+    rows = _q(
+        "SELECT category, substr(date,1,7) AS month, SUM(amount) AS monthly_total "
+        "FROM transactions WHERE date >= :d "
+        "GROUP BY category, month ORDER BY category, month",
+        {"d": cutoff}
+    )
+    cat_months: dict = defaultdict(list)
+    for cat, _m, total in rows:
+        cat_months[cat].append(total or 0)
+
+    results = []
+    for cat, vals in cat_months.items():
+        if len(vals) < 2:
+            continue
+        mean = round(_stats.mean(vals), 2)
+        stdev = round(_stats.stdev(vals), 2)
+        cv = round(stdev / mean * 100, 1) if mean > 0 else 0
+        vol_label = "Alta" if cv > 50 else ("Media" if cv > 25 else "Bassa")
+        results.append((cat, mean, stdev, cv, vol_label, len(vals)))
+
+    results.sort(key=lambda x: x[3], reverse=True)
+    return {
+        "chart_data": {
+            "type": "bar",
+            "data": [{"name": r[0], "value": r[3]} for r in results[:MAX_CHART_POINTS]],
+            "title": f"Volatilità spese per categoria (ultimi {period_days}gg)",
+        },
+        "table_data": {
+            "headers": ["Categoria", "Media mensile", "StdDev", "Volatilità (CV%)", "Mesi"],
+            "rows": [
+                [r[0], f"€{r[1]}", f"€{r[2]}", f"{r[3]}% — {r[4]}", str(r[5])]
+                for r in results[:MAX_TABLE_ROWS]
+            ],
+        },
+    }
+
+
+def _fn_frequency_analysis(db_path: str, params: dict) -> dict:
+    import statistics as _stats
+    from datetime import datetime as _dt
+
+    category = params.get("category")
+    if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
+        category = None
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
+    cutoff = _dates(period_days)
+
+    def _gaps_and_stats(date_list, amount_list):
+        gaps = []
+        for i in range(1, len(date_list)):
+            try:
+                d1 = _dt.strptime(date_list[i - 1], "%Y-%m-%d")
+                d2 = _dt.strptime(date_list[i], "%Y-%m-%d")
+                gaps.append((d2 - d1).days)
+            except ValueError:
+                pass
+        n = len(amount_list)
+        mean_amt = round(_stats.mean(amount_list), 2) if amount_list else 0
+        median_amt = round(_stats.median(amount_list), 2) if amount_list else 0
+        avg_gap = round(_stats.mean(gaps), 1) if gaps else 0
+        return n, avg_gap, mean_amt, median_amt, gaps
+
+    if category:
+        rows = _q(
+            "SELECT date, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
+            {"cat": category, "d": cutoff}
+        )
+        if not rows:
+            return {"chart_data": None, "table_data": {"headers": ["Info"], "rows": [["Nessuna transazione trovata."]]}}
+        dates_ = [r[0] for r in rows]
+        amounts_ = [r[1] or 0 for r in rows]
+        n, avg_gap, mean_amt, median_amt, gaps = _gaps_and_stats(dates_, amounts_)
+        chart_items = [
+            {"name": dates_[i][5:], "value": gaps[i - 1]}
+            for i in range(1, min(len(dates_), MAX_CHART_POINTS + 1))
+        ]
+        return {
+            "chart_data": {"type": "line", "data": chart_items, "title": f"Gap tra transazioni: {category} (giorni)"},
+            "table_data": {
+                "headers": ["Categoria", "Transazioni", "Gap medio (gg)", "Media €", "Mediana €"],
+                "rows": [[category, str(n), str(avg_gap), f"€{mean_amt}", f"€{median_amt}"]],
+            },
+        }
+    else:
+        rows = _q(
+            "SELECT category, date, amount FROM transactions WHERE date >= :d ORDER BY category, date",
+            {"d": cutoff}
+        )
+        cat_data: dict = defaultdict(lambda: {"amounts": [], "dates": []})
+        for cat, date_str, amount in rows:
+            cat_data[cat]["amounts"].append(amount or 0)
+            cat_data[cat]["dates"].append(date_str)
+
+        table_rows = []
+        for cat, data in cat_data.items():
+            n, avg_gap, mean_amt, median_amt, _ = _gaps_and_stats(data["dates"], data["amounts"])
+            table_rows.append([cat, str(n), str(avg_gap), f"€{mean_amt}", f"€{median_amt}"])
+        table_rows.sort(key=lambda r: int(r[1]), reverse=True)
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Categoria", "Transazioni", "Gap medio (gg)", "Media €", "Mediana €"],
+                "rows": table_rows[:MAX_TABLE_ROWS],
+            },
+        }
+
+
+def _fn_concentration_risk(db_path: str, params: dict) -> dict:
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
+    cutoff = _dates(period_days)
+    total = _scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d", {"d": cutoff}) or 0
+
+    cat_rows = _q(
+        "SELECT category, SUM(amount) AS s FROM transactions WHERE date >= :d "
+        "GROUP BY category ORDER BY s DESC LIMIT 3", {"d": cutoff}
+    )
+    desc_rows = _q(
+        "SELECT COALESCE(description,'?'), SUM(amount) AS s FROM transactions "
+        "WHERE date >= :d AND description IS NOT NULL "
+        "GROUP BY description ORDER BY s DESC LIMIT 5", {"d": cutoff}
+    )
+    day_rows = _q(
+        "SELECT date, SUM(amount) AS s FROM transactions WHERE date >= :d "
+        "GROUP BY date ORDER BY s DESC LIMIT 5", {"d": cutoff}
+    )
+
+    def pct(v):
+        return f"{round(v / total * 100, 1)}%" if total > 0 else "0%"
+
+    rows: list = (
+        [["─── Top 3 categorie ───", "", ""]]
+        + [[r[0], f"€{round(r[1],2)}", pct(r[1])] for r in cat_rows]
+        + [["─── Top 5 descrizioni ───", "", ""]]
+        + [[r[0], f"€{round(r[1],2)}", pct(r[1])] for r in desc_rows]
+        + [["─── Top 5 giorni ───", "", ""]]
+        + [[r[0], f"€{round(r[1],2)}", pct(r[1])] for r in day_rows]
+    )
+
+    top3_total = sum(r[1] for r in cat_rows)
+    other = round(total - top3_total, 2)
+    chart_items = [{"name": r[0], "value": round(r[1], 2)} for r in cat_rows]
+    if other > 0:
+        chart_items.append({"name": "Altro", "value": other})
+
+    return {
+        "chart_data": {"type": "pie", "data": chart_items, "title": f"Concentrazione spese (ultimi {period_days}gg)"},
+        "table_data": {"headers": ["Voce", "Importo", "%"], "rows": rows[:MAX_TABLE_ROWS]},
+    }
+
+
+def _fn_period_compare(db_path: str, params: dict) -> dict:
+    period_a_days        = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_a_days", 30))))
+    period_b_offset_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_b_offset_days", 30))))
+
+    start_a = _dates(period_a_days)
+    end_a   = _dates(0)
+    start_b = _dates(period_a_days + period_b_offset_days)
+    end_b   = _dates(period_b_offset_days)
+
+    rows_a = _q(
+        "SELECT category, SUM(amount) FROM transactions WHERE date >= :s AND date < :e GROUP BY category",
+        {"s": start_a, "e": end_a}
+    )
+    rows_b = _q(
+        "SELECT category, SUM(amount) FROM transactions WHERE date >= :s AND date < :e GROUP BY category",
+        {"s": start_b, "e": end_b}
+    )
+
+    a_map = {r[0]: round(r[1] or 0, 2) for r in rows_a}
+    b_map = {r[0]: round(r[1] or 0, 2) for r in rows_b}
+    all_cats = sorted(set(a_map) | set(b_map))
+
+    results = []
+    for cat in all_cats:
+        a = a_map.get(cat, 0)
+        b = b_map.get(cat, 0)
+        delta_eur = round(a - b, 2)
+        delta_pct = round((a - b) / b * 100, 1) if b > 0 else (100.0 if a > 0 else 0.0)
+        results.append((cat, a, b, delta_eur, delta_pct))
+    results.sort(key=lambda x: abs(x[3]), reverse=True)
+
+    def _fmt_eur(v): return f"+€{v}" if v >= 0 else f"-€{abs(v)}"
+    def _fmt_pct(v): return f"+{v}%" if v >= 0 else f"{v}%"
+
+    return {
+        "chart_data": {
+            "type": "bar",
+            "data": [{"name": r[0], "value": r[3]} for r in results[:MAX_CHART_POINTS]],
+            "title": f"Delta A({period_a_days}gg) vs B({period_b_offset_days}gg prima)",
+        },
+        "table_data": {
+            "headers": [
+                "Categoria",
+                f"Periodo A ({period_a_days}gg)",
+                f"Periodo B ({period_b_offset_days}gg prima)",
+                "Δ€", "Δ%",
+            ],
+            "rows": [
+                [r[0], f"€{r[1]}", f"€{r[2]}", _fmt_eur(r[3]), _fmt_pct(r[4])]
+                for r in results[:MAX_TABLE_ROWS]
+            ],
+        },
+    }
+
+
+def _fn_momentum(db_path: str, params: dict) -> dict:
+    from datetime import datetime as _dt
+
+    category = params.get("category")
+    if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
+        category = None
+    period_days = max(14, min(MAX_PERIOD_DAYS, int(params.get("period_days", 60))))
+    n_weeks = max(2, period_days // 7)
+    cutoff = _dates(period_days)
+
+    def _linear_slope(vals: list) -> float:
+        n = len(vals)
+        if n < 2:
+            return 0.0
+        xs = list(range(n))
+        sx = sum(xs);  sy = sum(vals)
+        sxy = sum(x * y for x, y in zip(xs, vals))
+        sxx = sum(x * x for x in xs)
+        denom = n * sxx - sx * sx
+        return (n * sxy - sx * sy) / denom if denom != 0 else 0.0
+
+    def _classify(pct_week: float) -> str:
+        if pct_week > 5:  return "🔴 Accelerazione"
+        if pct_week < -5: return "🟢 Decelerazione"
+        return "🟡 Stabile"
+
+    def _bucket(rows_iter, base_dt):
+        weekly = [0.0] * n_weeks
+        for date_str, amt in rows_iter:
+            try:
+                d = _dt.strptime(date_str, "%Y-%m-%d")
+                idx = min((d - base_dt).days // 7, n_weeks - 1)
+                weekly[idx] += (amt or 0)
+            except ValueError:
+                pass
+        return weekly
+
+    base = _dt.strptime(cutoff, "%Y-%m-%d")
+
+    if category:
+        rows = _q(
+            "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d "
+            "GROUP BY date ORDER BY date",
+            {"cat": category, "d": cutoff}
+        )
+        weekly = _bucket(rows, base)
+        slope = _linear_slope(weekly)
+        mean_y = sum(weekly) / n_weeks
+        pct_w = round(slope / mean_y * 100, 2) if mean_y else 0.0
+        sign = "+" if pct_w >= 0 else ""
+        return {
+            "chart_data": {
+                "type": "line",
+                "data": [{"name": f"W{i+1}", "value": round(weekly[i], 2)} for i in range(n_weeks)][:MAX_CHART_POINTS],
+                "title": f"Momentum settimanale: {category}",
+            },
+            "table_data": {
+                "headers": ["Categoria", "Trend %/sett", "Classificazione"],
+                "rows": [[category, f"{sign}{pct_w}%", _classify(pct_w)]],
+            },
+        }
+    else:
+        rows = _q(
+            "SELECT category, date, SUM(amount) FROM transactions WHERE date >= :d "
+            "GROUP BY category, date ORDER BY category, date",
+            {"d": cutoff}
+        )
+        cat_raw: dict = defaultdict(list)
+        for cat, date_str, amt in rows:
+            cat_raw[cat].append((date_str, amt))
+
+        table_rows = []
+        total_weekly = [0.0] * n_weeks
+        for cat, pairs in cat_raw.items():
+            weekly = _bucket(pairs, base)
+            for i, v in enumerate(weekly):
+                total_weekly[i] += v
+            slope = _linear_slope(weekly)
+            mean_y = sum(weekly) / n_weeks
+            pct_w = round(slope / mean_y * 100, 2) if mean_y else 0.0
+            sign = "+" if pct_w >= 0 else ""
+            table_rows.append([cat, f"{sign}{pct_w}%", _classify(pct_w)])
+        table_rows.sort(key=lambda r: float(r[1].replace("%", "")), reverse=True)
+
+        return {
+            "chart_data": {
+                "type": "line",
+                "data": [{"name": f"W{i+1}", "value": round(total_weekly[i], 2)} for i in range(n_weeks)][:MAX_CHART_POINTS],
+                "title": "Trend settimanale totale spese",
+            },
+            "table_data": {
+                "headers": ["Categoria", "Trend %/sett", "Classificazione"],
+                "rows": table_rows[:MAX_TABLE_ROWS],
+            },
+        }
+
+
+# ─── SEARCH & DRILLDOWN ───────────────────────────────────────────────────────
+
+def _fn_search_transactions(db_path: str, params: dict) -> dict:
+    import re as _re
+    query = _re.sub(r"[^a-zA-Z0-9\s]", "", str(params.get("query", ""))).strip()[:50].lower()
+    if not query:
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Info"],
+                "rows": [["Query non valida (solo caratteri alfanumerici, max 50 char)."]],
+            },
+        }
+    n = max(1, min(MAX_TOP_N, int(params.get("n", 20))))
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
+    cutoff = _dates(period_days)
+    like_q = f"%{query}%"
+
+    rows = _q(
+        "SELECT date, category, description, tags, amount FROM transactions "
+        "WHERE date >= :d "
+        "  AND (LOWER(COALESCE(description,'')) LIKE :q OR LOWER(COALESCE(tags,'')) LIKE :q) "
+        "ORDER BY amount DESC LIMIT :n",
+        {"d": cutoff, "q": like_q, "n": n}
+    )
+    if not rows:
+        return {
+            "chart_data": None,
+            "table_data": {"headers": ["Info"], "rows": [[f"Nessuna transazione trovata per '{query}'."]]}
+        }
+
+    total_found = sum(r[4] or 0 for r in rows)
+    table_rows = [
+        [r[0], r[1] or "-", r[2] or "-", r[3] or "-", f"€{round(r[4] or 0, 2)}"]
+        for r in rows
+    ] + [["── TOTALE ──", "", "", "", f"€{round(total_found, 2)}"]]
+
+    daily = _q(
+        "SELECT date, SUM(amount) FROM transactions "
+        "WHERE date >= :d "
+        "  AND (LOWER(COALESCE(description,'')) LIKE :q OR LOWER(COALESCE(tags,'')) LIKE :q) "
+        "GROUP BY date ORDER BY date",
+        {"d": cutoff, "q": like_q}
+    )
+    chart_items = [{"name": r[0][5:], "value": round(r[1] or 0, 2)} for r in daily][:MAX_CHART_POINTS]
+
+    return {
+        "chart_data": (
+            {"type": "line", "data": chart_items, "title": f"Trend giornaliero: '{query}' ({period_days}gg)"}
+            if chart_items else None
+        ),
+        "table_data": {
+            "headers": ["Data", "Categoria", "Descrizione", "Tag", "Importo"],
+            "rows": table_rows,
+        },
+    }
+
+
+def _fn_category_drill(db_path: str, params: dict) -> dict:
+    import statistics as _stats
+
+    category = params.get("category")
+    if not isinstance(category, str) or category not in CATEGORIES:
+        category = "cibo"
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
+    cutoff = _dates(period_days)
+
+    rows = _q(
+        "SELECT date, description, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
+        {"cat": category, "d": cutoff}
+    )
+    if not rows:
+        return {
+            "chart_data": None,
+            "table_data": {"headers": ["Voce", "Valore", "Extra"], "rows": [[f"Nessuna tx per '{category}'.", "", ""]]},
+        }
+
+    amounts = [r[2] or 0 for r in rows]
+    total   = round(sum(amounts), 2)
+    n       = len(amounts)
+    mean    = round(_stats.mean(amounts), 2)
+    median  = round(_stats.median(amounts), 2)
+    mn, mx  = round(min(amounts), 2), round(max(amounts), 2)
+
+    top_desc = _q(
+        "SELECT COALESCE(description,'-'), COUNT(*), SUM(amount) FROM transactions "
+        "WHERE category = :cat AND date >= :d AND description IS NOT NULL "
+        "GROUP BY description ORDER BY SUM(amount) DESC LIMIT 5",
+        {"cat": category, "d": cutoff}
+    )
+    top_days = _q(
+        "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d "
+        "GROUP BY date ORDER BY SUM(amount) DESC LIMIT 5",
+        {"cat": category, "d": cutoff}
+    )
+
+    combined: list = (
+        [["─── Statistiche ───", "", ""],
+         ["Totale",          f"€{total}", ""],
+         ["N. transazioni",  str(n),      ""],
+         ["Media",           f"€{mean}",  ""],
+         ["Mediana",         f"€{median}",""],
+         ["Minima",          f"€{mn}",    ""],
+         ["Massima",         f"€{mx}",    ""],
+         ["─── Top 5 descrizioni ───", "", ""]]
+        + [[d, f"€{round(s,2)}", f"{c} tx"] for d, c, s in top_desc]
+        + [["─── Top 5 giorni ───", "", ""]]
+        + [[day, f"€{round(s,2)}", ""] for day, s in top_days]
+    )
+
+    daily = _q(
+        "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d "
+        "GROUP BY date ORDER BY date",
+        {"cat": category, "d": cutoff}
+    )
+    chart_items = [{"name": r[0][5:], "value": round(r[1] or 0, 2)} for r in daily][-MAX_CHART_POINTS:]
+
+    return {
+        "chart_data": {
+            "type": "line",
+            "data": chart_items,
+            "title": f"Trend giornaliero: {category} (ultimi {period_days}gg)",
+        },
+        "table_data": {
+            "headers": ["Voce", "Valore", "Extra"],
+            "rows": combined[:MAX_TABLE_ROWS],
+        },
+    }
+
+
+def _fn_tag_analysis(db_path: str, params: dict) -> dict:
+    import re as _re
+
+    tag = params.get("tag")
+    if tag is not None:
+        tag = _re.sub(r"[^a-zA-Z0-9_\s]", "", str(tag))[:30].strip().lower()
+        if not tag:
+            tag = None
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
+    cutoff = _dates(period_days)
+
+    if tag:
+        like_q = f"%{tag}%"
+        rows = _q(
+            "SELECT date, category, description, amount FROM transactions "
+            "WHERE date >= :d AND LOWER(COALESCE(tags,'')) LIKE :q ORDER BY date",
+            {"d": cutoff, "q": like_q}
+        )
+        if not rows:
+            return {
+                "chart_data": None,
+                "table_data": {"headers": ["Info"], "rows": [[f"Nessuna tx con tag '{tag}'."]]}
+            }
+        total = sum(r[3] or 0 for r in rows)
+        table_rows = [
+            [r[0], r[1] or "-", r[2] or "-", f"€{round(r[3] or 0, 2)}"]
+            for r in rows[: MAX_TABLE_ROWS - 1]
+        ] + [["── TOTALE ──", "", "", f"€{round(total, 2)}"]]
+
+        daily = _q(
+            "SELECT date, SUM(amount) FROM transactions "
+            "WHERE date >= :d AND LOWER(COALESCE(tags,'')) LIKE :q "
+            "GROUP BY date ORDER BY date",
+            {"d": cutoff, "q": like_q}
+        )
+        chart_items = [{"name": r[0][5:], "value": round(r[1] or 0, 2)} for r in daily][:MAX_CHART_POINTS]
+
+        return {
+            "chart_data": (
+                {"type": "line", "data": chart_items, "title": f"Trend tag '{tag}' (ultimi {period_days}gg)"}
+                if chart_items else None
+            ),
+            "table_data": {
+                "headers": ["Data", "Categoria", "Descrizione", "Importo"],
+                "rows": table_rows,
+            },
+        }
+    else:
+        rows = _q(
+            "SELECT tags, amount FROM transactions WHERE date >= :d AND tags IS NOT NULL AND tags != ''",
+            {"d": cutoff}
+        )
+        tag_totals: dict = defaultdict(float)
+        for tags_str, amount in rows:
+            for t in str(tags_str).split(","):
+                t = t.strip().lower()
+                if t:
+                    tag_totals[t] += (amount or 0)
+
+        if not tag_totals:
+            return {
+                "chart_data": None,
+                "table_data": {"headers": ["Info"], "rows": [["Nessun tag trovato nel periodo."]]}
+            }
+
+        sorted_tags = sorted(tag_totals.items(), key=lambda x: x[1], reverse=True)[:10]
+        return {
+            "chart_data": {
+                "type": "bar",
+                "data": [{"name": t, "value": round(v, 2)} for t, v in sorted_tags[:MAX_CHART_POINTS]],
+                "title": f"Top 10 tag per spesa (ultimi {period_days}gg)",
+            },
+            "table_data": {
+                "headers": ["Tag", "Totale speso"],
+                "rows": [[t, f"€{round(v,2)}"] for t, v in sorted_tags],
+            },
+        }
+
+
 _PREBUILT_FUNCTIONS = {
     "spending_by_category": _fn_spending_by_category,
     "daily_trend": _fn_daily_trend,
@@ -727,6 +1278,15 @@ _PREBUILT_FUNCTIONS = {
     "budget_status": _fn_budget_status,
     "recurring_vs_variable": _fn_recurring_vs_variable,
     "subscriptions_audit": _fn_subscriptions_audit,
+    # Block D — 8 nuove funzioni analitiche
+    "category_volatility": _fn_category_volatility,
+    "frequency_analysis": _fn_frequency_analysis,
+    "concentration_risk": _fn_concentration_risk,
+    "period_compare": _fn_period_compare,
+    "momentum": _fn_momentum,
+    "search_transactions": _fn_search_transactions,
+    "category_drill": _fn_category_drill,
+    "tag_analysis": _fn_tag_analysis,
 }
 
 
@@ -783,6 +1343,10 @@ def execute_prebuilt_function(name: str, params: dict) -> dict:
 
 FUNCTION_SELECTOR_PROMPT = """Sei un router finanziario. Classifica la domanda in uno dei tre casi.
 
+SINONIMI CATEGORIA (normalizza sempre):
+ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
+libri/corso/udemy → formazione | netflix/spotify/prime → abbonamenti | bici/moto/aereo → trasporti
+
 FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
 - spending_by_category(period_days=30, range 1..365): "dove vanno i soldi", "analisi completa", "distribuzione spese", "per categoria"
 - daily_trend(days=30, range 1..365): "trend giornaliero", "grafico spese nel tempo", "giorno per giorno"
@@ -796,6 +1360,14 @@ FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
 - budget_status(): "come vado coi budget", "sto sforando", "stato budget", "budget superato"
 - recurring_vs_variable(period_days=90, range 1..365): "fissi vs variabili", "quanto e' ricorrente", "spese fisse"
 - subscriptions_audit(): "lista abbonamenti", "audit subscription", "abbonamenti zombie", "ho abbonamenti attivi"
+- category_volatility(period_days=180, range 1..365): "variabilita'", "volatilita' di spesa", "categoria piu' imprevedibile", "quanto oscilla"
+- frequency_analysis(category=null, period_days=90, range 1..365): "ogni quanto spendo", "frequenza acquisti", "intervallo medio tra transazioni"
+- concentration_risk(period_days=30, range 1..365): "concentrazione spese", "dipendo da poche voci", "che concentrazione ho", "dove va la maggior parte"
+- period_compare(period_a_days=30 range 1..365, period_b_offset_days=30 range 1..365): "ultime N settimane vs N prima", "confronto due periodi", "come cambiato rispetto a", "delta tra periodi"
+- momentum(category=null, period_days=60, range 1..365): "spese in accelerazione", "sto aumentando", "tendenza recente", "il cibo e' in accelerazione"
+- search_transactions(query str max50, period_days=90, n=20): "quanto ho speso in [posto]", "trova transazioni con", "cerca [keyword]", "starbucks/esselunga/amazon"
+- category_drill(category str, period_days=90, range 1..365): "drilldown [categoria]", "dettaglio [categoria]", "analisi approfondita [categoria]", "breakdown [categoria]"
+- tag_analysis(tag=null, period_days=90, range 1..365): "spese taggate [tag]", "analisi tag", "tag [nome]", "cosa ho taggato come"
 
 CASO 1 — c'e' una funzione adatta:
 {"use_function": {"name": "nome", "params": {...}}, "in_perimeter": true}
@@ -883,10 +1455,12 @@ def _validate_router_output(parsed: dict) -> dict:
                 params = dict(use_function.get("params") or {})
                 # Clip integer params to safe ranges
                 for key, lo, hi, default in [
-                    ("period_days", 1, 365, 30),
-                    ("days", 1, 365, 30),
-                    ("n", 1, 50, 10),
-                    ("months", 1, 24, 6),
+                    ("period_days",          1, 365, 30),
+                    ("days",                 1, 365, 30),
+                    ("n",                    1,  50, 10),
+                    ("months",               1,  24,  6),
+                    ("period_a_days",        1, 365, 30),
+                    ("period_b_offset_days", 1, 365, 30),
                 ]:
                     if key in params:
                         try:
@@ -902,6 +1476,16 @@ def _validate_router_output(parsed: dict) -> dict:
                     cat = params["category"]
                     if not isinstance(cat, str) or cat not in CATEGORIES:
                         params["category"] = None
+                # query: max 50 chars, only alphanum+space
+                if "query" in params and params["query"] is not None:
+                    import re as _re
+                    q = _re.sub(r"[^a-z0-9\s]", "", str(params["query"]).lower()).strip()
+                    params["query"] = q[:50] if q else None
+                # tag: max 30 chars, only alphanum+underscore
+                if "tag" in params and params["tag"] is not None:
+                    import re as _re
+                    t = _re.sub(r"[^a-z0-9_]", "", str(params["tag"]).lower()).strip()
+                    params["tag"] = t[:30] if t else None
                 use_function = {"name": name, "params": params}
 
     return {"use_function": use_function, "in_perimeter": in_perimeter}
