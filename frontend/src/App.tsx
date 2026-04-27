@@ -11,60 +11,39 @@ import BudgetPanel from "./components/BudgetPanel/BudgetPanel";
 import SettingsPanel from "./components/Settings/SettingsPanel";
 import LoginPage from "./components/Auth/LoginPage";
 import { supabase } from "./lib/supabase";
+import { useAuthStore } from "./store/authStore";
 
 type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
 const VALID_VIEWS: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
 
 function App() {
   const { currentView, setView } = useAppStore();
-  const [session, setSession] = useState<any>(undefined); // undefined = loading
-  const navigate = useNavigate();
-  const location = useLocation();
+  // Auth handling via authStore
+  const {
+    isLoading,
+    isAuthenticated,
+    logout,
+  } = useAuthStore();
 
-  // Sync URL → Zustand: on initial load and browser back/forward
-  useEffect(() => {
-    const segment = location.pathname.replace(/^\//, "") as View;
-    const view = VALID_VIEWS.includes(segment) ? segment : "dashboard";
-    if (view !== currentView) {
-      setView(view);
-    }
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync Zustand → URL: when setView() is called from anywhere in the app
-  useEffect(() => {
-    const expected = `/${currentView}`;
-    if (location.pathname !== expected) {
-      navigate(expected, { replace: location.pathname === "/" });
-    }
-  }, [currentView]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  // Keep theme sync as before
   useEffect(() => {
     document.documentElement.setAttribute(
       "data-theme",
       localStorage.getItem("theme") === "light" ? "light" : "dark",
     );
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
-    return () => subscription.unsubscribe();
+    // authStore.init is called in AppInitializer (or can be called here if not)
   }, []);
 
-  // Dev locale senza VITE_SUPABASE_URL configurato → salta login
-  const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL;
-
-  if (supabaseConfigured && session === undefined) {
-    return (
-      <div className="loading-screen" style={{ height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
-        <div className="spin" style={{ width: '40px', height: '40px', border: '3px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%' }}></div>
-        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>Verifica sessione in corso...</p>
-      </div>
-    );
-  }
-
-  if (supabaseConfigured && !session) {
+  // Removed previous session state; auth logic handled by authStore and AppInitializer
+  // Session handling removed – auth state now comes from authStore (isAuthenticated)
+  if (supabaseConfigured && !isAuthenticated) {
     return (
       <LoginPage
         onLogin={() => {
-          supabase.auth.getSession().then(({ data }) => setSession(data.session));
+          // After successful login via Supabase, re‑initialize authStore to pick up token
+          supabase.auth.getSession().then(() => {
+            useAuthStore.getState().init();
+          });
         }}
       />
     );
