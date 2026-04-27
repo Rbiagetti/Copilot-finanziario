@@ -22,11 +22,25 @@ client = OpenAI(
 
 # ─── BLOCK A — CONSTANTS & PRE-FILTER ────────────────────────────────────────
 
-MAX_QUESTION_CHARS      = 500
-MAX_HISTORY_MESSAGES    = 4
-MAX_HISTORY_CHARS_PER_MSG = 300
-MAX_DATA_SUMMARY_ROWS   = 12
-MAX_FOLLOWUP_QUESTIONS  = 2
+MAX_QUESTION_CHARS          = 500
+MAX_HISTORY_MESSAGES        = 4
+MAX_HISTORY_CHARS_PER_MSG   = 300
+MAX_DATA_SUMMARY_ROWS       = 12
+MAX_FOLLOWUP_QUESTIONS      = 2
+
+# ─── BLOCK A — FUNCTION OUTPUT BOUNDS ────────────────────────────────────────
+MAX_TABLE_ROWS              = 30
+MAX_CHART_POINTS            = 24
+MAX_PERIOD_DAYS             = 365
+MAX_TOP_N                   = 50
+MAX_CATEGORY_TREND_MONTHS   = 24
+
+# Known categories — used to validate router-supplied category params.
+# Treated as a soft allowlist: unrecognised values are set to None.
+CATEGORIES: frozenset = frozenset({
+    "abbigliamento", "abbonamenti", "altro", "casa", "cibo",
+    "formazione", "intrattenimento", "lavoro", "salute", "svago", "trasporti",
+})
 
 _DEBUG_LOG_ROUTING = os.getenv("AI_DEBUG_ROUTING", "0") == "1"
 
@@ -34,27 +48,27 @@ _DEBUG_LOG_ROUTING = os.getenv("AI_DEBUG_ROUTING", "0") == "1"
 _OOS_PATTERNS: list = [
     # cucina / ricette
     re.compile(
-        r"\b(ricett[ae]|ingredienti\s+per|come\s+si\s+cucina|cuocere\s+(?:la|il|i|le)|carbonara|risotto\s+(?:al|alla)|pizza\s+(?:fatta|napoletana)|pane\s+(?:da|di|fatto))\b",
+        r"\b(ricett[ae]|ingredienti\s+per|come\s+si\s+cucina|cuoc[ei]|carbonara|risotto\s+(?:al|alla)|pizza\s+(?:fatta|napoletana)|pane\s+(?:da|di|fatto))\b",
         re.IGNORECASE,
     ),
     # sport
     re.compile(
-        r"\b(partita\s+di\s+(?:calcio|basket|tennis)|campionato\s+di\s+(?:calcio|basket)|champions\s+league|formula\s+1\s+(?:gara|pilota|classifica)|motogp\s+(?:gara|classifica))\b",
+        r"\b(partita\s+di\s+(?:calcio|basket|tennis)|chi\s+ha\s+vinto\s+la\s+partita|campionato\s+di\s+(?:calcio|basket)|champions\s+league|formula\s+1\s+(?:gara|pilota|classifica)|motogp\s+(?:gara|classifica))\b",
         re.IGNORECASE,
     ),
     # meteo
     re.compile(
-        r"\b(previsioni\s+(?:del\s+)?meteo|come\s+sarà\s+il\s+tempo|temperatura\s+(?:domani|oggi\s+fuori)|pioverà\s+(?:domani|oggi)|allerta\s+meteo)\b",
+        r"\b(previsioni\s+(?:del\s+)?meteo|che\s+tempo\s+fa|come\s+sar[aà]\s+il\s+tempo|temperatura\s+(?:domani|oggi\s+fuori)|piover[aà]\s+(?:domani|oggi)|allerta\s+meteo)\b",
         re.IGNORECASE,
     ),
     # codice / programmazione
     re.compile(
-        r"\b(scrivi\s+(?:un\s+)?codice|come\s+si\s+programma|in\s+(?:python|javascript|java|c\+\+)\s+(?:come|scrivi|crea)|algoritmo\s+di\s+(?:ordinamento|ricerca)|fare\s+(?:un\s+)?debug)\b",
+        r"\b(scrivi(?:mi)?\s+(?:un[ao]?\s+)?(?:funzione|programma|script|algoritmo|codice)|come\s+si\s+programma|in\s+(?:python|javascript|java|c\+\+)\s+(?:come|scrivi|crea)|fare\s+(?:un\s+)?debug)\b",
         re.IGNORECASE,
     ),
     # geopolitica
     re.compile(
-        r"\b(guerra\s+(?:in|tra|di)\s+\w+|chi\s+ha\s+vinto\s+(?:la\s+)?(?:guerra|le\s+elezioni)|elezioni?\s+(?:politiche|presidenziali)\s+(?:in|di)\s+\w+|presidente\s+(?:degli\s+stati\s+uniti|della\s+russia|cinese))\b",
+        r"\b(guerra\s+(?:in|tra|di)\s+\w+|chi\s+ha\s+vinto\s+(?:la\s+)?(?:guerra|le\s+elezioni)|elezioni?\s+(?:politiche|presidenziali)|chi\s+[eèé]\s+il\s+presidente|presidente\s+(?:degli\s+stati|usa\b|della\s+russia))\b",
         re.IGNORECASE,
     ),
     # meta-AI
@@ -64,7 +78,7 @@ _OOS_PATTERNS: list = [
     ),
     # salute
     re.compile(
-        r"\b(quante\s+calorie\s+(?:ha|in)\s+\w+|dieta\s+per\s+(?:dimagrire|perdere\s+peso)|sintomi\s+(?:di|del)\s+\w+|quali?\s+farmaci?\s+(?:per|prendere)|come\s+si\s+cura\s+(?:il|la|un|una)\s+\w+)\b",
+        r"\b(quante\s+calorie\s+(?:ha|in)\s+\w+|dieta\s+per\s+(?:dimagrire|perdere\s+peso)|sintomi\s+(?:di|del)\s+\w+|quali?\s+farmaci?\s+(?:per|prendere)|come\s+si\s+cura\s+|mal\s+di\s+(?:testa|schiena|stomaco|denti)|ho\s+(?:la\s+)?febbre)\b",
         re.IGNORECASE,
     ),
 ]
@@ -302,13 +316,16 @@ _CATALOG_WIKI = "\n".join(
 
 
 def _fn_spending_by_category(db_path: str, params: dict) -> dict:
-    period_days = int(params.get("period_days", 30))
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
     chart_type = params.get("chart_type", "bar")
+    if chart_type not in ("bar", "line", "pie"):
+        chart_type = "bar"
     cutoff = _dates(period_days)
     rows = _q(
         "SELECT category, SUM(amount) FROM transactions "
-        "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC",
-        {"d": cutoff}
+        "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC "
+        "LIMIT :lim",
+        {"d": cutoff, "lim": MAX_CHART_POINTS}
     )
     data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if r[1] and r[1] > 0]
     return {
@@ -318,13 +335,16 @@ def _fn_spending_by_category(db_path: str, params: dict) -> dict:
 
 
 def _fn_daily_trend(db_path: str, params: dict) -> dict:
-    days = int(params.get("days", 30))
+    days = max(1, min(MAX_PERIOD_DAYS, int(params.get("days", 30))))
     cutoff = _dates(days)
+    # Take the most recent MAX_CHART_POINTS days, then re-sort ascending for the chart
     rows = _q(
         "SELECT date, SUM(amount) FROM transactions "
-        "WHERE date >= :d GROUP BY date ORDER BY date",
-        {"d": cutoff}
+        "WHERE date >= :d GROUP BY date ORDER BY date DESC "
+        "LIMIT :lim",
+        {"d": cutoff, "lim": MAX_CHART_POINTS}
     )
+    rows = sorted(rows, key=lambda r: r[0])
     data = [{"name": r[0][5:], "value": round(r[1], 2)} for r in rows]
     return {
         "chart_data": {"type": "line", "data": data, "title": f"Trend giornaliero (ultimi {days}gg)"},
@@ -333,9 +353,11 @@ def _fn_daily_trend(db_path: str, params: dict) -> dict:
 
 
 def _fn_top_transactions(db_path: str, params: dict) -> dict:
-    n = int(params.get("n", 10))
+    n = max(1, min(MAX_TOP_N, int(params.get("n", 10))))
     category = params.get("category")
-    period_days = int(params.get("period_days", 30))
+    if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
+        category = None
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
     cutoff = _dates(period_days)
     if category:
         rows = _q(
@@ -367,8 +389,9 @@ def _fn_month_vs_month(db_path: str, params: dict) -> dict:
         "SUM(CASE WHEN date >= :ms THEN amount ELSE 0 END) as curr, "
         "SUM(CASE WHEN date >= :pms AND date < :ms THEN amount ELSE 0 END) as prev "
         "FROM transactions WHERE date >= :pms "
-        "GROUP BY category ORDER BY curr DESC",
-        {"ms": ms, "pms": pms}
+        "GROUP BY category ORDER BY curr DESC "
+        "LIMIT :lim",
+        {"ms": ms, "pms": pms, "lim": MAX_TABLE_ROWS}
     )
     table = {
         "headers": ["Categoria", "Mese corrente", "Mese prec.", "Variazione"],
@@ -376,7 +399,7 @@ def _fn_month_vs_month(db_path: str, params: dict) -> dict:
             [r[0], f"€{round(r[1],2)}", f"€{round(r[2],2)}",
              f"+{round((r[1]-r[2])/r[2]*100)}%" if r[2] > 0 else "N/A"]
             for r in rows if (r[1] or 0) > 0 or (r[2] or 0) > 0
-        ],
+        ][:MAX_TABLE_ROWS],
     }
     data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if (r[1] or 0) > 0]
     return {
@@ -387,7 +410,7 @@ def _fn_month_vs_month(db_path: str, params: dict) -> dict:
 
 def _fn_spending_by_weekday(db_path: str, params: dict) -> dict:
     from datetime import datetime as _dt
-    period_days = int(params.get("period_days", 90))
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
     cutoff = _dates(period_days)
     rows = _q(
         "SELECT date, SUM(amount) FROM transactions WHERE date >= :d GROUP BY date",
@@ -415,7 +438,9 @@ def _fn_spending_by_weekday(db_path: str, params: dict) -> dict:
 
 def _fn_category_trend(db_path: str, params: dict) -> dict:
     category = params.get("category", "cibo")
-    months = int(params.get("months", 6))
+    if not isinstance(category, str) or category not in CATEGORIES:
+        category = "cibo"
+    months = max(1, min(MAX_CATEGORY_TREND_MONTHS, int(params.get("months", 6))))
     cutoff = _dates(months * 30)
     rows = _q(
         "SELECT date, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
@@ -424,7 +449,9 @@ def _fn_category_trend(db_path: str, params: dict) -> dict:
     monthly: dict = defaultdict(float)
     for date_str, amount in rows:
         monthly[date_str[:7]] += amount or 0
-    data = [{"name": k, "value": round(v, 2)} for k, v in sorted(monthly.items())]
+    # Take the most recent MAX_CHART_POINTS months
+    sorted_months = sorted(monthly.items())[-MAX_CHART_POINTS:]
+    data = [{"name": k, "value": round(v, 2)} for k, v in sorted_months]
     return {
         "chart_data": {"type": "line", "data": data, "title": f"Andamento mensile: {category}"},
         "table_data": None,
@@ -467,7 +494,7 @@ def _fn_year_end_forecast(db_path: str, params: dict) -> dict:
 
 
 def _fn_summary_stats(db_path: str, params: dict) -> dict:
-    period_days = int(params.get("period_days", 30))
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
     cutoff = _dates(period_days)
     row = _q(
         "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d",
@@ -506,12 +533,51 @@ _PREBUILT_FUNCTIONS = {
 }
 
 
+def _validate_function_output(out: dict) -> dict:
+    """Normalizza e clippa l'output di ogni funzione prebuilt prima di ritornarlo."""
+    if not isinstance(out, dict):
+        return {"chart_data": None, "table_data": None}
+
+    # ── chart_data ───────────────────────────────────────────────────────────
+    cd = out.get("chart_data")
+    if cd is not None:
+        if not isinstance(cd, dict):
+            cd = None
+        else:
+            if cd.get("type") not in ("bar", "line", "pie"):
+                cd["type"] = "bar"
+            cd["title"] = str(cd.get("title", ""))[:80]
+            data = cd.get("data")
+            if not isinstance(data, list):
+                cd = None
+            else:
+                cd["data"] = data[:MAX_CHART_POINTS]
+
+    # ── table_data ───────────────────────────────────────────────────────────
+    td = out.get("table_data")
+    if td is not None:
+        if not isinstance(td, dict):
+            td = None
+        else:
+            rows = td.get("rows")
+            if not isinstance(rows, list):
+                td = None
+            else:
+                td["rows"] = [
+                    [str(cell) for cell in row]
+                    for row in rows[:MAX_TABLE_ROWS]
+                ]
+
+    return {"chart_data": cd, "table_data": td}
+
+
 def execute_prebuilt_function(name: str, params: dict) -> dict:
     fn = _PREBUILT_FUNCTIONS.get(name)
     if not fn:
         return {"chart_data": None, "table_data": None}
     try:
-        return fn(None, params or {})
+        raw = fn(None, params or {})
+        return _validate_function_output(raw)
     except Exception:
         return {"chart_data": None, "table_data": None}
 
@@ -520,14 +586,14 @@ def execute_prebuilt_function(name: str, params: dict) -> dict:
 
 FUNCTION_SELECTOR_PROMPT = """Sei un router finanziario. Classifica la domanda in uno dei tre casi.
 
-FUNZIONI DISPONIBILI:
-- spending_by_category(period_days=30): "dove vanno i soldi", "analisi completa", "distribuzione spese", "per categoria"
-- daily_trend(days=30): "trend giornaliero", "grafico spese nel tempo", "giorno per giorno"
-- top_transactions(n=10, category=null, period_days=30): "spese piu' alte", "transazioni piu' costose", "top N"
+FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
+- spending_by_category(period_days=30, range 1..365): "dove vanno i soldi", "analisi completa", "distribuzione spese", "per categoria"
+- daily_trend(days=30, range 1..365): "trend giornaliero", "grafico spese nel tempo", "giorno per giorno"
+- top_transactions(n=10 range 1..50, category=null, period_days=30 range 1..365): "spese piu' alte", "transazioni piu' costose", "top N"
 - month_vs_month(): "confronto mesi", "questo mese vs mese scorso", "variazione mensile"
-- spending_by_weekday(period_days=90): "weekend vs feriali", "giorno piu' costoso", "media per giorno settimana"
-- category_trend(category, months=6): "andamento [categoria] nel tempo", "storico [categoria] mesi"
-- summary_stats(period_days=30): "statistiche generali", "totale e media", "quante transazioni"
+- spending_by_weekday(period_days=90, range 1..365): "weekend vs feriali", "giorno piu' costoso", "media per giorno settimana"
+- category_trend(category, months=6 range 1..24): "andamento [categoria] nel tempo", "storico [categoria] mesi"
+- summary_stats(period_days=30, range 1..365): "statistiche generali", "totale e media", "quante transazioni"
 - year_end_forecast(): "stima fine anno", "previsione annuale", "quanto spendero' entro dicembre"
 
 CASO 1 — c'e' una funzione adatta:
@@ -630,9 +696,10 @@ def _validate_router_output(parsed: dict) -> dict:
                 if "chart_type" in params:
                     if params["chart_type"] not in ("bar", "line"):
                         params["chart_type"] = "bar"
-                # category must be str or None
+                # category must be a known CATEGORIES value or None
                 if "category" in params and params["category"] is not None:
-                    if not isinstance(params["category"], str):
+                    cat = params["category"]
+                    if not isinstance(cat, str) or cat not in CATEGORIES:
                         params["category"] = None
                 use_function = {"name": name, "params": params}
 
