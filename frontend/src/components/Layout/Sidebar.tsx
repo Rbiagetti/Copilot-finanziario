@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../../store/appStore";
 import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut } from "lucide-react";
 import { signOut } from "../../lib/supabase";
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const { currentView, setView } = useAppStore();
+  const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
@@ -27,6 +29,11 @@ export default function Sidebar() {
     }
   };
 
+  const handleNavClick = (key: typeof NAV_ITEMS[number]["key"]) => {
+    setView(key);
+    navigate(`/${key}`);
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -38,7 +45,7 @@ export default function Sidebar() {
           <button
             key={key}
             className={`nav-item ${currentView === key ? "active" : ""}`}
-            onClick={() => setView(key)}
+            onClick={() => handleNavClick(key)}
           >
             <Icon size={20} />
             <span>{label}</span>
@@ -61,3 +68,4 @@ export default function Sidebar() {
     </aside>
   );
 }
+
