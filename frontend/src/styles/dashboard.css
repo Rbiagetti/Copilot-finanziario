@@ -466,6 +466,12 @@
   z-index: 30;
   animation: fadeIn var(--duration-fast) var(--ease-out) both;
 }
+/* Variante allineata a destra (Transactions) — deve stare DOPO .filters-panel */
+.filters-panel--right {
+  left: auto;
+  right: 0;
+  transform: none;
+}
 .filters-panel .filter-row {
   display: flex;
   align-items: center;

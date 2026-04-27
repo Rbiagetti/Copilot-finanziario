@@ -83,19 +83,7 @@ export default function TransactionList() {
   const [toggling, setToggling] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [groupByDate, setGroupByDate] = useState(false);
-  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
-  const filtersBtnRef = useRef<HTMLButtonElement>(null);
   const modalRef = useFocusTrap(!!editState);
-
-  useEffect(() => {
-    if (filtersOpen && filtersBtnRef.current) {
-      const r = filtersBtnRef.current.getBoundingClientRect();
-      const W = 240;
-      // Bordo destro del pannello = bordo destro del bottone
-      const left = Math.max(12, r.right - W);
-      setPanelPos({ top: r.bottom + 8, left });
-    }
-  }, [filtersOpen]);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string> = {};
@@ -289,7 +277,6 @@ export default function TransactionList() {
             {/* Filtri collassabili identici alla Dashboard */}
             <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
               <button
-                ref={filtersBtnRef}
                 className="filters-toggle"
                 onClick={() => setFiltersOpen(o => !o)}
                 aria-expanded={filtersOpen}
@@ -307,7 +294,7 @@ export default function TransactionList() {
               {filtersOpen && (
                 <>
                 <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
-                <div className="filters-panel" style={{ position: "fixed", top: panelPos.top, left: panelPos.left, width: 240 }}>
+                <div className="filters-panel filters-panel--right">
                   <div className="filter-row">
                     <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select" aria-label="Categoria">
                       <option value="">Tutte le categorie</option>
