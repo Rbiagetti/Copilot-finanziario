@@ -45,7 +45,7 @@ export default function Sidebar() {
           <button
             key={key}
             className={`nav-item ${currentView === key ? "active" : ""}`}
-            onClick={() => handleNavClick(key)}
+            onPointerDown={() => handleNavClick(key)}
           >
             <Icon size={20} />
             <span>{label}</span>
@@ -56,7 +56,7 @@ export default function Sidebar() {
       <div className="sidebar-footer desktop-only" style={{ marginTop: "auto", padding: "1rem" }}>
         <button
           className="nav-item"
-          onClick={handleLogout}
+          onPointerDown={handleLogout}
           disabled={loggingOut}
           aria-label="Disconnetti"
           style={{ width: "100%", justifyContent: "flex-start", color: "var(--text-dim)" }}
