@@ -39,6 +39,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         chart_data=result["chart_data"],
         data_table=result["data_table"],
         followup_questions=result["followup_questions"],
+        reasoning_steps=result.get("reasoning_steps", []),
     )
 
 
