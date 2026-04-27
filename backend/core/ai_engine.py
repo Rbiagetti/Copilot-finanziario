@@ -42,7 +42,9 @@ CATEGORIES: frozenset = frozenset({
     "formazione", "intrattenimento", "lavoro", "salute", "svago", "trasporti",
 })
 
-_DEBUG_LOG_ROUTING = os.getenv("AI_DEBUG_ROUTING", "0") == "1"
+_DEBUG_LOG_ROUTING  = os.getenv("AI_DEBUG_ROUTING",   "0") == "1"
+AI_DISABLE_LLM      = os.getenv("AI_DISABLE_LLM",    "0") == "1"   # salta LLM → OUT_OF_SCOPE in <10ms
+AI_FORCE_TEMP_ZERO  = os.getenv("AI_FORCE_TEMP_ZERO", "0") == "1"  # forza temperature=0 su interpret/answer
 
 # Precompiled OOS patterns — 7 domains
 _OOS_PATTERNS: list = [
@@ -141,6 +143,10 @@ def _llm_call(
     """Wrapper LLM centralizzato con contatore chiamate e json_mode con fallback."""
     _token_counter["calls"] += 1
     _token_counter["by_phase"][phase] += 1
+
+    # AI_FORCE_TEMP_ZERO: applica solo su interpret/answer/text (il router è già a 0)
+    if AI_FORCE_TEMP_ZERO and phase not in ("router",):
+        temperature = 0.0
 
     kwargs: dict = {
         "model": MODEL,
@@ -305,6 +311,22 @@ FUNCTION_CATALOG = {
     },
     "year_end_forecast": {
         "desc": "Proiezione spese fino a fine anno basata sulla media giornaliera recente.",
+        "params": "(nessuno)",
+    },
+    "anomalies": {
+        "desc": "Transazioni statisticamente anomale (z-score > 1.5) negli ultimi 60 giorni.",
+        "params": "(nessuno)",
+    },
+    "budget_status": {
+        "desc": "Stato budget attivi: speso vs budget mensile per categoria, con semaforo ok/warning/exceeded.",
+        "params": "(nessuno)",
+    },
+    "recurring_vs_variable": {
+        "desc": "Spese ricorrenti vs variabili per mese, ultimi N giorni.",
+        "params": "period_days: int=90",
+    },
+    "subscriptions_audit": {
+        "desc": "Lista abbonamenti attivi (is_recurring=1, >=2 addebiti): importo medio, annualizzato.",
         "params": "(nessuno)",
     },
 }
@@ -521,6 +543,177 @@ def _fn_summary_stats(db_path: str, params: dict) -> dict:
     }
 
 
+def _fn_anomalies(db_path: str, params: dict) -> dict:
+    """Riusa get_anomalies() senza duplicare la logica statistica."""
+    anomalies = get_anomalies()
+    if not anomalies:
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Info"],
+                "rows": [["Nessuna anomalia rilevata negli ultimi 60 giorni."]],
+            },
+        }
+    top10 = anomalies[:min(10, MAX_CHART_POINTS)]
+    chart_data = {
+        "type": "bar",
+        "data": [{"name": f"{a['description'][:18] or a['category']}", "value": a["amount"]} for a in top10],
+        "title": "Top anomalie per z-score (ultimi 60gg)",
+    }
+    table_data = {
+        "headers": ["Data", "Categoria", "Descrizione", "Importo", "Z-score", "% sopra media"],
+        "rows": [
+            [
+                a["date"],
+                a["category"],
+                a["description"][:40] or "-",
+                f"€{a['amount']}",
+                str(a["z_score"]),
+                f"+{a['pct_above_avg']}%",
+            ]
+            for a in anomalies[:MAX_TABLE_ROWS]
+        ],
+    }
+    return {"chart_data": chart_data, "table_data": table_data}
+
+
+def _fn_budget_status(db_path: str, params: dict) -> dict:
+    """Stato budget attivi: confronta budgets con spese del mese corrente."""
+    ms = _month_start(0)
+    rows = _q(
+        "SELECT b.category, b.amount AS budget, "
+        "COALESCE(SUM(t.amount), 0) AS spent "
+        "FROM budgets b "
+        "LEFT JOIN transactions t "
+        "  ON t.category = b.category AND t.date >= :ms "
+        "WHERE b.active = 1 "
+        "GROUP BY b.category, b.amount "
+        "ORDER BY (COALESCE(SUM(t.amount), 0) / b.amount) DESC "
+        "LIMIT :lim",
+        {"ms": ms, "lim": MAX_TABLE_ROWS}
+    )
+    if not rows:
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Info"],
+                "rows": [["Nessun budget attivo. Creane uno nella sezione Budget."]],
+            },
+        }
+
+    table_rows = []
+    chart_data_items = []
+    for cat, budget, spent in rows:
+        budget = round(budget or 0, 2)
+        spent  = round(spent  or 0, 2)
+        pct    = round(spent / budget * 100, 1) if budget > 0 else 0
+        if pct < 80:
+            status = "✅ ok"
+        elif pct <= 100:
+            status = "⚠️ attenzione"
+        else:
+            status = "🔴 sforato"
+        table_rows.append([cat, f"€{budget}", f"€{spent}", f"{pct}%", status])
+        chart_data_items.append({"name": cat, "value": pct})
+
+    return {
+        "chart_data": {
+            "type": "bar",
+            "data": chart_data_items[:MAX_CHART_POINTS],
+            "title": "Utilizzo budget mese corrente (%)",
+        },
+        "table_data": {
+            "headers": ["Categoria", "Budget", "Speso", "%", "Stato"],
+            "rows": table_rows,
+        },
+    }
+
+
+def _fn_recurring_vs_variable(db_path: str, params: dict) -> dict:
+    """Fisso vs variabile per mese, ultimi period_days giorni."""
+    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
+    cutoff = _dates(period_days)
+    rows = _q(
+        "SELECT "
+        "  substr(date,1,7) AS month, "
+        "  SUM(CASE WHEN is_recurring = 1 THEN amount ELSE 0 END) AS recurring, "
+        "  SUM(CASE WHEN is_recurring = 0 OR is_recurring IS NULL THEN amount ELSE 0 END) AS variable "
+        "FROM transactions "
+        "WHERE date >= :d "
+        "GROUP BY month "
+        "ORDER BY month DESC "
+        "LIMIT :lim",
+        {"d": cutoff, "lim": MAX_CHART_POINTS}
+    )
+    rows = sorted(rows, key=lambda r: r[0])  # ri-ordina ascendente
+
+    table_rows = []
+    chart_items = []
+    for month, rec, var in rows:
+        rec = round(rec or 0, 2)
+        var = round(var or 0, 2)
+        total = rec + var
+        pct_rec = round(rec / total * 100, 1) if total > 0 else 0
+        table_rows.append([month, f"€{rec}", f"€{var}", f"{pct_rec}%"])
+        chart_items.append({"name": month, "value": rec})   # bar = quota ricorrente
+
+    return {
+        "chart_data": {
+            "type": "bar",
+            "data": chart_items,
+            "title": f"Spese ricorrenti per mese (ultimi {period_days}gg)",
+        },
+        "table_data": {
+            "headers": ["Mese", "Ricorrenti", "Variabili", "% Ricorrenti"],
+            "rows": table_rows,
+        },
+    }
+
+
+def _fn_subscriptions_audit(db_path: str, params: dict) -> dict:
+    """Audit abbonamenti: transazioni ricorrenti raggruppate per descrizione+categoria."""
+    rows = _q(
+        "SELECT description, category, AVG(amount), COUNT(*), MIN(date), MAX(date) "
+        "FROM transactions "
+        "WHERE is_recurring = 1 "
+        "GROUP BY description, category "
+        "HAVING COUNT(*) >= 2 "
+        "ORDER BY AVG(amount) DESC "
+        "LIMIT :lim",
+        {"lim": MAX_TABLE_ROWS}
+    )
+    if not rows:
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Info"],
+                "rows": [["Nessun abbonamento ricorrente rilevato (≥2 addebiti)."]],
+            },
+        }
+
+    table_rows = []
+    for desc, cat, avg_amt, count, first, last in rows:
+        avg_amt    = round(avg_amt or 0, 2)
+        annualized = round(avg_amt * 12, 2)
+        table_rows.append([
+            desc or "-",
+            cat or "-",
+            f"€{avg_amt}",
+            str(count),
+            first or "-",
+            last or "-",
+            f"€{annualized}",
+        ])
+
+    return {
+        "chart_data": None,
+        "table_data": {
+            "headers": ["Descrizione", "Categoria", "Importo medio", "N. addebiti", "Primo", "Ultimo", "Annualizzato"],
+            "rows": table_rows,
+        },
+    }
+
+
 _PREBUILT_FUNCTIONS = {
     "spending_by_category": _fn_spending_by_category,
     "daily_trend": _fn_daily_trend,
@@ -530,6 +723,10 @@ _PREBUILT_FUNCTIONS = {
     "category_trend": _fn_category_trend,
     "summary_stats": _fn_summary_stats,
     "year_end_forecast": _fn_year_end_forecast,
+    "anomalies": _fn_anomalies,
+    "budget_status": _fn_budget_status,
+    "recurring_vs_variable": _fn_recurring_vs_variable,
+    "subscriptions_audit": _fn_subscriptions_audit,
 }
 
 
@@ -595,6 +792,10 @@ FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
 - category_trend(category, months=6 range 1..24): "andamento [categoria] nel tempo", "storico [categoria] mesi"
 - summary_stats(period_days=30, range 1..365): "statistiche generali", "totale e media", "quante transazioni"
 - year_end_forecast(): "stima fine anno", "previsione annuale", "quanto spendero' entro dicembre"
+- anomalies(): "spese strane", "anomalie", "transazioni fuori dalla norma", "pagamenti insoliti"
+- budget_status(): "come vado coi budget", "sto sforando", "stato budget", "budget superato"
+- recurring_vs_variable(period_days=90, range 1..365): "fissi vs variabili", "quanto e' ricorrente", "spese fisse"
+- subscriptions_audit(): "lista abbonamenti", "audit subscription", "abbonamenti zombie", "ho abbonamenti attivi"
 
 CASO 1 — c'e' una funzione adatta:
 {"use_function": {"name": "nome", "params": {...}}, "in_perimeter": true}
@@ -843,6 +1044,15 @@ def _interpret_results(question: str, data_summary: str) -> dict:
 # ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
 
 def chat_with_ai(question: str, history=None) -> dict:
+    # ── Emergency kill-switch: bypass tutto, nessuna chiamata LLM ────────────
+    if AI_DISABLE_LLM:
+        return {
+            "answer": _OUT_OF_SCOPE["answer"],
+            "chart_data": None,
+            "data_table": None,
+            "followup_questions": _OUT_OF_SCOPE["followup_questions"],
+        }
+
     # ── Block A: Pre-filter (zero LLM calls) ──────────────────────────────────
     if _input_too_long(question):
         return {
