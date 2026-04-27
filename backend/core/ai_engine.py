@@ -34,6 +34,7 @@ MAX_CHART_POINTS            = 24
 MAX_PERIOD_DAYS             = 365
 MAX_TOP_N                   = 50
 MAX_CATEGORY_TREND_MONTHS   = 24
+MAX_MULTI_SUMMARY_CHARS     = 2500
 
 # Known categories — used to validate router-supplied category params.
 # Treated as a soft allowlist: unrecognised values are set to None.
@@ -41,6 +42,34 @@ CATEGORIES: frozenset = frozenset({
     "abbigliamento", "abbonamenti", "altro", "casa", "cibo",
     "formazione", "intrattenimento", "lavoro", "salute", "svago", "trasporti",
 })
+
+MACRO_INTENTS: dict = {
+    "full_monthly_review": {
+        "triggers": ["analisi completa", "riassunto del mese", "panoramica", "dimmi tutto", "come sto andando"],
+        "functions": [
+            ("month_vs_month",           {}),
+            ("spending_by_category",     {"period_days": 30}),
+            ("anomalies",                {}),
+            ("budget_status",            {}),
+        ],
+    },
+    "savings_audit": {
+        "triggers": ["dove posso risparmiare", "come tagliare", "ottimizzare spese", "ridurre spesa"],
+        "functions": [
+            ("subscriptions_audit",      {}),
+            ("category_volatility",      {"period_days": 180}),
+            ("concentration_risk",       {"period_days": 30}),
+        ],
+    },
+    "trend_overview": {
+        "triggers": ["come sto cambiando", "trend generale", "evoluzione spese", "andamento"],
+        "functions": [
+            ("daily_trend",              {"days": 60}),
+            ("momentum",                 {}),
+            ("month_vs_month",           {}),
+        ],
+    },
+}
 
 _DEBUG_LOG_ROUTING  = os.getenv("AI_DEBUG_ROUTING",   "0") == "1"
 AI_DISABLE_LLM      = os.getenv("AI_DISABLE_LLM",    "0") == "1"   # salta LLM → OUT_OF_SCOPE in <10ms
@@ -362,6 +391,11 @@ FUNCTION_CATALOG = {
     "tag_analysis": {
         "desc": "Analisi tag: tag specificato → transazioni e trend; tag null → top 10 tag per spesa.",
         "params": "tag: str=null, period_days: int=90",
+    },
+    # ── What-if simulator ───────────────────────────────────────────────────
+    "what_if": {
+        "desc": "Simulazione what-if: calcola risparmio/costo di una modifica mensile su categoria o totale.",
+        "params": "category: str=null, monthly_delta: float=0, monthly_target: float=null, percent_change: float=null, horizon_months: int=12",
     },
 }
 
@@ -1265,6 +1299,72 @@ def _fn_tag_analysis(db_path: str, params: dict) -> dict:
         }
 
 
+def _fn_what_if(db_path: str, params: dict) -> dict:
+    """What-if simulator: baseline mensile → scenario → risparmio/costo su orizzonte."""
+    category = params.get("category")
+    if isinstance(category, str) and category not in CATEGORIES:
+        category = None
+    horizon_months = max(1, min(60, int(params.get("horizon_months", 12))))
+    percent_change  = params.get("percent_change")
+    monthly_target  = params.get("monthly_target")
+    monthly_delta   = float(params.get("monthly_delta", 0))
+
+    cutoff = _dates(90)
+    with engine.connect() as conn:
+        if category:
+            row = conn.execute(
+                text("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE date>=:c AND category=:cat"),
+                {"c": cutoff, "cat": category},
+            ).fetchone()
+        else:
+            row = conn.execute(
+                text("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE date>=:c"),
+                {"c": cutoff},
+            ).fetchone()
+
+    total_90 = float(row[0]) if row else 0.0
+    baseline = round(total_90 / 3, 2)
+
+    if baseline == 0:
+        scope = f"categoria '{category}'" if category else "totale"
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Metrica", "Valore"],
+                "rows": [[f"Dati insufficienti per simulare {scope}", "—"]],
+            },
+        }
+
+    if percent_change is not None:
+        new_monthly = round(baseline * (1 + float(percent_change) / 100), 2)
+    elif monthly_target is not None:
+        new_monthly = round(float(monthly_target), 2)
+    else:
+        new_monthly = round(baseline + monthly_delta, 2)
+
+    delta_monthly = round(new_monthly - baseline, 2)
+    saved_total   = round(-delta_monthly * horizon_months, 2)
+
+    return {
+        "chart_data": {
+            "type": "bar",
+            "title": f"What-if: baseline vs scenario ({horizon_months} mesi)",
+            "data": [
+                {"name": "Baseline",  "value": round(baseline    * horizon_months, 2)},
+                {"name": "Scenario",  "value": round(new_monthly * horizon_months, 2)},
+            ],
+        },
+        "table_data": {
+            "headers": ["Metrica", "Baseline", "Scenario"],
+            "rows": [
+                ["Mensile",                      f"€{baseline}",              f"€{new_monthly}"],
+                ["Annuale",                       f"€{round(baseline*12,2)}",  f"€{round(new_monthly*12,2)}"],
+                [f"Δ orizzonte ({horizon_months}m)", "—",                     f"€{saved_total:+.2f}"],
+            ],
+        },
+    }
+
+
 _PREBUILT_FUNCTIONS = {
     "spending_by_category": _fn_spending_by_category,
     "daily_trend": _fn_daily_trend,
@@ -1287,6 +1387,8 @@ _PREBUILT_FUNCTIONS = {
     "search_transactions": _fn_search_transactions,
     "category_drill": _fn_category_drill,
     "tag_analysis": _fn_tag_analysis,
+    # Block E — What-if simulator
+    "what_if": _fn_what_if,
 }
 
 
@@ -1368,6 +1470,7 @@ FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
 - search_transactions(query str max50, period_days=90, n=20): "quanto ho speso in [posto]", "trova transazioni con", "cerca [keyword]", "starbucks/esselunga/amazon"
 - category_drill(category str, period_days=90, range 1..365): "drilldown [categoria]", "dettaglio [categoria]", "analisi approfondita [categoria]", "breakdown [categoria]"
 - tag_analysis(tag=null, period_days=90, range 1..365): "spese taggate [tag]", "analisi tag", "tag [nome]", "cosa ho taggato come"
+- what_if(category=null, monthly_delta=0, monthly_target=null, percent_change=null, horizon_months=12): "se taglio X€/mese da [cat]" → {category:cat, monthly_delta:-X}; "se metto budget Y€ su [cat]" → {category:cat, monthly_target:Y}; "se riduco del K% [cat] per N mesi" → {category:cat, percent_change:-K, horizon_months:N}; "quanto risparmio se...", "simulazione"
 
 CASO 1 — c'e' una funzione adatta:
 {"use_function": {"name": "nome", "params": {...}}, "in_perimeter": true}
@@ -1397,6 +1500,20 @@ Scrivi 2-3 frasi da consulente. REGOLE:
 Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
 Esempi corretti: "Mostrami il trend dell'abbigliamento negli ultimi 6 mesi", "Quali sono le 5 spese piu' alte di trasporti?"
 NON includere suggerimenti di domande dentro il campo answer. Il campo answer contiene SOLO l'analisi.
+
+SOLO JSON: {{"answer": "...", "followup_questions": ["...", "..."]}}"""
+
+INTERPRET_MULTI_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
+
+DOMANDA: {question}
+
+HAI I RISULTATI DI {n_blocks} ANALISI:
+{data_summary}
+
+Produci 4-6 frasi che colleghino TRA LORO i blocchi (es. 'la categoria X e' anche quella piu' volatile e contribuisce per il 35% del totale'). NON elencare i blocchi separatamente. Usa numeri ESATTI dai dati. Termina con UNA raccomandazione concreta basata sull'incrocio dei risultati.
+
+Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
+NON includere suggerimenti dentro il campo answer.
 
 SOLO JSON: {{"answer": "...", "followup_questions": ["...", "..."]}}"""
 
@@ -1455,16 +1572,28 @@ def _validate_router_output(parsed: dict) -> dict:
                 params = dict(use_function.get("params") or {})
                 # Clip integer params to safe ranges
                 for key, lo, hi, default in [
-                    ("period_days",          1, 365, 30),
-                    ("days",                 1, 365, 30),
-                    ("n",                    1,  50, 10),
-                    ("months",               1,  24,  6),
-                    ("period_a_days",        1, 365, 30),
-                    ("period_b_offset_days", 1, 365, 30),
+                    ("period_days",          1,   365,   30),
+                    ("days",                 1,   365,   30),
+                    ("n",                    1,    50,   10),
+                    ("months",               1,    24,    6),
+                    ("period_a_days",        1,   365,   30),
+                    ("period_b_offset_days", 1,   365,   30),
+                    ("horizon_months",       1,    60,   12),
                 ]:
                     if key in params:
                         try:
                             params[key] = max(lo, min(hi, int(params[key])))
+                        except (ValueError, TypeError):
+                            params[key] = default
+                # Clip float params to safe ranges
+                for key, lo, hi, default in [
+                    ("monthly_delta",   -10000, 10000,    0),
+                    ("monthly_target",       0, 50000, None),
+                    ("percent_change",    -100,  1000, None),
+                ]:
+                    if key in params and params[key] is not None:
+                        try:
+                            params[key] = max(lo, min(hi, float(params[key])))
                         except (ValueError, TypeError):
                             params[key] = default
                 # chart_type enum
@@ -1625,6 +1754,79 @@ def _interpret_results(question: str, data_summary: str) -> dict:
     return _parse_ai_response(raw)
 
 
+# ─── MACRO-INTENT ORCHESTRATION ──────────────────────────────────────────────
+
+def _match_macro_intent(question: str) -> "str | None":
+    """Keyword match deterministico sui trigger di MACRO_INTENTS. Zero LLM."""
+    q = question.lower()
+    for intent_name, intent in MACRO_INTENTS.items():
+        for trigger in intent["triggers"]:
+            if re.search(r"\b" + re.escape(trigger) + r"\b", q):
+                return intent_name
+    return None
+
+
+def _build_multi_summary(blocks: list) -> str:
+    """Concatena blocchi; tronca proporzionalmente se supera MAX_MULTI_SUMMARY_CHARS."""
+    full = "\n\n".join(blocks)
+    if len(full) <= MAX_MULTI_SUMMARY_CHARS:
+        return full
+    truncated = []
+    for block in blocks:
+        lines = block.splitlines()
+        truncated.append("\n".join(lines[:6]))  # header + max 5 data lines
+    return "\n\n".join(truncated)[:MAX_MULTI_SUMMARY_CHARS]
+
+
+def _interpret_multi_results(question: str, data_summary: str, n_blocks: int) -> dict:
+    prompt = INTERPRET_MULTI_PROMPT.format(
+        n_blocks=n_blocks,
+        question=question,
+        data_summary=data_summary,
+    )
+    raw = _llm_call(
+        "interpret_multi",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "Analizza e collega i blocchi."},
+        ],
+        temperature=0.1,
+        max_tokens=600,
+        seed=42,
+        json_mode=True,
+    )
+    return _parse_ai_response(raw)
+
+
+def _execute_macro_intent(question: str, intent_name: str) -> dict:
+    intent = MACRO_INTENTS[intent_name]
+    blocks: list = []
+    first_chart = None
+    first_table = None
+
+    for fn_name, fn_params in intent["functions"]:
+        result = execute_prebuilt_function(fn_name, fn_params)
+        cd = result.get("chart_data")
+        td = result.get("table_data")
+        if first_chart is None and cd is not None:
+            first_chart = cd
+        if first_table is None and td is not None:
+            first_table = td
+        header = "## " + fn_name.replace("_", " ").title()
+        body   = _format_data_for_interpretation(cd, td)
+        blocks.append(f"{header}\n{body}")
+
+    data_summary = _build_multi_summary(blocks)
+    interp = _interpret_multi_results(question, data_summary, n_blocks=len(blocks))
+
+    return {
+        "answer":             interp.get("answer", "Analisi completata.").strip(),
+        "chart_data":         first_chart,
+        "data_table":         first_table,
+        "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
+    }
+
+
 # ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
 
 def chat_with_ai(question: str, history=None) -> dict:
@@ -1653,6 +1855,11 @@ def chat_with_ai(question: str, history=None) -> dict:
             "data_table": None,
             "followup_questions": _OUT_OF_SCOPE_PREFILTER["followup_questions"],
         }
+
+    # ── Macro-intent: 0 router LLM calls, N prebuilt + 1 interpret_multi ────
+    macro = _match_macro_intent(question)
+    if macro:
+        return _execute_macro_intent(question, macro)
 
     # ── Block B: Router with determinism & validation ─────────────────────────
     selector = _select_function(question, history)

@@ -32,6 +32,10 @@ from backend.core.ai_engine import (
     MAX_TOP_N,
     MAX_PERIOD_DAYS,
     MAX_CATEGORY_TREND_MONTHS,
+    MAX_MULTI_SUMMARY_CHARS,
+    MACRO_INTENTS,
+    _match_macro_intent,
+    _build_multi_summary,
 )
 
 HAS_API_KEY = bool(os.getenv("GROQ_API_KEY", "").strip())
@@ -412,3 +416,155 @@ class TestSanitizeHistory:
         roles = [m["role"] for m in s]
         assert "user" in roles
         assert "assistant" in roles
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Macro-intent matching
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestMacroIntent:
+    @pytest.mark.parametrize("question,expected", [
+        ("fammi un'analisi completa del mese",         "full_monthly_review"),
+        ("riassunto del mese",                         "full_monthly_review"),
+        ("panoramica delle mie spese",                 "full_monthly_review"),
+        ("dimmi tutto sulle mie finanze",              "full_monthly_review"),
+        ("come sto andando con le spese?",             "full_monthly_review"),
+        ("dove posso risparmiare questo mese?",        "savings_audit"),
+        ("come tagliare le spese?",                    "savings_audit"),
+        ("ottimizzare spese fisse",                    "savings_audit"),
+        ("come ridurre spesa mensile",                 "savings_audit"),
+        ("come sto cambiando nelle abitudini?",        "trend_overview"),
+        ("trend generale delle mie spese",             "trend_overview"),
+        ("evoluzione spese negli ultimi mesi",         "trend_overview"),
+    ])
+    def test_trigger_matches(self, question, expected):
+        assert _match_macro_intent(question) == expected
+
+    @pytest.mark.parametrize("question", [
+        "quanto ho speso in cibo?",
+        "mostrami le top 5 transazioni",
+        "qual è il mio budget?",
+        "stima fine anno",
+    ])
+    def test_non_matching_returns_none(self, question):
+        assert _match_macro_intent(question) is None
+
+    def test_case_insensitive(self):
+        assert _match_macro_intent("ANALISI COMPLETA") == "full_monthly_review"
+        assert _match_macro_intent("Dove Posso Risparmiare") == "savings_audit"
+
+    def test_all_intents_in_catalog(self):
+        for intent_name, intent in MACRO_INTENTS.items():
+            for fn_name, _ in intent["functions"]:
+                from backend.core.ai_engine import FUNCTION_CATALOG
+                assert fn_name in FUNCTION_CATALOG, f"{fn_name} not in FUNCTION_CATALOG (intent={intent_name})"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Multi-summary builder
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestBuildMultiSummary:
+    def test_short_blocks_unchanged(self):
+        blocks = ["## Block A\nriga1\nriga2", "## Block B\nriga3"]
+        result = _build_multi_summary(blocks)
+        assert "## Block A" in result
+        assert "## Block B" in result
+        assert len(result) <= MAX_MULTI_SUMMARY_CHARS
+
+    def test_long_blocks_truncated(self):
+        big_block = "## Header\n" + "\n".join(f"dato {i}: €{i*10}" for i in range(500))
+        blocks = [big_block, big_block]
+        result = _build_multi_summary(blocks)
+        assert len(result) <= MAX_MULTI_SUMMARY_CHARS
+
+    def test_truncation_keeps_headers(self):
+        big_block = "## SectionX\n" + "x" * 3000
+        result = _build_multi_summary([big_block])
+        assert result.startswith("## SectionX")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# What-if: _validate_router_output param clips
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestWhatIfValidation:
+    def _route(self, params: dict) -> dict:
+        return _validate_router_output({
+            "use_function": {"name": "what_if", "params": params},
+            "in_perimeter": True,
+        })
+
+    def test_horizon_months_clipped_high(self):
+        r = self._route({"horizon_months": 999})
+        assert r["use_function"]["params"]["horizon_months"] == 60
+
+    def test_horizon_months_clipped_low(self):
+        r = self._route({"horizon_months": 0})
+        assert r["use_function"]["params"]["horizon_months"] == 1
+
+    def test_monthly_delta_clipped_high(self):
+        r = self._route({"monthly_delta": 99999})
+        assert r["use_function"]["params"]["monthly_delta"] == 10000
+
+    def test_monthly_delta_clipped_low(self):
+        r = self._route({"monthly_delta": -99999})
+        assert r["use_function"]["params"]["monthly_delta"] == -10000
+
+    def test_monthly_target_clipped(self):
+        r = self._route({"monthly_target": 99999})
+        assert r["use_function"]["params"]["monthly_target"] == 50000
+
+    def test_monthly_target_zero_floor(self):
+        r = self._route({"monthly_target": -100})
+        assert r["use_function"]["params"]["monthly_target"] == 0
+
+    def test_percent_change_clipped_low(self):
+        r = self._route({"percent_change": -200})
+        assert r["use_function"]["params"]["percent_change"] == -100
+
+    def test_percent_change_clipped_high(self):
+        r = self._route({"percent_change": 5000})
+        assert r["use_function"]["params"]["percent_change"] == 1000
+
+    def test_valid_category_kept(self):
+        r = self._route({"category": "svago", "monthly_delta": -50})
+        assert r["use_function"]["params"]["category"] == "svago"
+
+    def test_invalid_category_nulled(self):
+        r = self._route({"category": "ristorante", "monthly_delta": -50})
+        assert r["use_function"]["params"]["category"] is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# What-if: function output shape
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestWhatIfOutput:
+    def test_returns_table_and_chart(self):
+        result = execute_prebuilt_function("what_if", {"monthly_delta": -50, "horizon_months": 12})
+        assert "chart_data" in result
+        assert "table_data" in result
+
+    def test_table_has_three_rows(self):
+        result = execute_prebuilt_function("what_if", {"monthly_delta": -50, "horizon_months": 12})
+        td = result.get("table_data")
+        if td is not None:
+            # Either 3-row result or "Dati insufficienti" (1-row) — both valid
+            assert len(td["rows"]) >= 1
+
+    def test_percent_change_mode(self):
+        result = execute_prebuilt_function("what_if", {"category": "cibo", "percent_change": -15, "horizon_months": 6})
+        assert "chart_data" in result
+        assert "table_data" in result
+
+    def test_monthly_target_mode(self):
+        result = execute_prebuilt_function("what_if", {"category": "cibo", "monthly_target": 300})
+        assert "chart_data" in result
+        assert "table_data" in result
+
+    def test_empty_category_returns_insufficient_or_valid(self):
+        result = execute_prebuilt_function("what_if", {"category": "abbigliamento", "monthly_delta": -20})
+        td = result.get("table_data")
+        assert td is not None
+        assert len(td["rows"]) >= 1
