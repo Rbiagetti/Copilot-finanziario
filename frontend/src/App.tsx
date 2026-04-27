@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate, useLocation, Routes, Route, Navigate } from "react-router-dom";
+import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
@@ -13,35 +13,42 @@ import LoginPage from "./components/Auth/LoginPage";
 import { useAuthStore } from "./store/authStore";
 
 type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
-const VALID_VIEWS: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
 
+function AppLayout() {
+  const { isAuthenticated } = useAuthStore();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return (
+    <>
+      <Sidebar />
+      <TopBar />
+      <main className="main-content">
+        <Outlet />
+      </main>
+    </>
+  );
+}
 
 function App() {
-  const { currentView, setView } = useAppStore();
+  const { setView } = useAppStore();
   const { isAuthenticated } = useAuthStore();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL;
 
-  // Sync URL → Zustand: for authenticated users only
+  // Sync URL → Zustand: still useful for some global state but no longer drives the render switch
   useEffect(() => {
     if (!isAuthenticated) return;
     const segment = location.pathname.replace(/^\//, "") as View;
-    const view = VALID_VIEWS.includes(segment) ? segment : "dashboard";
-    if (view !== currentView) {
-      setView(view);
+    const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
+    if (validViews.includes(segment)) {
+      setView(segment);
     }
-  }, [location.pathname, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync Zustand → URL: for authenticated users only
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const expected = `/${currentView}`;
-    if (location.pathname !== expected) {
-      navigate(expected, { replace: location.pathname === "/" });
-    }
-  }, [currentView, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, isAuthenticated, setView]);
 
   useEffect(() => {
     document.documentElement.setAttribute(
@@ -78,34 +85,24 @@ function App() {
       <Routes>
         <Route 
           path="/login" 
-          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage onLogin={() => {}} />} 
+          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={() => {}} />} 
         />
         
-        <Route 
-          path="/*" 
-          element={
-            !isAuthenticated ? (
-              <Navigate to="/login" replace state={{ from: location }} />
-            ) : (
-              <>
-                <Sidebar />
-                <TopBar />
-                <main className="main-content">
-                  {currentView === "dashboard" && <Dashboard />}
-                  {currentView === "transactions" && <TransactionList />}
-                  {currentView === "chat" && <ChatInterface />}
-                  {currentView === "budget" && <BudgetPanel />}
-                  {currentView === "settings" && <SettingsPanel />}
-                </main>
-              </>
-            )
-          } 
-        />
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/transactions" element={<TransactionList />} />
+          <Route path="/chat" element={<ChatInterface />} />
+          <Route path="/budget" element={<BudgetPanel />} />
+          <Route path="/settings" element={<SettingsPanel />} />
+        </Route>
+
+        {/* Catch-all: redirect to dashboard if logged in, otherwise login */}
+        <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
       </Routes>
     </div>
   );
 }
 
-
-
 export default App;
+
