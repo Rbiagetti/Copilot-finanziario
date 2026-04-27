@@ -289,3 +289,97 @@
   .followup-btn { font-size: 0.72rem; padding: 0.35rem 0.65rem; }
   .msg-chart-container { padding: 0.75rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ThinkingTrace — Reasoning steps display
+   ═══════════════════════════════════════════════════════════════ */
+
+.thinking-trace {
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  overflow: hidden;
+  font-size: 0.78rem;
+}
+
+.thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  border: none;
+  text-align: left;
+  transition: background 0.15s;
+}
+.thinking-toggle:hover { background: var(--surface-hover, #1a1a1a); }
+
+.thinking-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #ff8c42);
+  animation: thinking-pulse-anim 1.8s infinite;
+  flex-shrink: 0;
+}
+@keyframes thinking-pulse-anim {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+.thinking-chevron { margin-left: auto; font-size: 0.65rem; }
+
+.thinking-steps {
+  padding: 6px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--border, #333);
+}
+
+.thinking-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.thinking-step--skipped { opacity: 0.45; }
+.thinking-step--error   { color: var(--danger, #f43f5e); }
+
+.thinking-step-icon { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
+
+.thinking-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.thinking-step-label {
+  color: var(--text, #e0e0e0);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thinking-step-detail {
+  color: var(--text-muted, #888);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thinking-step-ms {
+  color: var(--text-muted, #888);
+  font-size: 0.68rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
+}

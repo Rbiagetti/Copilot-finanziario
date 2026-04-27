@@ -2,6 +2,7 @@ import os
 import re
 import json
 import logging
+import time as _time
 from datetime import date, timedelta
 from collections import defaultdict
 
@@ -102,9 +103,9 @@ _OOS_PATTERNS: list = [
         r"\b(guerra\s+(?:in|tra|di)\s+\w+|chi\s+ha\s+vinto\s+(?:la\s+)?(?:guerra|le\s+elezioni)|elezioni?\s+(?:politiche|presidenziali)|chi\s+[eèé]\s+il\s+presidente|presidente\s+(?:degli\s+stati|usa\b|della\s+russia))\b",
         re.IGNORECASE,
     ),
-    # meta-AI
+    # meta-AI (include "sei chatgpt/gpt/gemini/claude")
     re.compile(
-        r"\b(sei\s+un[a']?\s+(?:intelligenza\s+artificiale|robot|bot|ai\b|llm)|come\s+sei\s+stato\s+(?:creato|addestrato|programmato)|chi\s+ti\s+ha\s+(?:creato|fatto|programmato)|che\s+modello\s+sei)\b",
+        r"\b(sei\s+(?:un[a']?\s+(?:intelligenza\s+artificiale|robot|bot|ai\b|llm)|chatgpt|gpt[-\s]?\d*|gemini|bard|copilot|claude)|come\s+sei\s+stato\s+(?:creato|addestrato|programmato)|chi\s+ti\s+ha\s+(?:creato|fatto|programmato)|che\s+modello\s+sei)\b",
         re.IGNORECASE,
     ),
     # salute
@@ -112,7 +113,18 @@ _OOS_PATTERNS: list = [
         r"\b(quante\s+calorie\s+(?:ha|in)\s+\w+|dieta\s+per\s+(?:dimagrire|perdere\s+peso)|sintomi\s+(?:di|del)\s+\w+|quali?\s+farmaci?\s+(?:per|prendere)|come\s+si\s+cura\s+|mal\s+di\s+(?:testa|schiena|stomaco|denti)|ho\s+(?:la\s+)?febbre)\b",
         re.IGNORECASE,
     ),
+    # intrattenimento non finanziario (serie TV, film, musica, libri da leggere)
+    re.compile(
+        r"\b(consigliami\s+(?:una\s+serie|un\s+film|una\s+canzone|un\s+libro\s+da\s+leggere|qualcosa\s+da\s+(?:vedere|guardare|ascoltare))|che\s+serie\s+(?:guardi|vedere)|migliori?\s+serie\s+(?:su|del|di\s+netflix|amazon)|cosa\s+(?:guardo|vedo|ascolto)\s+stasera)\b",
+        re.IGNORECASE,
+    ),
 ]
+
+
+def _input_meaningless(question: str) -> bool:
+    """True se l'input non contiene abbastanza caratteri alfabetici per essere una domanda."""
+    alpha_count = sum(1 for c in question if c.isalpha())
+    return alpha_count < 2
 
 
 def _is_obviously_out_of_scope(question: str) -> bool:
@@ -217,6 +229,24 @@ def get_llm_stats() -> dict:
         "by_phase": dict(_token_counter["by_phase"]),
         "json_mode_supported": _llm_state["response_format_supported"],
     }
+
+
+def _reset_llm_stats() -> None:
+    """Azzera i contatori LLM. Usato dal test harness prima di ogni caso."""
+    _token_counter["calls"] = 0
+    _token_counter["by_phase"].clear()
+
+
+def _step(steps: list, phase: str, label: str, detail: str,
+          t_start: float, status: str = "ok") -> None:
+    """Aggiunge un passo di reasoning alla lista steps."""
+    steps.append({
+        "phase":       phase,
+        "label":       label[:60],
+        "detail":      str(detail)[:120],
+        "duration_ms": int((_time.time() - t_start) * 1000),
+        "status":      status,
+    })
 
 
 # ─── BLOCK C — HISTORY SANITIZER ─────────────────────────────────────────────
@@ -1449,6 +1479,38 @@ SINONIMI CATEGORIA (normalizza sempre):
 ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
 libri/corso/udemy → formazione | netflix/spotify/prime → abbonamenti | bici/moto/aereo → trasporti
 
+REGOLA MERCHANT (PRIORITÀ MASSIMA): se la domanda contiene un nome proprio, brand commerciale
+o nome di negozio che NON è una categoria (cibo, trasporti, casa, salute, svago, abbigliamento,
+lavoro, abbonamenti, formazione, altro), usa SEMPRE search_transactions con params.query = nome merchant in minuscolo.
+Esempi OBBLIGATORI:
+- "quanto ho speso da IKEA?" → search_transactions(query="ikea")
+- "le mie spese su Amazon" → search_transactions(query="amazon")
+- "Starbucks questo mese" → search_transactions(query="starbucks", period_days=30)
+- "Uber" → search_transactions(query="uber")
+- "Esselunga sopra i 100€" → search_transactions(query="esselunga")
+- "Netflix" → search_transactions(query="netflix")
+- "benzina" → search_transactions(query="benzina")
+- "palestra" → search_transactions(query="palestra")
+- "McDonald's" → search_transactions(query="mcdonald")
+- "Trenitalia" → search_transactions(query="trenitalia")
+- "gym" → search_transactions(query="gym") oppure search_transactions(query="palestra")
+- "Leroy Merlin" → search_transactions(query="leroy merlin")
+- "Q8" → search_transactions(query="q8")
+- "Deliveroo" → search_transactions(query="deliveroo")
+I brand possono essere in qualsiasi lingua. Se incerto, usa search_transactions.
+
+PERIODO IMPLICITO (mappa queste espressioni al valore period_days corretto):
+- "questa settimana" / "questa week" → period_days=7
+- "settimana scorsa" → period_days=14
+- "questo mese" / "ultimo mese" → period_days=30
+- "mese scorso" → usa month_vs_month oppure period_days=60
+- "ultimi 2 mesi" → period_days=60
+- "ultimi 3 mesi" → period_days=90
+- "ultimi 6 mesi" → period_days=180
+- "ieri" → period_days=1
+- "sempre" / "storico totale" / "da sempre" → period_days=365
+Se la domanda contiene "questa settimana" + merchant → search_transactions con period_days=7.
+
 FUNZIONI DISPONIBILI (usa solo i parametri indicati, rispetta i range):
 - spending_by_category(period_days=30, range 1..365): "dove vanno i soldi", "analisi completa", "distribuzione spese", "per categoria"
 - daily_trend(days=30, range 1..365): "trend giornaliero", "grafico spese nel tempo", "giorno per giorno"
@@ -1798,13 +1860,14 @@ def _interpret_multi_results(question: str, data_summary: str, n_blocks: int) ->
     return _parse_ai_response(raw)
 
 
-def _execute_macro_intent(question: str, intent_name: str) -> dict:
+def _execute_macro_intent(question: str, intent_name: str, steps: list) -> dict:
     intent = MACRO_INTENTS[intent_name]
     blocks: list = []
     first_chart = None
     first_table = None
 
     for fn_name, fn_params in intent["functions"]:
+        t = _time.time()
         result = execute_prebuilt_function(fn_name, fn_params)
         cd = result.get("chart_data")
         td = result.get("table_data")
@@ -1815,88 +1878,145 @@ def _execute_macro_intent(question: str, intent_name: str) -> dict:
         header = "## " + fn_name.replace("_", " ").title()
         body   = _format_data_for_interpretation(cd, td)
         blocks.append(f"{header}\n{body}")
+        rows = len((cd or {}).get("data", []) or (td or {}).get("rows", []))
+        _step(steps, "fn_execute", f"📊 Eseguita {fn_name}", f"{rows} righe DB", t)
 
+    t = _time.time()
     data_summary = _build_multi_summary(blocks)
     interp = _interpret_multi_results(question, data_summary, n_blocks=len(blocks))
+    _step(steps, "llm_interpret", "✍️ LLM interpreta i dati (multi)",
+          f"{len(data_summary)} char · {len(blocks)} blocchi", t)
 
     return {
         "answer":             interp.get("answer", "Analisi completata.").strip(),
         "chart_data":         first_chart,
         "data_table":         first_table,
         "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
+        "reasoning_steps":    steps,
     }
 
 
 # ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
 
 def chat_with_ai(question: str, history=None) -> dict:
-    # ── Emergency kill-switch: bypass tutto, nessuna chiamata LLM ────────────
+    steps: list = []
+
+    # ── Emergency kill-switch ─────────────────────────────────────────────────
     if AI_DISABLE_LLM:
         return {
             "answer": _OUT_OF_SCOPE["answer"],
             "chart_data": None,
             "data_table": None,
             "followup_questions": _OUT_OF_SCOPE["followup_questions"],
+            "reasoning_steps": steps,
         }
 
-    # ── Block A: Pre-filter (zero LLM calls) ──────────────────────────────────
+    # PASSO 1 — Pre-filtro lunghezza e input non significativo
+    t = _time.time()
     if _input_too_long(question):
+        _step(steps, "pre_filter", "⛔ Input troppo lungo",
+              f"{len(question)} char > 500", t, "error")
         return {
             "answer": _INPUT_TOO_LONG["answer"],
             "chart_data": None,
             "data_table": None,
             "followup_questions": _INPUT_TOO_LONG["followup_questions"],
+            "reasoning_steps": steps,
         }
-
-    if _is_obviously_out_of_scope(question):
+    if _input_meaningless(question):
+        _step(steps, "pre_filter", "⛔ Input non significativo",
+              f"< 2 caratteri alfabetici", t, "skipped")
         return {
             "answer": _OUT_OF_SCOPE_PREFILTER["answer"],
             "chart_data": None,
             "data_table": None,
             "followup_questions": _OUT_OF_SCOPE_PREFILTER["followup_questions"],
+            "reasoning_steps": steps,
         }
+    _step(steps, "pre_filter", "✓ Lunghezza input OK", f"{len(question)} char", t)
 
-    # ── Macro-intent: 0 router LLM calls, N prebuilt + 1 interpret_multi ────
+    # PASSO 2 — Pre-filtro OOS deterministico
+    t = _time.time()
+    if _is_obviously_out_of_scope(question):
+        _step(steps, "pre_filter", "⛔ Fuori perimetro (regex)",
+              "match: cucina/sport/meteo/codice/news/salute", t, "skipped")
+        return {
+            "answer": _OUT_OF_SCOPE_PREFILTER["answer"],
+            "chart_data": None,
+            "data_table": None,
+            "followup_questions": _OUT_OF_SCOPE_PREFILTER["followup_questions"],
+            "reasoning_steps": steps,
+        }
+    _step(steps, "pre_filter", "✓ In perimetro finanziario", "", t)
+
+    # PASSO 3 — Macro-intent matching (zero LLM)
+    t = _time.time()
     macro = _match_macro_intent(question)
     if macro:
-        return _execute_macro_intent(question, macro)
+        _step(steps, "macro_match", f"⚡ Macro-intent: {macro}",
+              f"trigger match → {len(MACRO_INTENTS[macro]['functions'])} funzioni", t)
+        return _execute_macro_intent(question, macro, steps)
+    _step(steps, "macro_match", "– Nessun macro-intent", "pass-through al router LLM", t)
 
-    # ── Block B: Router with determinism & validation ─────────────────────────
+    # PASSO 4 — Router LLM
+    t = _time.time()
     selector = _select_function(question, history)
     use_function = selector.get("use_function")
     in_perimeter = selector.get("in_perimeter", True)
-
     if not in_perimeter:
+        _step(steps, "llm_router", "⛔ LLM: fuori perimetro", "in_perimeter=false", t, "skipped")
         return {
             "answer": _OUT_OF_SCOPE["answer"],
             "chart_data": None,
             "data_table": None,
             "followup_questions": _OUT_OF_SCOPE["followup_questions"],
+            "reasoning_steps": steps,
         }
-
     if use_function and isinstance(use_function, dict):
-        fn_result = execute_prebuilt_function(
-            use_function.get("name", ""),
-            use_function.get("params") or {},
-        )
+        fn_name    = use_function.get("name", "?")
+        fn_params_str = str(use_function.get("params") or {})[:80]
+        _step(steps, "llm_router", f"🔀 Router → {fn_name}", f"params: {fn_params_str}", t)
+    else:
+        _step(steps, "llm_router", "💬 Router → risposta testuale", "nessuna funzione adatta", t)
+
+    # PASSO 5 — Esecuzione funzione + interpret
+    if use_function and isinstance(use_function, dict):
+        t = _time.time()
+        fn_result  = execute_prebuilt_function(
+            use_function.get("name", ""), use_function.get("params") or {})
         chart_data = fn_result.get("chart_data")
         table_data = fn_result.get("table_data")
+        rows = len((chart_data or {}).get("data", []) or (table_data or {}).get("rows", []))
+        _step(steps, "fn_execute", f"📊 Eseguita {use_function.get('name', '')}",
+              f"{rows} righe DB", t)
+
+        t = _time.time()
         data_summary = _format_data_for_interpretation(chart_data, table_data)
         interp = _interpret_results(question, data_summary)
+        _step(steps, "llm_interpret", "✍️ LLM interpreta i dati",
+              f"data_summary: {len(data_summary)} char", t)
+
         return {
-            "answer": interp.get("answer", "Analisi completata.").strip(),
-            "chart_data": chart_data,
-            "data_table": table_data,
+            "answer":             interp.get("answer", "Analisi completata.").strip(),
+            "chart_data":         chart_data,
+            "data_table":         table_data,
             "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
+            "reasoning_steps":    steps,
         }
 
+    # PASSO 6 — Risposta testuale
+    t = _time.time()
     compact_ctx = build_compact_context()
     interp = _answer_in_perimeter(question, compact_ctx)
+    _step(steps, "text_answer", "✍️ LLM risposta testuale",
+          f"ctx: {len(compact_ctx)} char", t)
+
     return {
-        "answer": interp.get("answer", "").strip(),
-        "chart_data": None,
-        "data_table": None,
+        "answer":             interp.get("answer", "").strip(),
+        "chart_data":         None,
+        "data_table":         None,
         "followup_questions": interp.get("followup_questions", [])[:MAX_FOLLOWUP_QUESTIONS],
+        "reasoning_steps":    steps,
     }
 
 

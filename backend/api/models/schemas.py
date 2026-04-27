@@ -53,11 +53,20 @@ class ChatRequest(BaseModel):
     history: List[Dict] = Field(default_factory=list)
 
 
+class ReasoningStep(BaseModel):
+    phase:       str
+    label:       str
+    detail:      str
+    duration_ms: int
+    status:      str
+
+
 class ChatResponse(BaseModel):
     answer: str
     chart_data: Optional[Dict] = None
     data_table: Optional[Dict] = None
     followup_questions: List[str] = Field(default_factory=list)
+    reasoning_steps: List[ReasoningStep] = Field(default_factory=list)
 
 
 class BudgetCreate(BaseModel):

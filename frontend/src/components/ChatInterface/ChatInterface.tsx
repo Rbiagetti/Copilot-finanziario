@@ -15,6 +15,14 @@ interface TableData {
   rows: (string | number)[][];
 }
 
+interface ReasoningStep {
+  phase: string;
+  label: string;
+  detail: string;
+  duration_ms: number;
+  status: string;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -22,6 +30,7 @@ interface Message {
   data_table?: TableData | null;
   followups?: string[];
   originalQuestion?: string;
+  reasoning_steps?: ReasoningStep[];
 }
 
 const COLORS = [
@@ -148,6 +157,54 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
   );
 }
 
+// ── ThinkingTrace ────────────────────────────────────────────────────────────
+
+const PHASE_ICON: Record<string, string> = {
+  pre_filter:    "🛡️",
+  macro_match:   "⚡",
+  llm_router:    "🔀",
+  fn_execute:    "📊",
+  llm_interpret: "✍️",
+  text_answer:   "💬",
+};
+
+function ThinkingTrace({ steps }: { steps?: ReasoningStep[] }) {
+  const [open, setOpen] = useState(false);
+  if (!steps || steps.length === 0) return null;
+  const totalMs = steps.reduce((s, x) => s + x.duration_ms, 0);
+  return (
+    <div className="thinking-trace">
+      <button
+        className="thinking-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span className="thinking-pulse" />
+        Ragionamento AI — {steps.length} passi · {totalMs}ms
+        <span className="thinking-chevron">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="thinking-steps">
+          {steps.map((step, i) => (
+            <div key={i} className={`thinking-step thinking-step--${step.status}`}>
+              <span className="thinking-step-icon">
+                {PHASE_ICON[step.phase] ?? "•"}
+              </span>
+              <div className="thinking-step-body">
+                <span className="thinking-step-label">{step.label}</span>
+                {step.detail && (
+                  <span className="thinking-step-detail">{step.detail}</span>
+                )}
+              </div>
+              <span className="thinking-step-ms">{step.duration_ms}ms</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export default function ChatInterface() {
@@ -221,6 +278,7 @@ export default function ChatInterface() {
           data_table: data.data_table,
           followups: data.followup_questions,
           originalQuestion: msg,
+          reasoning_steps: data.reasoning_steps,
         },
       ]);
     } catch {
@@ -272,6 +330,9 @@ export default function ChatInterface() {
               {msg.role === "user" ? <User size={18} /> : <Bot size={18} />}
             </div>
             <div className="msg-content">
+              {msg.role === "assistant" && (
+                <ThinkingTrace steps={msg.reasoning_steps} />
+              )}
               <div className="msg-text" dangerouslySetInnerHTML={{
                 __html: msg.content
                   .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
