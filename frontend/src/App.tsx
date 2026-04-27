@@ -1,16 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
 import TopBar from "./components/Layout/TopBar";
-import Dashboard from "./components/Dashboard/Dashboard";
-import TransactionList from "./components/TransactionList/TransactionList";
-import ChatInterface from "./components/ChatInterface/ChatInterface";
-import BudgetPanel from "./components/BudgetPanel/BudgetPanel";
-import SettingsPanel from "./components/Settings/SettingsPanel";
 import LoginPage from "./components/Auth/LoginPage";
 import { useAuthStore } from "./store/authStore";
+
+// Code splitting for performance
+const Dashboard = lazy(() => import("./components/Dashboard/Dashboard"));
+const TransactionList = lazy(() => import("./components/TransactionList/TransactionList"));
+const ChatInterface = lazy(() => import("./components/ChatInterface/ChatInterface"));
+const BudgetPanel = lazy(() => import("./components/BudgetPanel/BudgetPanel"));
+const SettingsPanel = lazy(() => import("./components/Settings/SettingsPanel"));
+
+const LoadingFallback = () => (
+  <div className="flex-col" style={{ height: "100vh", alignItems: "center", justifyContent: "center" }}>
+    <div className="spin" style={{ width: 32, height: 32, border: "3px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%" }} />
+  </div>
+);
 
 type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
 
@@ -90,11 +98,11 @@ function App() {
         
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/transactions" element={<TransactionList />} />
-          <Route path="/chat" element={<ChatInterface />} />
-          <Route path="/budget" element={<BudgetPanel />} />
-          <Route path="/settings" element={<SettingsPanel />} />
+          <Route path="/dashboard" element={<Suspense fallback={<LoadingFallback />}><Dashboard /></Suspense>} />
+          <Route path="/transactions" element={<Suspense fallback={<LoadingFallback />}><TransactionList /></Suspense>} />
+          <Route path="/chat" element={<Suspense fallback={<LoadingFallback />}><ChatInterface /></Suspense>} />
+          <Route path="/budget" element={<Suspense fallback={<LoadingFallback />}><BudgetPanel /></Suspense>} />
+          <Route path="/settings" element={<Suspense fallback={<LoadingFallback />}><SettingsPanel /></Suspense>} />
         </Route>
 
         {/* Catch-all: redirect to dashboard if logged in, otherwise login */}

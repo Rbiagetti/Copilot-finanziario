@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
@@ -26,13 +26,13 @@ interface EditState {
   is_recurring: boolean;
 }
 
-function TxRow({ tx, toggling, onEdit, onDelete, onToggle }: {
+const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle }: {
   tx: Transaction;
   toggling: number | null;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: number) => void;
   onToggle: (tx: Transaction) => void;
-}) {
+}) => {
   return (
     <div className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""}`}>
       <span className="tx-emoji">{EMOJI_MAP[tx.category] || "❓"}</span>
@@ -53,21 +53,21 @@ function TxRow({ tx, toggling, onEdit, onDelete, onToggle }: {
           className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`}
           aria-label={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
           title={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
-          onClick={() => onToggle(tx)}
+          onPointerDown={() => onToggle(tx)}
           disabled={toggling === tx.id}
         >
           <Repeat size={14} />
         </button>
-        <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onClick={() => onEdit(tx)}>
+        <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onPointerDown={() => onEdit(tx)}>
           <Pencil size={14} />
         </button>
-        <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onClick={() => onDelete(tx.id)}>
+        <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onPointerDown={() => onDelete(tx.id)}>
           <Trash2 size={14} />
         </button>
       </div>
     </div>
   );
-}
+});
 
 export default function TransactionList() {
   const [txs, setTxs] = useState<Transaction[]>([]);
