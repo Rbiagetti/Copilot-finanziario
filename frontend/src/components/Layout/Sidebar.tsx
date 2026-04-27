@@ -18,7 +18,9 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleLogout = async () => {
+  const handleLogout = async (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setLoggingOut(true);
     try {
       await signOut();
@@ -29,7 +31,9 @@ export default function Sidebar() {
     }
   };
 
-  const handleNavClick = (key: typeof NAV_ITEMS[number]["key"]) => {
+  const handleNavClick = (e: React.PointerEvent, key: typeof NAV_ITEMS[number]["key"]) => {
+    e.preventDefault();
+    e.stopPropagation();
     setView(key);
     navigate(`/${key}`);
   };
@@ -45,7 +49,7 @@ export default function Sidebar() {
           <button
             key={key}
             className={`nav-item ${currentView === key ? "active" : ""}`}
-            onPointerDown={() => handleNavClick(key)}
+            onPointerDown={(e) => handleNavClick(e, key)}
           >
             <Icon size={20} />
             <span>{label}</span>
