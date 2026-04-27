@@ -291,95 +291,127 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ThinkingTrace — Reasoning steps display
+   ThinkingTrace — tt-* (professional redesign)
    ═══════════════════════════════════════════════════════════════ */
 
-.thinking-trace {
+.tt-trace {
   margin-bottom: 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border, #333);
-  overflow: hidden;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
 }
 
-.thinking-toggle {
-  display: flex;
+/* ── Toggle pill ── */
+.tt-toggle {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
-  padding: 6px 10px;
+  padding: 3px 8px 3px 6px;
   background: transparent;
+  border: 1px solid var(--border, #2e2e2e);
+  border-radius: 20px;
   color: var(--text-muted, #888);
   cursor: pointer;
-  border: none;
-  text-align: left;
-  transition: background 0.15s;
+  transition: border-color 0.15s, color 0.15s;
+  line-height: 1;
 }
-.thinking-toggle:hover { background: var(--surface-hover, #1a1a1a); }
-
-.thinking-pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent, #ff8c42);
-  animation: thinking-pulse-anim 1.8s infinite;
-  flex-shrink: 0;
-}
-@keyframes thinking-pulse-anim {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.7); }
-}
-
-.thinking-chevron { margin-left: auto; font-size: 0.65rem; }
-
-.thinking-steps {
-  padding: 6px 10px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  border-top: 1px solid var(--border, #333);
-}
-
-.thinking-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.thinking-step--skipped { opacity: 0.45; }
-.thinking-step--error   { color: var(--danger, #f43f5e); }
-
-.thinking-step-icon { font-size: 0.85rem; flex-shrink: 0; margin-top: 1px; }
-
-.thinking-step-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.thinking-step-label {
+.tt-toggle:hover {
+  border-color: var(--accent, #6366f1);
   color: var(--text, #e0e0e0);
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.thinking-step-detail {
-  color: var(--text-muted, #888);
-  font-size: 0.72rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.thinking-step-ms {
-  color: var(--text-muted, #888);
-  font-size: 0.68rem;
+.tt-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted, #666);
   flex-shrink: 0;
-  margin-left: auto;
-  padding-left: 8px;
+}
+
+.tt-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: 0.01em;
+}
+
+.tt-llm-badge {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 15%, transparent);
+  color: var(--accent, #6366f1);
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.tt-chevron {
+  font-size: 0.6rem;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
+/* ── Steps list ── */
+.tt-steps {
+  margin-top: 6px;
+  padding-left: 6px;
+  border-left: 2px solid var(--border, #2e2e2e);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tt-step {
+  display: grid;
+  grid-template-columns: 44px 1fr auto auto;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  line-height: 1.4;
+}
+
+.tt-step--skipped { opacity: 0.4; }
+.tt-step--error   { color: var(--danger, #f43f5e); }
+
+/* ── Phase tag (monospace badge) ── */
+.tt-phase {
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-align: center;
+  white-space: nowrap;
+  background: var(--surface, #1a1a1a);
+  color: var(--text-muted, #888);
+}
+
+.tt-phase--pre_filter    { color: #64748b; }
+.tt-phase--macro_match   { color: #10b981; }
+.tt-phase--llm_router    { color: #6366f1; }
+.tt-phase--fn_execute    { color: #f59e0b; }
+.tt-phase--llm_interpret { color: #6366f1; }
+.tt-phase--text_answer   { color: #6366f1; }
+
+.tt-step-label {
+  color: var(--text, #d0d0d0);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tt-step-detail {
+  color: var(--text-muted, #666);
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.tt-step-ms {
+  color: var(--text-muted, #555);
+  font-size: 0.67rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

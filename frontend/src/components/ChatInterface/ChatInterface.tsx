@@ -159,44 +159,56 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
 
 // ── ThinkingTrace ────────────────────────────────────────────────────────────
 
-const PHASE_ICON: Record<string, string> = {
-  pre_filter:    "🛡️",
-  macro_match:   "⚡",
-  llm_router:    "🔀",
-  fn_execute:    "📊",
-  llm_interpret: "✍️",
-  text_answer:   "💬",
+const PHASE_TAG: Record<string, string> = {
+  pre_filter:    "filter",
+  macro_match:   "macro",
+  llm_router:    "router",
+  fn_execute:    "exec",
+  llm_interpret: "llm",
+  text_answer:   "llm",
 };
+
+// Strip leading emoji / unicode symbols from backend labels
+function cleanLabel(label: string): string {
+  return label.replace(/^[\p{Emoji}\p{So}\p{Sk}✓⛔–•]+\s*/u, "").trim();
+}
+
+function fmtMs(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
 
 function ThinkingTrace({ steps }: { steps?: ReasoningStep[] }) {
   const [open, setOpen] = useState(false);
   if (!steps || steps.length === 0) return null;
   const totalMs = steps.reduce((s, x) => s + x.duration_ms, 0);
+  const llmSteps = steps.filter(s => s.phase === "llm_router" || s.phase === "llm_interpret" || s.phase === "text_answer").length;
   return (
-    <div className="thinking-trace">
+    <div className="tt-trace">
       <button
-        className="thinking-toggle"
-        onClick={() => setOpen((o) => !o)}
+        className="tt-toggle"
+        onClick={() => setOpen(o => !o)}
         aria-expanded={open}
       >
-        <span className="thinking-pulse" />
-        Ragionamento AI — {steps.length} passi · {totalMs}ms
-        <span className="thinking-chevron">{open ? "▲" : "▼"}</span>
+        <span className="tt-dot" />
+        <span className="tt-label">
+          {steps.length} steps · {fmtMs(totalMs)}
+          {llmSteps > 0 && <span className="tt-llm-badge">{llmSteps} LLM</span>}
+        </span>
+        <span className="tt-chevron">{open ? "▴" : "▾"}</span>
       </button>
+
       {open && (
-        <div className="thinking-steps">
+        <div className="tt-steps">
           {steps.map((step, i) => (
-            <div key={i} className={`thinking-step thinking-step--${step.status}`}>
-              <span className="thinking-step-icon">
-                {PHASE_ICON[step.phase] ?? "•"}
+            <div key={i} className={`tt-step tt-step--${step.status}`}>
+              <span className={`tt-phase tt-phase--${step.phase}`}>
+                {PHASE_TAG[step.phase] ?? step.phase}
               </span>
-              <div className="thinking-step-body">
-                <span className="thinking-step-label">{step.label}</span>
-                {step.detail && (
-                  <span className="thinking-step-detail">{step.detail}</span>
-                )}
-              </div>
-              <span className="thinking-step-ms">{step.duration_ms}ms</span>
+              <span className="tt-step-label">{cleanLabel(step.label)}</span>
+              {step.detail && (
+                <span className="tt-step-detail">{step.detail}</span>
+              )}
+              <span className="tt-step-ms">{fmtMs(step.duration_ms)}</span>
             </div>
           ))}
         </div>
