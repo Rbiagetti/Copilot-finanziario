@@ -67,11 +67,20 @@ export interface TableData {
   rows: (string | number)[][];
 }
 
+export interface ReasoningStep {
+  phase: string;
+  label: string;
+  detail: string;
+  duration_ms: number;
+  status: string;
+}
+
 export interface ChatResponse {
   answer: string;
   chart_data: { type: string; data: { name: string; value: number }[]; title: string } | null;
   data_table: TableData | null;
   followup_questions: string[];
+  reasoning_steps: ReasoningStep[];
 }
 
 export interface BudgetStatus {
