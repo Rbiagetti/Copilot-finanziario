@@ -174,7 +174,9 @@ button:active,
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease;
 }
-.topbar-bell:hover { background: rgba(255,140,66,0.08); border-color: rgba(255,182,141,0.18); }
+@media (hover: hover) and (pointer: fine) {
+  .topbar-bell:hover { background: rgba(255,140,66,0.08); border-color: rgba(255,182,141,0.18); }
+}
 
 /* ═══════════════════════════════════
    MAIN CONTENT — Desktop

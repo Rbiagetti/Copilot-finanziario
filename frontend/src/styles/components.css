@@ -61,7 +61,9 @@
     transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
     background 160ms ease;
 }
-.btn-primary:hover { background: var(--primary-hover); transform: none; box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover { background: var(--primary-hover); transform: none; box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset; }
+}
 .btn-primary:active { transform: scale(0.94); transition-duration: 90ms; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
@@ -98,10 +100,14 @@
     padding: 0.55rem;
   }
 }
-.btn-icon:hover { border-color: var(--glass-border-hi); color: var(--text); background: var(--glass-1); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-icon:hover { border-color: var(--glass-border-hi); color: var(--text); background: var(--glass-1); }
+}
 .btn-icon:active { transform: scale(0.92); }
 .btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-icon.danger:hover { border-color: rgba(255,77,109,0.5); color: var(--danger); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-icon.danger:hover { border-color: rgba(255,77,109,0.5); color: var(--danger); }
+}
 
 .btn-voice {
   width: 44px; height: 44px;
@@ -114,11 +120,13 @@
   transition: all var(--duration-fast) var(--spring);
   flex-shrink: 0;
 }
-.btn-voice:hover {
-  border-color: rgba(255,140,66,0.4);
-  color: var(--accent);
-  background: rgba(255,140,66,0.1);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .btn-voice:hover {
+    border-color: rgba(255,140,66,0.4);
+    color: var(--accent);
+    background: rgba(255,140,66,0.1);
+    transform: scale(1.05);
+  }
 }
 .btn-voice.recording {
   background: var(--danger);
@@ -139,7 +147,9 @@
   flex-shrink: 0;
   transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), background 160ms ease;
 }
-.btn-send:hover { transform: none; background: var(--primary-hover); box-shadow: none; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-send:hover { transform: none; background: var(--primary-hover); box-shadow: none; }
+}
 .btn-send:active { transform: scale(0.88); transition-duration: 90ms; }
 .btn-send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
@@ -154,11 +164,13 @@
   cursor: pointer;
   transition: all var(--duration-fast) var(--spring);
 }
-.btn-chart-info:hover {
-  background: var(--accent);
-  color: white;
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px var(--accent-glow);
+@media (hover: hover) and (pointer: fine) {
+  .btn-chart-info:hover {
+    background: var(--accent);
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
 }
 
 .btn-retry-text {
@@ -172,7 +184,9 @@
   cursor: pointer;
   transition: all var(--duration-fast) var(--spring);
 }
-.btn-retry-text:hover { transform: scale(1.04); opacity: 0.9; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-retry-text:hover { transform: scale(1.04); opacity: 0.9; }
+}
 
 .btn-smart-send { width: auto !important; padding: 0.7rem 1.2rem !important; white-space: nowrap; }
 
@@ -187,7 +201,9 @@
   cursor: pointer;
   transition: all var(--duration-fast);
 }
-.btn-clear-filters:hover { background: rgba(255,77,109,0.15); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-clear-filters:hover { background: rgba(255,77,109,0.15); }
+}
 
 /* === BADGES === */
 .badge-recurring {
@@ -246,7 +262,9 @@
   border-radius: var(--radius-sm);
   transition: background var(--duration-fast);
 }
-.anomaly-row:hover { background: rgba(245,166,35,0.1); }
+@media (hover: hover) and (pointer: fine) {
+  .anomaly-row:hover { background: rgba(245,166,35,0.1); }
+}
 .anomaly-emoji { font-size: 1.3rem; }
 .anomaly-info { flex: 1; display: flex; flex-direction: column; }
 .anomaly-desc { font-weight: 600; font-size: 0.875rem; }
@@ -334,8 +352,10 @@ select option { background: #291d17; color: var(--text); }
   cursor: pointer !important;
   padding: 2px 4px !important;
 }
-.input-minimal:hover, .input-minimal:focus {
-  border-bottom: 1px solid var(--accent) !important;
+@media (hover: hover) and (pointer: fine) {
+  .input-minimal:hover, .input-minimal:focus {
+    border-bottom: 1px solid var(--accent) !important;
+  }
 }
 
 .empty-state {
