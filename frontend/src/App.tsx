@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate, useLocation, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
@@ -10,43 +10,48 @@ import ChatInterface from "./components/ChatInterface/ChatInterface";
 import BudgetPanel from "./components/BudgetPanel/BudgetPanel";
 import SettingsPanel from "./components/Settings/SettingsPanel";
 import LoginPage from "./components/Auth/LoginPage";
-import { supabase } from "./lib/supabase";
 import { useAuthStore } from "./store/authStore";
 
 type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
 const VALID_VIEWS: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
 
+
 function App() {
   const { currentView, setView } = useAppStore();
-  // Auth handling via authStore
-  const {
-    isLoading,
-    isAuthenticated,
-    logout,
-  } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Keep theme sync as before
+  const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL;
+
+  // Sync URL → Zustand: for authenticated users only
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const segment = location.pathname.replace(/^\//, "") as View;
+    const view = VALID_VIEWS.includes(segment) ? segment : "dashboard";
+    if (view !== currentView) {
+      setView(view);
+    }
+  }, [location.pathname, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync Zustand → URL: for authenticated users only
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const expected = `/${currentView}`;
+    if (location.pathname !== expected) {
+      navigate(expected, { replace: location.pathname === "/" });
+    }
+  }, [currentView, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     document.documentElement.setAttribute(
       "data-theme",
       localStorage.getItem("theme") === "light" ? "light" : "dark",
     );
-    // authStore.init is called in AppInitializer (or can be called here if not)
   }, []);
 
-  // Removed previous session state; auth logic handled by authStore and AppInitializer
-  // Session handling removed – auth state now comes from authStore (isAuthenticated)
-  if (supabaseConfigured && !isAuthenticated) {
-    return (
-      <LoginPage
-        onLogin={() => {
-          // After successful login via Supabase, re‑initialize authStore to pick up token
-          supabase.auth.getSession().then(() => {
-            useAuthStore.getState().init();
-          });
-        }}
-      />
-    );
+  if (!supabaseConfigured) {
+    return <div>Supabase not configured. Check your .env file.</div>;
   }
 
   return (
@@ -69,17 +74,38 @@ function App() {
           },
         }}
       />
-      <Sidebar />
-      <TopBar />
-      <main className="main-content">
-        {currentView === "dashboard" && <Dashboard />}
-        {currentView === "transactions" && <TransactionList />}
-        {currentView === "chat" && <ChatInterface />}
-        {currentView === "budget" && <BudgetPanel />}
-        {currentView === "settings" && <SettingsPanel />}
-      </main>
+      
+      <Routes>
+        <Route 
+          path="/login" 
+          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage onLogin={() => {}} />} 
+        />
+        
+        <Route 
+          path="/*" 
+          element={
+            !isAuthenticated ? (
+              <Navigate to="/login" replace state={{ from: location }} />
+            ) : (
+              <>
+                <Sidebar />
+                <TopBar />
+                <main className="main-content">
+                  {currentView === "dashboard" && <Dashboard />}
+                  {currentView === "transactions" && <TransactionList />}
+                  {currentView === "chat" && <ChatInterface />}
+                  {currentView === "budget" && <BudgetPanel />}
+                  {currentView === "settings" && <SettingsPanel />}
+                </main>
+              </>
+            )
+          } 
+        />
+      </Routes>
     </div>
   );
 }
+
+
 
 export default App;

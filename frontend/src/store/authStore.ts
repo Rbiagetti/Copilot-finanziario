@@ -1,59 +1,52 @@
 // src/store/authStore.ts
 import { create } from "zustand";
+import { supabase } from "../lib/supabase";
+import { Session } from "@supabase/supabase-js";
 
 interface AuthState {
-  token: string | null;
-  user: { id: string; email: string } | null;
+  session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   init: () => Promise<void>;
-  logout: () => void;
+  setSession: (session: Session | null) => void;
+  logout: () => Promise<void>;
 }
 
-/** safe read from localStorage */
-const readToken = (): string | null => {
-  try {
-    return localStorage.getItem("authToken");
-  } catch {
-    return null;
-  }
-};
-
-export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
-  user: null,
+export const useAuthStore = create<AuthState>((set) => ({
+  session: null,
   isLoading: true,
   isAuthenticated: false,
 
   init: async () => {
-    const stored = readToken();
-    if (!stored) {
-      set({ isLoading: false, isAuthenticated: false, token: null, user: null });
-      return;
-    }
     try {
-      const resp = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${stored}` },
+      const { data: { session } } = await supabase.auth.getSession();
+      set({ 
+        session, 
+        isAuthenticated: !!session, 
+        isLoading: false 
       });
-      if (!resp.ok) throw new Error("invalid token");
-      const data = await resp.json(); // { token, user }
-      localStorage.setItem("authToken", data.token);
-      set({
-        token: data.token,
-        user: data.user,
-        isAuthenticated: true,
-        isLoading: false,
+
+      // Listen for auth changes (login, logout, token refresh)
+      supabase.auth.onAuthStateChange((_event, session) => {
+        set({ 
+          session, 
+          isAuthenticated: !!session, 
+          isLoading: false 
+        });
       });
-    } catch (e) {
-      // silent logout on any error (expired, network, etc.)
-      get().logout();
+    } catch (error) {
+      console.error("Auth initialization error:", error);
       set({ isLoading: false, isAuthenticated: false });
     }
   },
 
-  logout: () => {
-    localStorage.removeItem("authToken");
-    set({ token: null, user: null, isAuthenticated: false });
+  setSession: (session) => {
+    set({ session, isAuthenticated: !!session });
   },
-}))
+
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({ session: null, isAuthenticated: false });
+  },
+}));
+
