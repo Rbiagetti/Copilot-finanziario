@@ -258,17 +258,41 @@ def _build_pdf(
     # ── ANOMALIE ─────────────────────────────────────────────────────────────
     if anomalies:
         story += section("Anomalie Rilevate")
-        an_header = ["Data", "Categoria", "Descrizione", "Importo (€)", "Z-score"]
+        # Cambiamo 'Z-score' in 'Alert' per essere più descrittivi su tutti i tipi di anomalie
+        an_header = ["Data", "Categoria", "Descrizione", "Importo (€)", "Alert / Analisi"]
         an_data = [an_header]
+        
+        # Mapping tipi per il report
+        type_labels = {
+            "amount_spike": "Importo Elevato",
+            "new_merchant": "Nuovo Esercente",
+            "frequency_spike": "Picco Frequenza",
+            "duplicate_suspect": "Sospetto Duplicato",
+            "unusual_time": "Orario Insolito"
+        }
+        
         for a in anomalies:
+            dtype = a.get("detection_type", "amount_spike")
+            label = type_labels.get(dtype, dtype)
+            
+            # Se è uno spike di importo, aggiungiamo lo z-score per dettaglio
+            if dtype == "amount_spike" and a.get("z_score", 0) > 0:
+                label += f" (Z={a['z_score']:.1f})"
+            
+            # Aggiungiamo severity in maiuscolo
+            sev = a.get("severity", "low").upper()
+            alert_text = f"{label} [{sev}]"
+            
             an_data.append([
                 a["date"],
                 a["category"],
                 (a["description"] or "—")[:35],
                 f"{a['amount']:.2f}",
-                f"{a.get('z_score', 0):.1f}",
+                Paragraph(alert_text, small), # Usiamo Paragraph per eventuale wrapping
             ])
-        story.append(tbl(an_data, [2 * cm, 2.5 * cm, 6 * cm, 2.5 * cm, 2 * cm]))
+            
+        # Larghezza colonne aggiornata per dare più spazio all'Alert
+        story.append(tbl(an_data, [2 * cm, 2.5 * cm, 5.5 * cm, 2 * cm, 3 * cm]))
 
     # ── RACCOMANDAZIONE ──────────────────────────────────────────────────────
     story += section("Raccomandazione")
@@ -386,7 +410,7 @@ async def monthly_report(
             month=month,
             force_refresh=False,
         )
-        anomalies = anomalies_data.get("anomalies", [])[:5]
+        anomalies = anomalies_data.get("anomalies", [])[:20]
     except Exception:
         anomalies = []
 
@@ -455,7 +479,7 @@ async def generate_monthly_report(
             month,
             False,
         )
-        anomalies = anomalies_result.get("anomalies", [])[:5]
+        anomalies = anomalies_result.get("anomalies", [])[:20]
 
         # STEP 2: Raccogli dati transazioni
         first_day = date(year, month, 1)

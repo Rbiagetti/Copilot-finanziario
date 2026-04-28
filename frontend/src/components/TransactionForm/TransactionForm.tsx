@@ -34,7 +34,7 @@ export default function TransactionForm({ onAdded }: Props) {
   const [recording, setRecording] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
-  const { autoStartVoice, setAutoStartVoice, invalidateDashboardCache } = useAppStore();
+  const { autoStartVoice, setAutoStartVoice, invalidateDashboardCache, markTransactionsAsNew } = useAppStore();
 
   useEffect(() => {
     if (autoStartVoice) {
@@ -64,6 +64,7 @@ export default function TransactionForm({ onAdded }: Props) {
     setSubmitting(true);
     try {
       invalidateDashboardCache();
+      markTransactionsAsNew();
       await createTransaction({
         amount: numAmount,
         category,
@@ -89,6 +90,7 @@ export default function TransactionForm({ onAdded }: Props) {
     setSubmitting(true);
     try {
       const res = await parseNatural(nlText.trim());
+      markTransactionsAsNew();
       const tx = res.data;
       toast.success(`€${tx.amount.toFixed(2)} salvato in ${tx.category} — "${tx.description}"`);
       setNlText("");

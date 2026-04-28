@@ -142,6 +142,7 @@ Il report non usa colori per la severity delle anomalie (solo tabella testo), me
 4. **RISOLTO** — **Ricalcolo inutile in Frontend**: Lo store Zustand ora accetta la risposta completa del backend senza ricalcoli ridondanti.
 5. **RISOLTO** — **Deduplicazione**: Implementata logica di deduplicazione nel backend per evitare che la stessa transazione compaia più volte se triggera più detector.
 6. **RISOLTO** — **Feedback caricamento**: Implementato `loading` state globale nello store delle anomalie, usato dalla Dashboard per feedback immediato.
+7. **RISOLTO** — **Unificazione Limiti**: Dashboard e Report ora mostrano entrambi fino a un massimo di 20 anomalie, eliminando la discrepanza precedente.
 
 ---
 

@@ -117,7 +117,7 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { invalidateDashboardCache } = useAppStore();
+  const { invalidateDashboardCache, markTransactionsAsNew } = useAppStore();
 
   const clearFilters = () => {
     setFilter(""); setSearch(""); setSearchInput(""); setDaysRange(365); setSortBy("date_desc");
@@ -158,6 +158,7 @@ export default function TransactionList() {
     if (!confirm("Eliminare questa transazione?")) return;
     try {
       invalidateDashboardCache();
+      markTransactionsAsNew();
       await deleteTransaction(id);
       toast.success("Transazione eliminata");
       load();
@@ -194,6 +195,7 @@ export default function TransactionList() {
     setSaving(true);
     try {
       invalidateDashboardCache();
+      markTransactionsAsNew();
       await updateTransaction(editState.tx.id, {
         amount: parseFloat(editState.amount),
         category: editState.category,
@@ -213,6 +215,7 @@ export default function TransactionList() {
     if (toggling === tx.id) return;
     setToggling(tx.id);
     try {
+      markTransactionsAsNew();
       await updateTransaction(tx.id, { is_recurring: !tx.is_recurring });
       load();
     } catch { toast.error("Errore nell'aggiornamento"); }
