@@ -1,8 +1,16 @@
 from __future__ import annotations
 import asyncio
-from fastapi import APIRouter, HTTPException
+from datetime import date
+from fastapi import APIRouter, HTTPException, Depends
 
-from backend.core.ai_engine import generate_briefing, get_anomalies, get_anomaly_detail
+from backend.core.ai_engine import (
+    generate_briefing,
+    get_anomalies,
+    get_anomaly_detail,
+    get_anomalies_for_month,
+    invalidate_anomaly_cache,
+)
+from backend.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
@@ -17,18 +25,52 @@ async def briefing():
 
 
 @router.get("/anomalies")
-async def anomalies():
-    """Anomalie multi-tipo (5 detector) sugli ultimi 60-90gg.
-    Eseguito in thread pool: il calcolo statistico è CPU-bound e non deve
-    bloccare l'event loop di uvicorn mentre altre route servono richieste.
+async def list_anomalies(
+    current_user_id: str = Depends(get_current_user),
+):
     """
-    items = await asyncio.to_thread(get_anomalies)
-    by_type = {t: 0 for t in _DETECTION_TYPES}
-    for item in items:
-        dt = item.get("detection_type", "amount_spike")
-        if dt in by_type:
-            by_type[dt] += 1
-    return {"anomalies": items, "count": len(items), "by_type": by_type}
+    Ritorna anomalie del mese corrente.
+    Usa cache in memoria se disponibile.
+    """
+    today = date.today()
+    result = await asyncio.to_thread(
+        get_anomalies_for_month,
+        current_user_id,
+        today.year,
+        today.month,
+        False,  # force_refresh
+    )
+    return result
+
+
+@router.post("/anomalies/refresh")
+async def refresh_anomalies(
+    current_user_id: str = Depends(get_current_user),
+):
+    """
+    Utente clicca 'Refresh anomalies'.
+    Ricalcola con force_refresh=True per il mese corrente.
+    """
+    today = date.today()
+
+    # Invalida cache per il mese corrente
+    await asyncio.to_thread(
+        invalidate_anomaly_cache,
+        current_user_id,
+        today.year,
+        today.month,
+    )
+
+    # Ricalcola
+    result = await asyncio.to_thread(
+        get_anomalies_for_month,
+        current_user_id,
+        today.year,
+        today.month,
+        True,  # force_refresh
+    )
+
+    return result
 
 
 @router.get("/anomalies/{tx_id}")

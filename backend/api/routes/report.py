@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import base64
 import io
 import json
 import os
@@ -7,12 +9,13 @@ from calendar import monthrange
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from backend.core.database import get_db, Transaction, Budget
+from backend.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/report", tags=["report"])
 
@@ -418,3 +421,168 @@ async def monthly_report(
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+@router.post("/monthly/generate")
+async def generate_monthly_report(
+    year: int,
+    month: int,
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Genera report mensile con anomalie on-demand.
+    
+    STEP 1: Assicura che le anomalie per il mese siano calcolate (o usa cache)
+    STEP 2: Genera il PDF usando quelle anomalie
+    STEP 3: Ritorna PDF come base64 nel JSON
+    """
+    try:
+        from backend.core.ai_engine import get_anomalies_for_month
+
+        # Valida year/month
+        if month < 1 or month > 12 or year < 2000:
+            raise HTTPException(400, "Invalid year/month")
+
+        # STEP 1: Assicura anomalie per il mese
+        # (non force_refresh: usa cache se disponibile, calcola se no)
+        anomalies_result = await asyncio.to_thread(
+            get_anomalies_for_month,
+            current_user_id,
+            year,
+            month,
+            False,  # force_refresh
+        )
+        anomalies = anomalies_result.get("anomalies", [])[:5]
+
+        # STEP 2: Raccogli dati transazioni come l'endpoint GET /monthly
+        first_day = date(year, month, 1)
+        last_day = date(year, month, monthrange(year, month)[1])
+
+        if month == 1:
+            prev_first = date(year - 1, 12, 1)
+            prev_last = date(year - 1, 12, 31)
+        else:
+            prev_first = date(year, month - 1, 1)
+            prev_last = date(year, month - 1, monthrange(year, month - 1)[1])
+
+        fd = first_day.isoformat()
+        ld = last_day.isoformat()
+        pf = prev_first.isoformat()
+        pl = prev_last.isoformat()
+
+        # Totali
+        row = db.query(
+            func.coalesce(func.sum(Transaction.amount), 0.0),
+            func.count(Transaction.id),
+        ).filter(Transaction.date >= fd, Transaction.date <= ld).one()
+        total_month = round(float(row[0]), 2)
+        count_month = int(row[1])
+        avg_tx = round(total_month / count_month, 2) if count_month else 0.0
+
+        prev_row = db.query(
+            func.coalesce(func.sum(Transaction.amount), 0.0),
+        ).filter(Transaction.date >= pf, Transaction.date <= pl).scalar()
+        total_prev = round(float(prev_row), 2)
+
+        if total_prev > 0:
+            delta_pct = round((total_month - total_prev) / total_prev * 100, 1)
+        else:
+            delta_pct = 0.0
+
+        # Categorie
+        cat_rows = (
+            db.query(Transaction.category, func.sum(Transaction.amount), func.count(Transaction.id))
+            .filter(Transaction.date >= fd, Transaction.date <= ld)
+            .group_by(Transaction.category)
+            .order_by(func.sum(Transaction.amount).desc())
+            .all()
+        )
+        categories = [
+            {
+                "category": r[0],
+                "total": round(float(r[1]), 2),
+                "count": int(r[2]),
+                "pct": round(float(r[1]) / total_month * 100, 1) if total_month else 0.0,
+            }
+            for r in cat_rows
+        ]
+
+        # Top 10
+        top_txs = (
+            db.query(Transaction)
+            .filter(Transaction.date >= fd, Transaction.date <= ld)
+            .order_by(Transaction.amount.desc())
+            .limit(10)
+            .all()
+        )
+        top10 = [
+            {"date": t.date, "category": t.category, "description": t.description, "amount": round(t.amount, 2)}
+            for t in top_txs
+        ]
+
+        # Budget
+        budgets = db.query(Budget).filter(Budget.active == True).all()
+        budget_rows = []
+        for b in budgets:
+            spent_row = db.query(func.coalesce(func.sum(Transaction.amount), 0.0)).filter(
+                Transaction.category == b.category,
+                Transaction.date >= fd,
+                Transaction.date <= ld,
+            ).scalar()
+            spent = round(float(spent_row), 2)
+            pct = round(spent / b.amount * 100, 1) if b.amount else 0.0
+            budget_rows.append({"category": b.category, "budget": b.amount, "spent": spent, "pct": pct})
+        budget_rows.sort(key=lambda x: x["pct"], reverse=True)
+
+        # Narrativa
+        top_cat = categories[0] if categories else {"category": "n/d", "total": 0.0, "pct": 0.0}
+        over_cats = [b["category"] for b in budget_rows if b["pct"] > 100]
+        month_label = f"{MONTH_LABELS_IT[month]} {year}"
+
+        narrative = _build_narrative({
+            "month_label": month_label,
+            "total_month": _fmt_eur(total_month),
+            "total_prev": _fmt_eur(total_prev),
+            "delta_pct": delta_pct,
+            "count_month": count_month,
+            "avg_tx": _fmt_eur(avg_tx),
+            "top_category": top_cat["category"],
+            "top_cat_amount": _fmt_eur(top_cat["total"]),
+            "top_cat_pct": top_cat["pct"],
+            "over_budget_cats": ", ".join(over_cats) if over_cats else "nessuna",
+            "anomaly_count": len(anomalies),
+        })
+
+        # STEP 3: Genera PDF
+        pdf_bytes = _build_pdf(
+            year=year,
+            month=month,
+            month_label=month_label,
+            total_month=total_month,
+            total_prev=total_prev,
+            count_month=count_month,
+            avg_tx=avg_tx,
+            delta_pct=delta_pct,
+            categories=categories,
+            top10=top10,
+            budget_rows=budget_rows,
+            anomalies=anomalies,
+            narrative=narrative,
+        )
+
+        filename = f"fincopilot_report_{year}_{month:02d}.pdf"
+        pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+        return {
+            "status": "success",
+            "filename": filename,
+            "size_kb": len(pdf_bytes) / 1024,
+            "pdf_base64": pdf_base64,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Errore generazione report: {str(e)}")
+

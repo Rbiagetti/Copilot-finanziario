@@ -183,7 +183,10 @@ export const getForecast = () => api.get<ForecastData>("/analytics/forecast");
 export const getMonthlyHistory = (months = 6) => api.get<{ month: string; label: string; total: number }[]>(`/analytics/monthly-history?months=${months}`);
 export const getBriefing = () => api.get<BriefingData>("/ai/briefing");
 export const getAnomalies = () =>
-  api.get<{ anomalies: Anomaly[]; count: number; by_type: Record<string, number> }>("/ai/anomalies");
+  api.get<{ anomalies: Anomaly[]; count: number; by_type: Record<string, number>; generated_at: string | null }>("/ai/anomalies");
+
+export const refreshAnomalies = () =>
+  api.post<{ anomalies: Anomaly[]; count: number; by_type: Record<string, number>; generated_at: string }>("/ai/anomalies/refresh");
 
 export const getAnomalyDetail = (txId: number, detectionType: string) =>
   api.get<AnomalyDetail>(`/ai/anomalies/${txId}?detection_type=${detectionType}`);
@@ -253,6 +256,11 @@ export const downloadMonthlyReport = async (year: number, month: number): Promis
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 };
+
+export const generateMonthlyReportWithAnomalies = (year: number, month: number) =>
+  api.post<{ status: string; filename: string; size_kb: number; pdf_base64: string }>(
+    `/report/monthly/generate?year=${year}&month=${month}`
+  );
 
 export const getBudgets = () => api.get("/budgets/");
 export const createBudget = (data: { category: string; amount: number }) =>

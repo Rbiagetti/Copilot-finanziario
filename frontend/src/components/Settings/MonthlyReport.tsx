@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileDown, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-import { downloadMonthlyReport } from "../../api/client";
+import { downloadMonthlyReport, generateMonthlyReportWithAnomalies } from "../../api/client";
 
 const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -17,14 +17,38 @@ export default function MonthlyReport() {
   const [month, setMonth]     = useState(DEFAULT_MONTH);
   const [year, setYear]       = useState(DEFAULT_YEAR);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus]   = useState<string | null>(null);
 
   const handleDownload = async () => {
     setLoading(true);
+    setStatus(null);
+
     try {
-      await downloadMonthlyReport(year, month);
+      // STEP 1: Comunica che stiamo preparando le anomalie
+      setStatus("Preparazione anomalie...");
+
+      // STEP 2: Genera report con anomalie (endpoint POST)
+      const res = await generateMonthlyReportWithAnomalies(year, month);
+
+      setStatus("Generazione PDF in corso...");
+
+      // STEP 3: Scarica il PDF da base64
+      const pdfBytes = Uint8Array.from(atob(res.data.pdf_base64), (c) => c.charCodeAt(0));
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = res.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+
+      setStatus(null);
       toast.success(`Report ${MESI[month - 1]} ${year} scaricato`);
-    } catch {
-      toast.error("Errore nella generazione del report");
+    } catch (err) {
+      setStatus(null);
+      toast.error(err instanceof Error ? err.message : "Errore nella generazione del report");
     } finally {
       setLoading(false);
     }
@@ -80,16 +104,16 @@ export default function MonthlyReport() {
             style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "auto", padding: "0.5rem 1.25rem" }}
           >
             {loading
-              ? <><RefreshCw size={15} className="spin" /> Generazione...</>
+              ? <><RefreshCw size={15} className="spin" /> {status || "Generazione..."}</>
               : <><FileDown size={15} /> Genera PDF</>
             }
           </button>
         </div>
       </div>
 
-      {loading && (
+      {loading && status && (
         <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.5rem" }}>
-          Generazione in corso (~5 secondi)…
+          {status}
         </p>
       )}
     </div>

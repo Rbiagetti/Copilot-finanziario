@@ -2442,3 +2442,341 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
         context = []
 
     return {"tx": tx_dict, "detection_type": detection_type, "stats": stats, "context": context}
+
+
+# ─── IN-MEMORY ANOMALY CACHE ───────────────────────────────────────────────
+# Cache structure: {user_id: {(year, month): result_dict}}
+# Survives during session, lost on server restart (acceptable for MVP)
+_anomaly_cache: dict = {}
+
+
+def _count_anomalies_by_type(anomalies: list) -> dict:
+    """Count anomalies by detection_type."""
+    counts: dict = {}
+    for anomaly in anomalies:
+        dt = anomaly.get("detection_type", "amount_spike")
+        counts[dt] = counts.get(dt, 0) + 1
+    return counts
+
+
+def _detect_anomalies_for_transactions(txs: list) -> list:
+    """
+    Apply all 5 detectors to a list of transaction rows.
+    Rows format: (id, amount, category, description, date, time)
+    Returns list of anomaly dicts.
+    """
+    import statistics as _stats
+    from datetime import datetime as _dt
+
+    all_anomalies: list = []
+
+    if not txs:
+        return all_anomalies
+
+    # ── TIPO 1: amount_spike ───────────────────────────────────────────────
+    by_cat: dict = defaultdict(list)
+    for row in txs:
+        by_cat[row[2]].append(row)
+
+    for cat, cat_rows in by_cat.items():
+        if len(cat_rows) < 3:
+            continue
+        amounts = [r[1] for r in cat_rows]
+        mean = _stats.mean(amounts)
+        stdev = _stats.stdev(amounts) if len(amounts) > 1 else 0.0
+        if stdev == 0:
+            continue
+        p75 = _percentile(amounts, 75)
+        p90 = _percentile(amounts, 90)
+        med = _percentile(amounts, 50)
+        mn, mx = min(amounts), max(amounts)
+        for row in cat_rows:
+            z = (row[1] - mean) / stdev
+            if z > 2.0:
+                pct_above = round((row[1] - mean) / mean * 100) if mean > 0 else 0
+                severity = "high" if z > 3.0 else "medium"
+                all_anomalies.append({
+                    "id": row[0],
+                    "amount": round(row[1], 2),
+                    "category": cat,
+                    "description": row[3] or "",
+                    "date": row[4],
+                    "time": row[5],
+                    "z_score": round(z, 2),
+                    "avg_category": round(mean, 2),
+                    "pct_above_avg": pct_above,
+                    "detection_type": "amount_spike",
+                    "detection_label": f"Importo €{row[1]:.2f} su {cat}: +{pct_above}% sopra la media ({z:.1f}σ)",
+                    "severity": severity,
+                    "stats": {
+                        "mean": round(mean, 2),
+                        "median": round(med, 2),
+                        "p75": round(p75, 2),
+                        "p90": round(p90, 2),
+                        "std": round(stdev, 2),
+                        "z_score": round(z, 2),
+                        "sample_size": len(amounts),
+                        "min": round(mn, 2),
+                        "max": round(mx, 2),
+                    },
+                })
+
+    # ── TIPO 2: new_merchant ───────────────────────────────────────────────
+    for row in txs:
+        desc = (row[3] or "").strip()
+        if not desc or row[1] <= 10:
+            continue
+        # Count previous occurrences in DB (simple approach: not in current txs)
+        count = _scalar(
+            "SELECT COUNT(*) FROM transactions WHERE description = :desc AND date < :tx_date",
+            {"desc": desc, "tx_date": row[4]},
+        ) or 0
+        if count == 0:
+            all_anomalies.append({
+                "id": row[0],
+                "amount": round(row[1], 2),
+                "category": row[2],
+                "description": desc,
+                "date": row[4],
+                "time": row[5],
+                "z_score": 0.0,
+                "avg_category": 0.0,
+                "pct_above_avg": 0,
+                "detection_type": "new_merchant",
+                "detection_label": f"Primo acquisto mai registrato: {desc}",
+                "severity": "low",
+                "stats": {"first_seen": row[4], "category": row[2]},
+            })
+
+    # ── TIPO 3: frequency_spike ────────────────────────────────────────────
+    # Count transactions by category in this period and compare to 60 days
+    cat_period = {}
+    for row in txs:
+        cat = row[2]
+        cat_period[cat] = cat_period.get(cat, 0) + 1
+
+    # Get 60-day baseline for each category
+    d60 = _dates(60)
+    cat_60_rows = _q(
+        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d GROUP BY category",
+        {"d": d60},
+    )
+    cat_60_map = {r[0]: r[1] for r in cat_60_rows}
+
+    # Period is typically 30-31 days, so avg_weekly = count_60 / 8.0
+    for cat, count_period in cat_period.items():
+        total_60 = cat_60_map.get(cat, 0)
+        if total_60 < 3:
+            continue
+        avg_weekly = total_60 / 8.0
+        # If period count is > 2x weekly average, flag it
+        if count_period > max(2, avg_weekly * 2):
+            # Get the most recent tx of this category
+            rep = [r for r in txs if r[2] == cat]
+            if rep:
+                r = rep[0]
+                ratio = round(count_period / avg_weekly, 1) if avg_weekly > 0 else 0.0
+                severity = "high" if count_period > avg_weekly * 3 else "medium"
+                all_anomalies.append({
+                    "id": r[0],
+                    "amount": round(r[1], 2),
+                    "category": cat,
+                    "description": r[3] or "",
+                    "date": r[4],
+                    "time": r[5],
+                    "z_score": 0.0,
+                    "avg_category": 0.0,
+                    "pct_above_avg": 0,
+                    "detection_type": "frequency_spike",
+                    "detection_label": f"{count_period} transazioni in {cat} questo mese (media: {avg_weekly:.1f}/sett)",
+                    "severity": severity,
+                    "stats": {
+                        "count_this_period": count_period,
+                        "avg_weekly": round(avg_weekly, 1),
+                        "ratio": ratio,
+                        "category": cat,
+                    },
+                })
+
+    # ── TIPO 4: duplicate_suspect ──────────────────────────────────────────
+    dup_groups: dict = defaultdict(list)
+    for row in txs:
+        if not (row[3] and row[3].strip()):
+            continue
+        key = (row[3].lower().strip(), round(row[1], 2))
+        dup_groups[key].append(row)
+
+    for key, group in dup_groups.items():
+        if len(group) < 2:
+            continue
+        group_sorted = sorted(group, key=lambda r: r[4])
+        for i in range(len(group_sorted) - 1):
+            r1, r2 = group_sorted[i], group_sorted[i + 1]
+            try:
+                d1 = _dt.fromisoformat(r1[4])
+                d2 = _dt.fromisoformat(r2[4])
+                hours_apart = abs((d2 - d1).total_seconds()) / 3600
+                if hours_apart <= 48:
+                    severity = "high" if hours_apart <= 2 else ("medium" if hours_apart <= 24 else "low")
+                    all_anomalies.append({
+                        "id": r2[0],
+                        "amount": round(r2[1], 2),
+                        "category": r2[2],
+                        "description": r2[3] or "",
+                        "date": r2[4],
+                        "time": r2[5],
+                        "z_score": 0.0,
+                        "avg_category": 0.0,
+                        "pct_above_avg": 0,
+                        "detection_type": "duplicate_suspect",
+                        "detection_label": f"Possibile duplicato: {r2[3]} €{r2[1]:.2f} già registrato {hours_apart:.0f}h prima",
+                        "severity": severity,
+                        "stats": {
+                            "original_date": r1[4],
+                            "original_time": r1[5],
+                            "hours_apart": round(hours_apart, 1),
+                            "original_tx_id": r1[0],
+                            "amount": round(r2[1], 2),
+                        },
+                    })
+            except Exception:
+                continue
+
+    # ── TIPO 5: unusual_time ───────────────────────────────────────────────
+    by_cat_time: dict = defaultdict(list)
+    for row in txs:
+        if row[5]:
+            by_cat_time[row[2]].append(row)
+
+    # Get historical hours for each category
+    for cat, cat_time_rows in by_cat_time.items():
+        hist_hours_rows = _q(
+            "SELECT time FROM transactions WHERE category = :cat "
+            "AND time IS NOT NULL ORDER BY date DESC LIMIT 50",
+            {"cat": cat},
+        )
+        hours = []
+        for hr in hist_hours_rows:
+            try:
+                hours.append(int(hr[0].split(":")[0]))
+            except Exception:
+                continue
+        if len(hours) < 10:
+            continue
+        usual_start = int(_percentile(hours, 10))
+        usual_end = int(_percentile(hours, 90))
+        for row in cat_time_rows:
+            try:
+                tx_hour = int(row[5].split(":")[0])
+            except Exception:
+                continue
+            if tx_hour < usual_start - 1 or tx_hour > usual_end + 1:
+                all_anomalies.append({
+                    "id": row[0],
+                    "amount": round(row[1], 2),
+                    "category": cat,
+                    "description": row[3] or "",
+                    "date": row[4],
+                    "time": row[5],
+                    "z_score": 0.0,
+                    "avg_category": 0.0,
+                    "pct_above_avg": 0,
+                    "detection_type": "unusual_time",
+                    "detection_label": (
+                        f"Transazione {cat} alle {row[5]}, "
+                        f"fuori dall'orario abituale ({usual_start:02d}:00–{usual_end:02d}:00)"
+                    ),
+                    "severity": "low",
+                    "stats": {
+                        "tx_time": row[5],
+                        "usual_start": f"{usual_start:02d}:00",
+                        "usual_end": f"{usual_end:02d}:00",
+                        "category": cat,
+                        "sample_size": len(hours),
+                    },
+                })
+
+    # Sort: severity (high→low) then date (desc)
+    _sev = {"high": 0, "medium": 1, "low": 2}
+    all_anomalies.sort(key=lambda x: x.get("date", ""), reverse=True)
+    all_anomalies.sort(key=lambda x: _sev.get(x.get("severity", "low"), 2))
+    return all_anomalies[:20]
+
+
+def get_anomalies_for_month(
+    user_id: str,
+    year: int,
+    month: int,
+    force_refresh: bool = False,
+) -> dict:
+    """
+    Ritorna anomalie per uno specifico mese.
+    Usa cache in memoria se disponibile e force_refresh=False.
+    
+    Args:
+        user_id: ID utente (per futura filtratura multi-user)
+        year, month: periodo richiesto
+        force_refresh: se True, ricalcola bypassing cache
+    
+    Returns:
+        {"anomalies": [...], "count": N, "by_type": {...}, "generated_at": ISO}
+    """
+    from datetime import datetime
+    from calendar import monthrange
+
+    cache_key = (year, month)
+
+    # Check cache se non forzato
+    if not force_refresh and user_id in _anomaly_cache:
+        if cache_key in _anomaly_cache[user_id]:
+            return _anomaly_cache[user_id][cache_key]
+
+    # Calcola il range della data per il mese
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+
+    # Query transactions per il mese richiesto
+    rows = _q(
+        "SELECT id, amount, category, description, date, time FROM transactions "
+        "WHERE date >= :first AND date <= :last "
+        "ORDER BY date DESC",
+        {"first": first_day.isoformat(), "last": last_day.isoformat()},
+    )
+
+    # Applica tutti i 5 detector
+    anomalies = _detect_anomalies_for_transactions(rows)
+
+    # Salva in cache
+    if user_id not in _anomaly_cache:
+        _anomaly_cache[user_id] = {}
+
+    result = {
+        "anomalies": anomalies,
+        "count": len(anomalies),
+        "by_type": _count_anomalies_by_type(anomalies),
+        "generated_at": datetime.now().isoformat(),
+    }
+
+    _anomaly_cache[user_id][cache_key] = result
+    return result
+
+
+def invalidate_anomaly_cache(
+    user_id: str,
+    year: int = None,
+    month: int = None,
+) -> None:
+    """
+    Invalida cache per un utente.
+    Se year/month specificati, invalida solo quel mese.
+    Altrimenti invalida tutto per l'utente.
+    """
+    if user_id not in _anomaly_cache:
+        return
+
+    if year is not None and month is not None:
+        cache_key = (year, month)
+        _anomaly_cache[user_id].pop(cache_key, None)
+    else:
+        _anomaly_cache[user_id] = {}
+

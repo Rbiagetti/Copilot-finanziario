@@ -9,9 +9,12 @@ interface DashboardCache {
   loadedAt: number | null;
 }
 
-interface AnomaliesCache {
-  anomalies: Anomaly[];
-  loadedAt: number | null;
+interface AnomalyState {
+  data: Anomaly[];
+  count: number;
+  by_type: Record<string, number>;
+  generated_at: string | null;
+  has_new_transactions: boolean;
 }
 
 interface AppState {
@@ -19,12 +22,13 @@ interface AppState {
   autoStartVoice: boolean;
   dashboardFilter: { category?: string; dateFrom?: string; dateTo?: string; tags?: string };
   dashboardCache: DashboardCache;
-  anomaliesCache: AnomaliesCache;
+  anomalies: AnomalyState;
   setView: (view: View) => void;
   setAutoStartVoice: (val: boolean) => void;
   setDashboardFilter: (filter: Partial<AppState["dashboardFilter"]>) => void;
   setDashboardCache: (data: Omit<DashboardCache, "loadedAt">) => void;
-  setAnomaliesCache: (anomalies: Anomaly[]) => void;
+  setAnomalies: (data: Anomaly[], generated_at: string) => void;
+  markTransactionsAsNew: () => void;
   invalidateDashboardCache: () => void;
 }
 
@@ -43,9 +47,12 @@ export const useAppStore = create<AppState>((set) => ({
     forecast: null,
     loadedAt: null,
   },
-  anomaliesCache: {
-    anomalies: [],
-    loadedAt: null,
+  anomalies: {
+    data: [],
+    count: 0,
+    by_type: {},
+    generated_at: null,
+    has_new_transactions: false,
   },
   setView: (view) => {
     localStorage.setItem("currentView", view);
@@ -58,9 +65,27 @@ export const useAppStore = create<AppState>((set) => ({
   setDashboardCache: (data) => set({
     dashboardCache: { ...data, loadedAt: Date.now() }
   }),
-  setAnomaliesCache: (anomalies) => set({
-    anomaliesCache: { anomalies, loadedAt: Date.now() }
-  }),
+  setAnomalies: (data, generated_at) => {
+    // Count by detection_type
+    const by_type: Record<string, number> = {};
+    data.forEach((anomaly) => {
+      const dt = anomaly.detection_type || "amount_spike";
+      by_type[dt] = (by_type[dt] || 0) + 1;
+    });
+
+    set({
+      anomalies: {
+        data,
+        count: data.length,
+        by_type,
+        generated_at,
+        has_new_transactions: false, // reset when loading fresh anomalies
+      },
+    });
+  },
+  markTransactionsAsNew: () => set((state) => ({
+    anomalies: { ...state.anomalies, has_new_transactions: true }
+  })),
   invalidateDashboardCache: () => set((state) => ({
     dashboardCache: { ...state.dashboardCache, loadedAt: null }
   })),

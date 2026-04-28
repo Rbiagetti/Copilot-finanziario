@@ -6,7 +6,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, Line,
   BarChart, Bar, LabelList, Legend
 } from "recharts";
-import { getForecast, getAnomalies, getAnomalyDetail, getFullHistory, getBudgetStatus } from "../../api/client";
+import { getForecast, getAnomalies, refreshAnomalies, getAnomalyDetail, getFullHistory, getBudgetStatus } from "../../api/client";
 import type { ForecastData, Anomaly, AnomalyDetail, FullHistoryTransaction, BudgetStatus } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
@@ -278,9 +278,9 @@ export default function Dashboard() {
   const isVisible = (id: string) => !hiddenCards.has(id);
   const customizeRef = useFocusTrap(showCustomize);
 
-  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomaliesCache, setAnomaliesCache } = useAppStore();
+  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
-  const anomalies = anomaliesCache.anomalies;
+  const anomalyState = anomalies;
   const cc = useChartColors();
   const modalRef = useFocusTrap(!!modalContent);
 
@@ -291,15 +291,15 @@ export default function Dashboard() {
   const loadAnomalies = async (force = false) => {
     const CACHE_TTL = 10 * 60 * 1000; // 10 minuti — analisi costosa
     // Leggi il valore corrente dello store direttamente (evita stale closure)
-    const cached = useAppStore.getState().anomaliesCache;
-    if (!force && cached.loadedAt && Date.now() - cached.loadedAt < CACHE_TTL) {
-      // Cache ancora valida: nessuna fetch, i dati sono già in anomaliesCache.anomalies
+    const cached = useAppStore.getState().anomalies;
+    if (!force && cached.generated_at && Date.now() - new Date(cached.generated_at).getTime() < CACHE_TTL) {
+      // Cache ancora valida: nessuna fetch
       return;
     }
     setAnomaliesLoading(true);
     try {
       const res = await getAnomalies();
-      setAnomaliesCache(res.data.anomalies || []);
+      setAnomalies(res.data.anomalies || [], res.data.generated_at || new Date().toISOString());
     } catch (e) {
       console.warn("Impossibile caricare anomalie:", e);
     } finally {
@@ -705,7 +705,7 @@ export default function Dashboard() {
         </div>
         <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
           <div className="kpi-icon" style={{ color: "var(--danger)" }}>
-            {anomaliesLoading && anomalies.length === 0
+            {anomaliesLoading && anomalyState.data.length === 0
               ? <RefreshCw size={20} className="spin" />
               : <AlertTriangle size={20} />
             }
@@ -713,7 +713,7 @@ export default function Dashboard() {
           <div className="kpi-content">
             <span className="kpi-label">Eventi Anomali</span>
             <span className="kpi-value">
-              {anomaliesLoading && anomalies.length === 0 ? "analisi…" : `${anomalies.length} rilevati`}
+              {anomaliesLoading && anomalyState.data.length === 0 ? "analisi…" : `${anomalyState.data.length} rilevati`}
             </span>
           </div>
         </div>
@@ -1165,11 +1165,35 @@ export default function Dashboard() {
                   { key: "unusual_time",    label: "🕐 Orario" },
                 ];
                 const filtered = anomalyTypeFilter === "all"
-                  ? anomalies
-                  : anomalies.filter(a => a.detection_type === anomalyTypeFilter);
+                  ? anomalyState.data
+                  : anomalyState.data.filter(a => a.detection_type === anomalyTypeFilter);
 
                 return (
                   <>
+                    {anomalyState.has_new_transactions && (
+                      <div className="anomaly-update-banner">
+                        <span className="banner-icon">⚠️</span>
+                        <span>Anomalie aggiornabili</span>
+                        <button
+                          className="btn-small btn-primary"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setAnomaliesLoading(true);
+                            try {
+                              const res = await refreshAnomalies();
+                              setAnomalies(res.data.anomalies || [], res.data.generated_at);
+                              // Non mostra toast nel componente — il banner sparisce semplicemente
+                            } catch (err) {
+                              console.error("Errore refresh anomalie:", err);
+                            } finally {
+                              setAnomaliesLoading(false);
+                            }
+                          }}
+                        >
+                          Aggiorna
+                        </button>
+                      </div>
+                    )}
                     <div className="anomaly-tabs">
                       {TABS.map(t => (
                         <button
