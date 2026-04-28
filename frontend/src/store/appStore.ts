@@ -6,6 +6,10 @@ type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
 interface DashboardCache {
   rawHistory: FullHistoryTransaction[];
   forecast: ForecastData | null;
+  loadedAt: number | null;
+}
+
+interface AnomaliesCache {
   anomalies: Anomaly[];
   loadedAt: number | null;
 }
@@ -15,10 +19,12 @@ interface AppState {
   autoStartVoice: boolean;
   dashboardFilter: { category?: string; dateFrom?: string; dateTo?: string; tags?: string };
   dashboardCache: DashboardCache;
+  anomaliesCache: AnomaliesCache;
   setView: (view: View) => void;
   setAutoStartVoice: (val: boolean) => void;
   setDashboardFilter: (filter: Partial<AppState["dashboardFilter"]>) => void;
   setDashboardCache: (data: Omit<DashboardCache, "loadedAt">) => void;
+  setAnomaliesCache: (anomalies: Anomaly[]) => void;
   invalidateDashboardCache: () => void;
 }
 
@@ -35,6 +41,9 @@ export const useAppStore = create<AppState>((set) => ({
   dashboardCache: {
     rawHistory: [],
     forecast: null,
+    loadedAt: null,
+  },
+  anomaliesCache: {
     anomalies: [],
     loadedAt: null,
   },
@@ -48,6 +57,9 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   setDashboardCache: (data) => set({
     dashboardCache: { ...data, loadedAt: Date.now() }
+  }),
+  setAnomaliesCache: (anomalies) => set({
+    anomaliesCache: { anomalies, loadedAt: Date.now() }
   }),
   invalidateDashboardCache: () => set((state) => ({
     dashboardCache: { ...state.dashboardCache, loadedAt: null }

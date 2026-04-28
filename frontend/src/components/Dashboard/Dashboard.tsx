@@ -243,7 +243,6 @@ export default function Dashboard() {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [anomaliesLoading, setAnomaliesLoading] = useState(false);
-  const anomaliesCachedAt = useRef<number | null>(null);
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -280,21 +279,30 @@ export default function Dashboard() {
   const isVisible = (id: string) => !hiddenCards.has(id);
   const customizeRef = useFocusTrap(showCustomize);
 
-  const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
+  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomaliesCache, setAnomaliesCache } = useAppStore();
   const cc = useChartColors();
   const modalRef = useFocusTrap(!!modalContent);
 
-  // Carica anomalie separatamente — non blocca la dashboard
+  // Carica anomalie separatamente — non blocca la dashboard.
+  // Cache in Zustand: sopravvive alla navigazione, una sola chiamata per sessione
+  // finché non scade il TTL o l'utente forza il refresh.
   const loadAnomalies = async (force = false) => {
-    const CACHE_TTL = 5 * 60 * 1000;
-    if (!force && anomaliesCachedAt.current && Date.now() - anomaliesCachedAt.current < CACHE_TTL) return;
+    const CACHE_TTL = 10 * 60 * 1000; // 10 minuti — analisi costosa
+    if (!force && anomaliesCache.loadedAt && Date.now() - anomaliesCache.loadedAt < CACHE_TTL) {
+      // Cache ancora valida: ripristina senza fetch
+      setAnomalies(anomaliesCache.anomalies);
+      return;
+    }
     setAnomaliesLoading(true);
     try {
       const res = await getAnomalies();
-      setAnomalies(res.data.anomalies || []);
-      anomaliesCachedAt.current = Date.now();
+      const data = res.data.anomalies || [];
+      setAnomalies(data);
+      setAnomaliesCache(data);
     } catch (e) {
       console.warn("Impossibile caricare anomalie:", e);
+      // Se abbiamo dati vecchi in cache, usali come fallback
+      if (anomaliesCache.anomalies.length > 0) setAnomalies(anomaliesCache.anomalies);
     } finally {
       setAnomaliesLoading(false);
     }
@@ -322,7 +330,7 @@ export default function Dashboard() {
       setRawHistory(rawHistory);
       setForecast(forecast);
       setBudgets(budg.data);
-      setDashboardCache({ rawHistory, forecast, anomalies: [] });
+      setDashboardCache({ rawHistory, forecast });
     } catch (e: any) {
       console.error("Errore Dashboard:", e);
       setErrorMsg("Errore di caricamento dati analitici.");
