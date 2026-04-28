@@ -1190,13 +1190,12 @@ export default function Dashboard() {
                       {filtered.map((a, i) => {
                         const meta = TYPE_META[a.detection_type] ?? { emoji: "❓", label: a.detection_type };
                         return (
-                          <div
+                          <button
                             key={i}
                             className="anomaly-card"
                             onClick={() => handleAnomalyClick(a)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={e => e.key === "Enter" && handleAnomalyClick(a)}
+                            disabled={detailLoading}
+                            aria-label={`Dettagli anomalia: ${a.detection_label} (€${a.amount.toFixed(2)})`}
                           >
                             {/* riga 1: badge + data + freccia */}
                             <div className="anomaly-card-top">
@@ -1216,7 +1215,7 @@ export default function Dashboard() {
                             </div>
                             {/* riga 3: label troncato */}
                             <span className="anomaly-card-label">{a.detection_label}</span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
