@@ -13,12 +13,18 @@ from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import (
     TransactionCreate, TransactionResponse, TransactionUpdate, CATEGORIES
 )
+from backend.core.ai_engine import invalidate_anomaly_cache
+from backend.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 
 
 @router.post("/", response_model=TransactionResponse)
-async def create_transaction(data: TransactionCreate, db: Session = Depends(get_db)):
+async def create_transaction(
+    data: TransactionCreate, 
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Crea una nuova transazione."""
     if data.category not in CATEGORIES:
         data.category = "altro"
@@ -36,6 +42,15 @@ async def create_transaction(data: TransactionCreate, db: Session = Depends(get_
     db.add(tx)
     db.commit()
     db.refresh(tx)
+    
+    # Invalida cache anomalie per il mese della transazione
+    try:
+        from datetime import date as _date
+        tx_date = _date.fromisoformat(tx.date)
+        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
+    except Exception:
+        pass
+        
     return tx
 
 
@@ -173,7 +188,12 @@ async def get_transaction(tx_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{tx_id}", response_model=TransactionResponse)
-async def update_transaction(tx_id: int, data: TransactionUpdate, db: Session = Depends(get_db)):
+async def update_transaction(
+    tx_id: int, 
+    data: TransactionUpdate, 
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
@@ -181,14 +201,34 @@ async def update_transaction(tx_id: int, data: TransactionUpdate, db: Session = 
         setattr(tx, field, value)
     db.commit()
     db.refresh(tx)
+    
+    # Invalida cache anomalie
+    try:
+        from datetime import date as _date
+        tx_date = _date.fromisoformat(tx.date)
+        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
+    except Exception:
+        pass
+        
     return tx
 
 
 @router.delete("/{tx_id}")
-async def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
+async def delete_transaction(
+    tx_id: int, 
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
+    # Salva info per invalidazione prima di eliminare
+    try:
+        tx_date = date.fromisoformat(tx.date)
+        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
+    except Exception:
+        pass
+        
     db.delete(tx)
     db.commit()
     return {"detail": "Transazione eliminata"}
@@ -205,7 +245,11 @@ class NLParseRequest(BaseModel):
 
 
 @router.post("/parse-natural")
-async def parse_natural_language(data: NLParseRequest, db: Session = Depends(get_db)):
+async def parse_natural_language(
+    data: NLParseRequest, 
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Parsa testo in linguaggio naturale e crea una transazione."""
     import os, json
     from openai import OpenAI
@@ -255,4 +299,13 @@ async def parse_natural_language(data: NLParseRequest, db: Session = Depends(get
     db.add(tx)
     db.commit()
     db.refresh(tx)
+    
+    # Invalida cache anomalie
+    try:
+        from datetime import date as _date
+        tx_date = _date.fromisoformat(tx.date)
+        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
+    except Exception:
+        pass
+        
     return tx

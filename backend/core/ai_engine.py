@@ -2700,7 +2700,18 @@ def _detect_anomalies_for_transactions(txs: list) -> list:
     _sev = {"high": 0, "medium": 1, "low": 2}
     all_anomalies.sort(key=lambda x: x.get("date", ""), reverse=True)
     all_anomalies.sort(key=lambda x: _sev.get(x.get("severity", "low"), 2))
-    return all_anomalies[:20]
+    
+    # Deduplica: se stessa transazione triggera più anomalie, tieni la più grave
+    unique_anomalies = {}
+    for a in all_anomalies:
+        tx_id = a["id"]
+        if tx_id not in unique_anomalies:
+            unique_anomalies[tx_id] = a
+        else:
+            # Se già presente, tieni quella con severity più alta (già ordinata)
+            pass
+            
+    return list(unique_anomalies.values())[:20]
 
 
 def get_anomalies_for_month(
@@ -2710,32 +2721,23 @@ def get_anomalies_for_month(
     force_refresh: bool = False,
 ) -> dict:
     """
-    Ritorna anomalie per uno specifico mese.
-    Usa cache in memoria se disponibile e force_refresh=False.
-    
-    Args:
-        user_id: ID utente (per futura filtratura multi-user)
-        year, month: periodo richiesto
-        force_refresh: se True, ricalcola bypassing cache
-    
-    Returns:
-        {"anomalies": [...], "count": N, "by_type": {...}, "generated_at": ISO}
+    FUNZIONE UNICA per ottenere anomalie di un mese.
+    Usata da dashboard, report, endpoint refresh.
     """
     from datetime import datetime
     from calendar import monthrange
 
     cache_key = (year, month)
 
-    # Check cache se non forzato
+    # Hit cache
     if not force_refresh and user_id in _anomaly_cache:
         if cache_key in _anomaly_cache[user_id]:
             return _anomaly_cache[user_id][cache_key]
 
-    # Calcola il range della data per il mese
+    # Cache miss: ricalcola
     first_day = date(year, month, 1)
     last_day = date(year, month, monthrange(year, month)[1])
 
-    # Query transactions per il mese richiesto
     rows = _q(
         "SELECT id, amount, category, description, date, time FROM transactions "
         "WHERE date >= :first AND date <= :last "
@@ -2743,13 +2745,9 @@ def get_anomalies_for_month(
         {"first": first_day.isoformat(), "last": last_day.isoformat()},
     )
 
-    # Applica tutti i 5 detector
     anomalies = _detect_anomalies_for_transactions(rows)
 
-    # Salva in cache
-    if user_id not in _anomaly_cache:
-        _anomaly_cache[user_id] = {}
-
+    # Costruisci response unica
     result = {
         "anomalies": anomalies,
         "count": len(anomalies),
@@ -2757,7 +2755,11 @@ def get_anomalies_for_month(
         "generated_at": datetime.now().isoformat(),
     }
 
+    # Salva in cache
+    if user_id not in _anomaly_cache:
+        _anomaly_cache[user_id] = {}
     _anomaly_cache[user_id][cache_key] = result
+    
     return result
 
 

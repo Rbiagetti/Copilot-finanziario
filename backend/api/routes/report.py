@@ -286,6 +286,7 @@ def _build_pdf(
 async def monthly_report(
     year:  Optional[int] = None,
     month: Optional[int] = None,
+    current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     today = date.today()
@@ -377,9 +378,15 @@ async def monthly_report(
 
     # ── BLOCCO E — anomalie (filtrate al mese) ───────────────────────────────
     try:
-        from backend.core.ai_engine import get_anomalies as _get_anomalies
-        all_anomalies = _get_anomalies()
-        anomalies = [a for a in all_anomalies if fd <= a.get("date", "") <= ld][:5]
+        from backend.core.ai_engine import get_anomalies_for_month
+        # Recupera anomalie per il mese specifico usando la cache
+        anomalies_data = get_anomalies_for_month(
+            user_id=current_user_id,
+            year=year,
+            month=month,
+            force_refresh=False,
+        )
+        anomalies = anomalies_data.get("anomalies", [])[:5]
     except Exception:
         anomalies = []
 
@@ -432,10 +439,6 @@ async def generate_monthly_report(
 ):
     """
     Genera report mensile con anomalie on-demand.
-    
-    STEP 1: Assicura che le anomalie per il mese siano calcolate (o usa cache)
-    STEP 2: Genera il PDF usando quelle anomalie
-    STEP 3: Ritorna PDF come base64 nel JSON
     """
     try:
         from backend.core.ai_engine import get_anomalies_for_month
@@ -444,18 +447,17 @@ async def generate_monthly_report(
         if month < 1 or month > 12 or year < 2000:
             raise HTTPException(400, "Invalid year/month")
 
-        # STEP 1: Assicura anomalie per il mese
-        # (non force_refresh: usa cache se disponibile, calcola se no)
+        # STEP 1: Assicura anomalie per il mese (Unique Source of Truth)
         anomalies_result = await asyncio.to_thread(
             get_anomalies_for_month,
             current_user_id,
             year,
             month,
-            False,  # force_refresh
+            False,
         )
         anomalies = anomalies_result.get("anomalies", [])[:5]
 
-        # STEP 2: Raccogli dati transazioni come l'endpoint GET /monthly
+        # STEP 2: Raccogli dati transazioni
         first_day = date(year, month, 1)
         last_day = date(year, month, monthrange(year, month)[1])
 
@@ -485,10 +487,7 @@ async def generate_monthly_report(
         ).filter(Transaction.date >= pf, Transaction.date <= pl).scalar()
         total_prev = round(float(prev_row), 2)
 
-        if total_prev > 0:
-            delta_pct = round((total_month - total_prev) / total_prev * 100, 1)
-        else:
-            delta_pct = 0.0
+        delta_pct = round((total_month - total_prev) / total_prev * 100, 1) if total_prev > 0 else 0.0
 
         # Categorie
         cat_rows = (
@@ -556,18 +555,11 @@ async def generate_monthly_report(
 
         # STEP 3: Genera PDF
         pdf_bytes = _build_pdf(
-            year=year,
-            month=month,
-            month_label=month_label,
-            total_month=total_month,
-            total_prev=total_prev,
-            count_month=count_month,
-            avg_tx=avg_tx,
-            delta_pct=delta_pct,
-            categories=categories,
-            top10=top10,
-            budget_rows=budget_rows,
-            anomalies=anomalies,
+            year=year, month=month, month_label=month_label,
+            total_month=total_month, total_prev=total_prev,
+            count_month=count_month, avg_tx=avg_tx, delta_pct=delta_pct,
+            categories=categories, top10=top10,
+            budget_rows=budget_rows, anomalies=anomalies,
             narrative=narrative,
         )
 
@@ -580,9 +572,6 @@ async def generate_monthly_report(
             "size_kb": len(pdf_bytes) / 1024,
             "pdf_base64": pdf_base64,
         }
-
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(500, f"Errore generazione report: {str(e)}")
 

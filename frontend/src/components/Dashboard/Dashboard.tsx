@@ -241,7 +241,6 @@ function ChartHeader({ title, infoTitle, infoBody }: { title: string; infoTitle:
 export default function Dashboard() {
   const [rawHistory, setRawHistory] = useState<FullHistoryTransaction[]>([]);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
-  const [anomaliesLoading, setAnomaliesLoading] = useState(false);
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -278,7 +277,7 @@ export default function Dashboard() {
   const isVisible = (id: string) => !hiddenCards.has(id);
   const customizeRef = useFocusTrap(showCustomize);
 
-  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, markTransactionsAsNew } = useAppStore();
+  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
   const anomalyState = anomalies;
   const cc = useChartColors();
@@ -299,7 +298,7 @@ export default function Dashboard() {
     setAnomaliesLoading(true);
     try {
       const res = await getAnomalies();
-      setAnomalies(res.data.anomalies || [], res.data.generated_at || new Date().toISOString());
+      setAnomalies(res.data);
     } catch (e) {
       console.warn("Impossibile caricare anomalie:", e);
     } finally {
@@ -705,7 +704,7 @@ export default function Dashboard() {
         </div>
         <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
           <div className="kpi-icon" style={{ color: "var(--danger)" }}>
-            {anomaliesLoading && anomalyState.data.length === 0
+            {anomalies.loading && anomalyState.data.length === 0
               ? <RefreshCw size={20} className="spin" />
               : <AlertTriangle size={20} />
             }
@@ -713,7 +712,7 @@ export default function Dashboard() {
           <div className="kpi-content">
             <span className="kpi-label">Eventi Anomali</span>
             <span className="kpi-value">
-              {anomaliesLoading && anomalyState.data.length === 0 ? "analisi…" : `${anomalyState.data.length} rilevati`}
+              {anomalies.loading && anomalyState.data.length === 0 ? "analisi…" : `${anomalyState.data.length} rilevati`}
             </span>
           </div>
         </div>
@@ -1181,8 +1180,7 @@ export default function Dashboard() {
                             setAnomaliesLoading(true);
                             try {
                               const res = await refreshAnomalies();
-                              setAnomalies(res.data.anomalies || [], res.data.generated_at);
-                              // Non mostra toast nel componente — il banner sparisce semplicemente
+                              setAnomalies(res.data);
                             } catch (err) {
                               console.error("Errore refresh anomalie:", err);
                             } finally {
@@ -1203,13 +1201,13 @@ export default function Dashboard() {
                         >{t.label}</button>
                       ))}
                     </div>
-                    {anomaliesLoading && (
+                    {anomalies.loading && (
                       <div className="anomaly-loading-banner">
                         <RefreshCw size={14} className="spin" />
                         <span>Analisi in corso…</span>
                       </div>
                     )}
-                    {!anomaliesLoading && filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
+                    {!anomalies.loading && filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
                     <div className="anomaly-list">
                       {filtered.map((a, i) => {
                         const meta = TYPE_META[a.detection_type] ?? { emoji: "❓", label: a.detection_type };
