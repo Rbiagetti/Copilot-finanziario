@@ -242,6 +242,8 @@ export default function Dashboard() {
   const [rawHistory, setRawHistory] = useState<FullHistoryTransaction[]>([]);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [anomaliesLoading, setAnomaliesLoading] = useState(false);
+  const anomaliesCachedAt = useRef<number | null>(null);
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -282,35 +284,52 @@ export default function Dashboard() {
   const cc = useChartColors();
   const modalRef = useFocusTrap(!!modalContent);
 
+  // Carica anomalie separatamente — non blocca la dashboard
+  const loadAnomalies = async (force = false) => {
+    const CACHE_TTL = 5 * 60 * 1000;
+    if (!force && anomaliesCachedAt.current && Date.now() - anomaliesCachedAt.current < CACHE_TTL) return;
+    setAnomaliesLoading(true);
+    try {
+      const res = await getAnomalies();
+      setAnomalies(res.data.anomalies || []);
+      anomaliesCachedAt.current = Date.now();
+    } catch (e) {
+      console.warn("Impossibile caricare anomalie:", e);
+    } finally {
+      setAnomaliesLoading(false);
+    }
+  };
+
   const loadAll = async (force = false) => {
     if (!force && dashboardCache.loadedAt && Date.now() - dashboardCache.loadedAt < 5 * 60 * 1000) {
       setRawHistory(dashboardCache.rawHistory);
       setForecast(dashboardCache.forecast);
-      setAnomalies(dashboardCache.anomalies);
       setLoading(false);
       // Budget non è in cache — lo fetchamo sempre (dati live)
       getBudgetStatus().then(r => setBudgets(r.data)).catch(() => {});
+      // Anomalie: ricarica in background se cache scaduta
+      loadAnomalies(false);
       return;
     }
     setLoading(true);
     setErrorMsg(null);
     try {
-      const [hist, fore, anom, budg] = await Promise.all([
-        getFullHistory(), getForecast(), getAnomalies(), getBudgetStatus(),
+      const [hist, fore, budg] = await Promise.all([
+        getFullHistory(), getForecast(), getBudgetStatus(),
       ]);
       const rawHistory = hist.data;
       const forecast = fore.data;
-      const anomalies = anom.data.anomalies || [];
       setRawHistory(rawHistory);
       setForecast(forecast);
-      setAnomalies(anomalies);
       setBudgets(budg.data);
-      setDashboardCache({ rawHistory, forecast, anomalies });
+      setDashboardCache({ rawHistory, forecast, anomalies: [] });
     } catch (e: any) {
       console.error("Errore Dashboard:", e);
       setErrorMsg("Errore di caricamento dati analitici.");
     }
     setLoading(false);
+    // Avvia il caricamento anomalie in background dopo che la dashboard è pronta
+    loadAnomalies(force);
   };
 
   useEffect(() => {
@@ -678,10 +697,17 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
-          <div className="kpi-icon" style={{ color: "var(--danger)" }}><AlertTriangle size={20} /></div>
+          <div className="kpi-icon" style={{ color: "var(--danger)" }}>
+            {anomaliesLoading && anomalies.length === 0
+              ? <RefreshCw size={20} className="spin" />
+              : <AlertTriangle size={20} />
+            }
+          </div>
           <div className="kpi-content">
             <span className="kpi-label">Eventi Anomali</span>
-            <span className="kpi-value">{anomalies.length} rilevati</span>
+            <span className="kpi-value">
+              {anomaliesLoading && anomalies.length === 0 ? "analisi…" : `${anomalies.length} rilevati`}
+            </span>
           </div>
         </div>
       </div>
@@ -1146,7 +1172,13 @@ export default function Dashboard() {
                         >{t.label}</button>
                       ))}
                     </div>
-                    {filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
+                    {anomaliesLoading && (
+                      <div className="anomaly-loading-banner">
+                        <RefreshCw size={14} className="spin" />
+                        <span>Analisi in corso…</span>
+                      </div>
+                    )}
+                    {!anomaliesLoading && filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
                     <div className="anomaly-list">
                       {filtered.map((a, i) => {
                         const meta = TYPE_META[a.detection_type] ?? { emoji: "❓", label: a.detection_type };
