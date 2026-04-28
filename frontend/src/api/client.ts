@@ -111,15 +111,47 @@ export interface BriefingData {
   action: string;
 }
 
+export interface AnomalyStats {
+  // amount_spike
+  mean?: number; median?: number; p75?: number; p90?: number;
+  std?: number; z_score?: number; sample_size?: number;
+  min?: number; max?: number;
+  // new_merchant
+  first_seen?: string;
+  // frequency_spike
+  count_this_week?: number; avg_weekly?: number; ratio?: number;
+  // duplicate_suspect
+  original_tx_id?: number; original_date?: string;
+  original_time?: string; hours_apart?: number;
+  // unusual_time
+  tx_time?: string; usual_start?: string; usual_end?: string;
+  // shared
+  category?: string; amount?: number;
+}
+
 export interface Anomaly {
   id: number;
   amount: number;
   category: string;
   description: string;
   date: string;
+  time: string | null;
+  // retrocompatibilità
   z_score: number;
   avg_category: number;
   pct_above_avg: number;
+  // nuovi campi
+  detection_type: "amount_spike" | "new_merchant" | "frequency_spike" | "duplicate_suspect" | "unusual_time";
+  detection_label: string;
+  severity: "low" | "medium" | "high";
+  stats: AnomalyStats;
+}
+
+export interface AnomalyDetail {
+  tx: Transaction;
+  detection_type: string;
+  stats: AnomalyStats;
+  context: Array<{ date: string; amount: number; description: string }>;
 }
 
 export const getTransactions = (params?: Record<string, string>) =>
@@ -150,7 +182,11 @@ export const parseNatural = (text: string) =>
 export const getForecast = () => api.get<ForecastData>("/analytics/forecast");
 export const getMonthlyHistory = (months = 6) => api.get<{ month: string; label: string; total: number }[]>(`/analytics/monthly-history?months=${months}`);
 export const getBriefing = () => api.get<BriefingData>("/ai/briefing");
-export const getAnomalies = () => api.get<{ anomalies: Anomaly[]; count: number }>("/ai/anomalies");
+export const getAnomalies = () =>
+  api.get<{ anomalies: Anomaly[]; count: number; by_type: Record<string, number> }>("/ai/anomalies");
+
+export const getAnomalyDetail = (txId: number, detectionType: string) =>
+  api.get<AnomalyDetail>(`/ai/anomalies/${txId}?detection_type=${detectionType}`);
 export const getFullHistory = () => api.get<FullHistoryTransaction[]>("/analytics/full-history");
 
 export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>

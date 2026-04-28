@@ -273,6 +273,88 @@
 .anomaly-val { font-weight: 700; }
 .anomaly-pct { font-size: 0.72rem; color: var(--warning); }
 
+/* === ANOMALY DETAIL === */
+.anomaly-type-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: var(--radius-pill);
+  font-size: 0.7rem; font-weight: 600; text-transform: capitalize;
+}
+.anomaly-type-badge.amount_spike    { background: rgba(255,77,109,0.15); color: var(--danger); }
+.anomaly-type-badge.new_merchant    { background: rgba(99,179,237,0.15); color: #63B3ED; }
+.anomaly-type-badge.frequency_spike { background: rgba(255,140,66,0.15); color: var(--accent); }
+.anomaly-type-badge.duplicate_suspect{ background: rgba(255,179,0,0.15); color: var(--warning); }
+.anomaly-type-badge.unusual_time    { background: rgba(167,139,250,0.15); color: #A78BFA; }
+
+.anomaly-severity-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.anomaly-severity-dot.high   { background: var(--danger); }
+.anomaly-severity-dot.medium { background: var(--warning); }
+.anomaly-severity-dot.low    { background: var(--text-muted); }
+
+.anomaly-stat-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem; margin: 0.75rem 0;
+}
+.anomaly-stat-cell {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 0.55rem 0.65rem; border-radius: var(--radius-sm);
+  background: var(--glass-1);
+}
+.anomaly-stat-label { font-size: 0.67rem; color: var(--text-muted); }
+.anomaly-stat-value { font-size: 0.92rem; font-weight: 700; }
+
+.anomaly-dist-bar {
+  height: 6px; border-radius: 3px;
+  background: var(--glass-2); position: relative; margin: 0.25rem 0;
+}
+.anomaly-dist-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--accent); position: absolute; left: 0;
+}
+.anomaly-dist-marker {
+  width: 2px; height: 14px; background: var(--danger);
+  position: absolute; top: -4px; border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+.anomaly-context-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 8px; border-radius: var(--radius-sm);
+  font-size: 0.79rem; gap: 4px;
+}
+.anomaly-context-row + .anomaly-context-row { margin-top: 2px; }
+.anomaly-context-row.highlighted {
+  background: rgba(255,140,66,0.1);
+  border: 1px solid rgba(255,140,66,0.3);
+}
+
+.anomaly-back-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: none;
+  color: var(--text-muted); font-size: 0.82rem;
+  cursor: pointer; padding: 0; margin-bottom: 1rem;
+}
+.anomaly-back-btn:hover { color: var(--text); }
+
+.anomaly-tabs {
+  display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 0.9rem;
+}
+.anomaly-tab {
+  padding: 3px 9px; border-radius: var(--radius-pill);
+  font-size: 0.71rem; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--glass-border);
+  background: transparent; color: var(--text-muted);
+  transition: all var(--duration-fast);
+}
+.anomaly-tab.active {
+  background: var(--accent); color: white; border-color: transparent;
+}
+
+@media (max-width: 768px) {
+  .anomaly-stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* === PILL-SHAPED FORM CONTROLS === */
 .cat-btn,
 .form-tab,

@@ -6,14 +6,14 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, Line,
   BarChart, Bar, LabelList, Legend
 } from "recharts";
-import { getForecast, getAnomalies, getFullHistory, getBudgetStatus } from "../../api/client";
-import type { ForecastData, Anomaly, FullHistoryTransaction, BudgetStatus } from "../../api/client";
+import { getForecast, getAnomalies, getAnomalyDetail, getFullHistory, getBudgetStatus } from "../../api/client";
+import type { ForecastData, Anomaly, AnomalyDetail, FullHistoryTransaction, BudgetStatus } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
 import {
   TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle,
   Calendar, Filter, SlidersHorizontal, ChevronDown, PlusCircle,
-  BarChart2, Wallet, ArrowRight, TrendingDown, Minus
+  BarChart2, Wallet, ArrowRight, TrendingDown, Minus, ChevronLeft, RefreshCw
 } from "lucide-react";
 import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData, getCategoryMoM, getAvailableMonths } from "../../utils/analyticsUtils";
 
@@ -246,6 +246,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<{ title: string; type: "anomalies" | "forecast" } | null>(null);
+  const [anomalyView, setAnomalyView] = useState<"list" | "detail">("list");
+  const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
+  const [anomalyDetail, setAnomalyDetail] = useState<AnomalyDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [anomalyTypeFilter, setAnomalyTypeFilter] = useState<string>("all");
   const [daysBack, setDaysBack] = useState(90);
   const [catFilter, setCatFilter] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -464,6 +469,28 @@ export default function Dashboard() {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [modalContent]);
+
+  const closeModal = () => {
+    setModalContent(null);
+    setAnomalyView("list");
+    setSelectedAnomaly(null);
+    setAnomalyDetail(null);
+    setAnomalyTypeFilter("all");
+  };
+
+  const handleAnomalyClick = async (anomaly: Anomaly) => {
+    setSelectedAnomaly(anomaly);
+    setAnomalyView("detail");
+    setDetailLoading(true);
+    try {
+      const res = await getAnomalyDetail(anomaly.id, anomaly.detection_type);
+      setAnomalyDetail(res.data);
+    } catch {
+      setAnomalyDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const handleDrilldown = (cat?: string) => {
     setDashboardFilter({ category: cat });
@@ -1071,7 +1098,7 @@ export default function Dashboard() {
 
       {/* MODALS */}
       {modalContent && createPortal(
-        <div className="modal-overlay" onClick={() => setModalContent(null)}>
+        <div className="modal-overlay" onClick={closeModal}>
           <div
             className="modal-box"
             ref={modalRef}
@@ -1079,33 +1106,231 @@ export default function Dashboard() {
             aria-modal="true"
             aria-label={modalContent.title}
             onClick={e => e.stopPropagation()}
+            style={modalContent.type === "anomalies" ? { maxWidth: 620 } : undefined}
           >
             <div className="modal-header">
               <h3>{modalContent.title}</h3>
-              <button className="btn-icon" aria-label="Chiudi" onClick={() => setModalContent(null)}><X size={18} /></button>
+              <button className="btn-icon" aria-label="Chiudi" onClick={closeModal}><X size={18} /></button>
             </div>
-            <div style={{ padding: "1.5rem" }}>
-              {modalContent.type === "anomalies" && (
-                <div className="flex-col" style={{ gap: 12 }}>
-                  {anomalies.length === 0 && <p className="text-dim">Nessuna anomalia rilevata.</p>}
-                  {anomalies.map((a, i) => (
-                    <div key={i} className="tx-row" style={{ padding: 12, background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)" }}>
-                      <div className="flex-col">
-                        <span style={{ fontWeight: 600 }}>{a.description || a.category}</span>
-                        <small className="text-dim">{a.date} · Eccede la media di €{a.avg_category.toFixed(0)}</small>
-                      </div>
-                      <div className="text-danger" style={{ fontWeight: 700 }}>€{a.amount}</div>
+            <div style={{ padding: "0 1.5rem 1.5rem" }}>
+
+              {/* ── ANOMALIE: master-detail ── */}
+              {modalContent.type === "anomalies" && anomalyView === "list" && (() => {
+                const TYPE_META: Record<string, { emoji: string; label: string }> = {
+                  amount_spike:    { emoji: "🔴", label: "Importo" },
+                  new_merchant:    { emoji: "🔵", label: "Nuovo" },
+                  frequency_spike: { emoji: "🟠", label: "Frequenza" },
+                  duplicate_suspect:{ emoji: "⚠️", label: "Duplicato" },
+                  unusual_time:    { emoji: "🟣", label: "Orario" },
+                };
+                const TABS = [
+                  { key: "all", label: "Tutti" },
+                  { key: "amount_spike",    label: "💰 Importo" },
+                  { key: "new_merchant",    label: "🆕 Nuovo" },
+                  { key: "frequency_spike", label: "🔁 Freq." },
+                  { key: "duplicate_suspect",label:"⚠️ Duplicato" },
+                  { key: "unusual_time",    label: "🕐 Orario" },
+                ];
+                const filtered = anomalyTypeFilter === "all"
+                  ? anomalies
+                  : anomalies.filter(a => a.detection_type === anomalyTypeFilter);
+
+                return (
+                  <>
+                    <div className="anomaly-tabs">
+                      {TABS.map(t => (
+                        <button
+                          key={t.key}
+                          className={`anomaly-tab${anomalyTypeFilter === t.key ? " active" : ""}`}
+                          onClick={() => setAnomalyTypeFilter(t.key)}
+                        >{t.label}</button>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                    {filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
+                    <div className="anomaly-list">
+                      {filtered.map((a, i) => {
+                        const meta = TYPE_META[a.detection_type] ?? { emoji: "❓", label: a.detection_type };
+                        return (
+                          <div
+                            key={i}
+                            className="anomaly-row"
+                            style={{ cursor: "pointer", flexDirection: "column", gap: 6 }}
+                            onClick={() => handleAnomalyClick(a)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={e => e.key === "Enter" && handleAnomalyClick(a)}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                              <span className={`anomaly-type-badge ${a.detection_type}`}>
+                                {meta.emoji} {meta.label}
+                              </span>
+                              <div className={`anomaly-severity-dot ${a.severity}`} />
+                              <span style={{ flex: 1, fontWeight: 600, fontSize: "0.85rem" }}>
+                                {a.description || a.category}
+                              </span>
+                              <span style={{ fontWeight: 700, color: "var(--danger)" }}>
+                                €{a.amount.toFixed(2)}
+                              </span>
+                              <ChevronLeft size={14} style={{ transform: "rotate(180deg)", color: "var(--text-dim)", flexShrink: 0 }} />
+                            </div>
+                            <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", paddingLeft: 2 }}>
+                              {a.detection_label}
+                            </span>
+                            <span style={{ fontSize: "0.7rem", color: "var(--text-dim)", paddingLeft: 2 }}>
+                              {a.date}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* ── ANOMALIE: detail ── */}
+              {modalContent.type === "anomalies" && anomalyView === "detail" && selectedAnomaly && (() => {
+                const a = selectedAnomaly;
+                const detail = anomalyDetail;
+                const stats = detail?.stats ?? a.stats ?? {};
+                const context = detail?.context ?? [];
+
+                const StatCell = ({ label, value }: { label: string; value: string }) => (
+                  <div className="anomaly-stat-cell">
+                    <span className="anomaly-stat-label">{label}</span>
+                    <span className="anomaly-stat-value">{value}</span>
+                  </div>
+                );
+
+                return (
+                  <>
+                    <button className="anomaly-back-btn" onClick={() => { setAnomalyView("list"); setAnomalyDetail(null); }}>
+                      <ChevronLeft size={14} /> Torna alla lista
+                    </button>
+
+                    {/* TX principale */}
+                    <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "var(--glass-1)", borderRadius: "var(--radius-sm)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{a.description || "—"}</div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 2 }}>
+                            {a.date}{a.time ? ` · ${a.time}` : ""} · {a.category}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--accent)", whiteSpace: "nowrap" }}>
+                          €{a.amount.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Motivo */}
+                    <div style={{ padding: "0.75rem", marginBottom: "1rem", borderRadius: "var(--radius-sm)", background: "var(--glass-1)", borderLeft: "3px solid var(--warning)" }}>
+                      <span className={`anomaly-type-badge ${a.detection_type}`} style={{ marginBottom: 6, display: "inline-flex" }}>
+                        {a.detection_type.replace("_", " ")}
+                      </span>
+                      <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: 0, marginTop: 4 }}>{a.detection_label}</p>
+                    </div>
+
+                    {/* Spinner durante caricamento */}
+                    {detailLoading && (
+                      <div style={{ display: "flex", justifyContent: "center", padding: "1rem" }}>
+                        <RefreshCw size={18} className="spin" />
+                      </div>
+                    )}
+
+                    {/* Stats per tipo */}
+                    {!detailLoading && a.detection_type === "amount_spike" && (
+                      <>
+                        <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.5rem" }}>Statistiche categoria · {a.category}</p>
+                        <div className="anomaly-stat-grid">
+                          <StatCell label="Media cat." value={`€${(stats.mean ?? 0).toFixed(2)}`} />
+                          <StatCell label="Mediana" value={`€${(stats.median ?? 0).toFixed(2)}`} />
+                          <StatCell label="P90" value={`€${(stats.p90 ?? 0).toFixed(2)}`} />
+                          <StatCell label="Z-score" value={`${(stats.z_score ?? 0).toFixed(1)}σ`} />
+                          <StatCell label="Std Dev" value={`€${(stats.std ?? 0).toFixed(2)}`} />
+                          <StatCell label="Campione" value={`${stats.sample_size ?? "?"} tx`} />
+                        </div>
+                        {stats.min != null && stats.max != null && stats.min < stats.max && (
+                          <div style={{ marginTop: "0.5rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-dim)", marginBottom: 4 }}>
+                              <span>€{stats.min.toFixed(2)}</span>
+                              <span>€{stats.max.toFixed(2)}</span>
+                            </div>
+                            <div className="anomaly-dist-bar">
+                              <div className="anomaly-dist-fill" style={{ width: `${Math.round(((stats.mean ?? 0) - stats.min) / (stats.max - stats.min) * 100)}%` }} />
+                              <div className="anomaly-dist-marker" style={{ left: `${Math.min(100, Math.round((a.amount - stats.min) / (stats.max - stats.min) * 100))}%` }} />
+                            </div>
+                            <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textAlign: "center", marginTop: 2 }}>
+                              ▲ questa tx (€{a.amount.toFixed(2)})
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {!detailLoading && a.detection_type === "new_merchant" && (
+                      <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", padding: "0.75rem", background: "var(--glass-1)", borderRadius: "var(--radius-sm)" }}>
+                        Prima transazione mai registrata per questo merchant.<br />
+                        Categoria: <strong>{a.category}</strong> · Prima registrazione: <strong>{a.date}</strong>
+                      </div>
+                    )}
+
+                    {!detailLoading && a.detection_type === "frequency_spike" && (
+                      <div className="anomaly-stat-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                        <StatCell label="Questa settimana" value={`${stats.count_this_week ?? "?"} tx`} />
+                        <StatCell label="Media settim." value={`${stats.avg_weekly ?? "?"} tx`} />
+                        <StatCell label="Ratio" value={`${stats.ratio ?? "?"}x`} />
+                      </div>
+                    )}
+
+                    {!detailLoading && a.detection_type === "duplicate_suspect" && (
+                      <div className="anomaly-stat-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                        <StatCell label="Tx originale" value={`${stats.original_date ?? "?"} ${stats.original_time ?? ""}`.trim()} />
+                        <StatCell label="Questa tx" value={a.date} />
+                        <StatCell label="Distanza" value={`${stats.hours_apart ?? "?"}h`} />
+                      </div>
+                    )}
+
+                    {!detailLoading && a.detection_type === "unusual_time" && (
+                      <div className="anomaly-stat-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+                        <StatCell label="Orario tx" value={stats.tx_time ?? a.time ?? "?"} />
+                        <StatCell label="Range normale" value={`${stats.usual_start ?? "?"} – ${stats.usual_end ?? "?"}`} />
+                        <StatCell label="Campione" value={`${stats.sample_size ?? "?"} tx`} />
+                      </div>
+                    )}
+
+                    {/* Contesto */}
+                    {!detailLoading && context.length > 0 && (
+                      <div style={{ marginTop: "1rem" }}>
+                        <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.5rem" }}>
+                          Ultime transazioni in {a.category}
+                        </p>
+                        {context.map((c, i) => (
+                          <div
+                            key={i}
+                            className={`anomaly-context-row${c.amount === a.amount && c.date === a.date ? " highlighted" : ""}`}
+                          >
+                            <span style={{ color: "var(--text-dim)" }}>{c.date}</span>
+                            <span style={{ flex: 1, padding: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {c.description || "—"}
+                            </span>
+                            <span style={{ fontWeight: 600 }}>€{c.amount.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* ── FORECAST ── */}
               {modalContent.type === "forecast" && (
-                <div className="flex-col" style={{ gap: "2rem", textAlign: "center" }}>
+                <div className="flex-col" style={{ gap: "2rem", textAlign: "center", paddingTop: "0.5rem" }}>
                   <div style={{ fontSize: "3rem", fontWeight: 800, color: "var(--accent)" }}>€{forecast?.projected_total.toFixed(0)}</div>
                   <p className="text-dim">Proiezione fine mese basata su burn-rate di €{forecast?.daily_burn_rate}/g · {forecast?.days_remaining}gg rimanenti.</p>
                   <div className="badge info" style={{ alignSelf: "center" }}>Confidenza: {forecast?.confidence?.toUpperCase()}</div>
                 </div>
               )}
+
             </div>
           </div>
         </div>,

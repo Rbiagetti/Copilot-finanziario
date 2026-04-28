@@ -2036,43 +2036,409 @@ def generate_briefing() -> dict:
     }
 
 
-def get_anomalies() -> list:
-    import statistics
-    d60 = _dates(60)
-    rows = _q(
-        "SELECT id, amount, category, description, date FROM transactions "
-        "WHERE date >= :d ORDER BY date DESC",
-        {"d": d60}
-    )
-    if not rows:
-        return []
+def _percentile(data: list, p: float) -> float:
+    s = sorted(data)
+    n = len(s)
+    if n == 0:
+        return 0.0
+    idx = (p / 100) * (n - 1)
+    lo = int(idx)
+    hi = min(lo + 1, n - 1)
+    return s[lo] + (s[hi] - s[lo]) * (idx - lo)
 
+
+def get_anomalies() -> list:
+    import statistics as _stats
+
+    d60 = _dates(60)
+    d90 = _dates(90)
+    d7  = _dates(7)
+    all_anomalies: list = []
+
+    # ── TIPO 1: amount_spike ───────────────────────────────────────────────
+    rows60 = _q(
+        "SELECT id, amount, category, description, date, time FROM transactions "
+        "WHERE date >= :d ORDER BY date DESC",
+        {"d": d60},
+    )
     by_cat: dict = defaultdict(list)
-    for row in rows:
+    for row in rows60:
         by_cat[row[2]].append(row)
 
-    anomalies = []
     for cat, cat_rows in by_cat.items():
         if len(cat_rows) < 3:
             continue
         amounts = [r[1] for r in cat_rows]
-        mean = statistics.mean(amounts)
-        stdev = statistics.stdev(amounts) if len(amounts) > 1 else 0
+        mean  = _stats.mean(amounts)
+        stdev = _stats.stdev(amounts) if len(amounts) > 1 else 0.0
         if stdev == 0:
             continue
+        p75 = _percentile(amounts, 75)
+        p90 = _percentile(amounts, 90)
+        med = _percentile(amounts, 50)
+        mn, mx = min(amounts), max(amounts)
         for row in cat_rows:
             z = (row[1] - mean) / stdev
-            if z > 1.5:
-                anomalies.append({
+            if z > 2.0:
+                pct_above = round((row[1] - mean) / mean * 100) if mean > 0 else 0
+                severity = "high" if z > 3.0 else "medium"
+                all_anomalies.append({
                     "id": row[0],
                     "amount": round(row[1], 2),
-                    "category": row[2],
+                    "category": cat,
                     "description": row[3] or "",
                     "date": row[4],
+                    "time": row[5],
                     "z_score": round(z, 2),
                     "avg_category": round(mean, 2),
-                    "pct_above_avg": round((row[1] - mean) / mean * 100) if mean > 0 else 0,
+                    "pct_above_avg": pct_above,
+                    "detection_type": "amount_spike",
+                    "detection_label": f"Importo €{row[1]:.2f} su {cat}: +{pct_above}% sopra la media ({z:.1f}σ)",
+                    "severity": severity,
+                    "stats": {
+                        "mean": round(mean, 2),
+                        "median": round(med, 2),
+                        "p75": round(p75, 2),
+                        "p90": round(p90, 2),
+                        "std": round(stdev, 2),
+                        "z_score": round(z, 2),
+                        "sample_size": len(amounts),
+                        "min": round(mn, 2),
+                        "max": round(mx, 2),
+                    },
                 })
 
-    anomalies.sort(key=lambda x: x["z_score"], reverse=True)
-    return anomalies[:5]
+    # ── TIPO 2: new_merchant ───────────────────────────────────────────────
+    recent_tx = _q(
+        "SELECT id, amount, category, description, date, time FROM transactions "
+        "WHERE date >= :d AND amount > 10 AND description IS NOT NULL "
+        "AND description != '' ORDER BY date DESC",
+        {"d": d60},
+    )
+    for row in recent_tx:
+        desc = (row[3] or "").strip()
+        if not desc:
+            continue
+        count = _scalar(
+            "SELECT COUNT(*) FROM transactions WHERE description = :desc AND date < :tx_date",
+            {"desc": desc, "tx_date": row[4]},
+        ) or 0
+        if count == 0:
+            all_anomalies.append({
+                "id": row[0],
+                "amount": round(row[1], 2),
+                "category": row[2],
+                "description": desc,
+                "date": row[4],
+                "time": row[5],
+                "z_score": 0.0,
+                "avg_category": 0.0,
+                "pct_above_avg": 0,
+                "detection_type": "new_merchant",
+                "detection_label": f"Primo acquisto mai registrato: {desc}",
+                "severity": "low",
+                "stats": {"first_seen": row[4], "category": row[2]},
+            })
+
+    # ── TIPO 3: frequency_spike ────────────────────────────────────────────
+    cat_60 = _q(
+        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d GROUP BY category",
+        {"d": d60},
+    )
+    cat_7 = _q(
+        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d GROUP BY category",
+        {"d": d7},
+    )
+    cat_60_map = {r[0]: r[1] for r in cat_60}
+    cat_7_map  = {r[0]: r[1] for r in cat_7}
+
+    for cat, count_week in cat_7_map.items():
+        total_60 = cat_60_map.get(cat, 0)
+        if total_60 < 3:
+            continue
+        avg_weekly = total_60 / 8.0
+        if count_week > max(2, avg_weekly * 2):
+            rep = _q(
+                "SELECT id, amount, category, description, date, time FROM transactions "
+                "WHERE category = :cat AND date >= :d ORDER BY date DESC LIMIT 1",
+                {"cat": cat, "d": d7},
+            )
+            if not rep:
+                continue
+            r = rep[0]
+            ratio = round(count_week / avg_weekly, 1) if avg_weekly > 0 else 0.0
+            severity = "high" if count_week > avg_weekly * 3 else "medium"
+            all_anomalies.append({
+                "id": r[0],
+                "amount": round(r[1], 2),
+                "category": cat,
+                "description": r[3] or "",
+                "date": r[4],
+                "time": r[5],
+                "z_score": 0.0,
+                "avg_category": 0.0,
+                "pct_above_avg": 0,
+                "detection_type": "frequency_spike",
+                "detection_label": f"{count_week} transazioni in {cat} questa settimana (media: {avg_weekly:.1f}/sett)",
+                "severity": severity,
+                "stats": {
+                    "count_this_week": count_week,
+                    "avg_weekly": round(avg_weekly, 1),
+                    "ratio": ratio,
+                    "category": cat,
+                },
+            })
+
+    # ── TIPO 4: duplicate_suspect ──────────────────────────────────────────
+    dup_rows = _q(
+        "SELECT id, amount, category, description, date, time FROM transactions "
+        "WHERE date >= :d AND description IS NOT NULL AND description != '' "
+        "ORDER BY description, amount, date",
+        {"d": d90},
+    )
+    dup_groups: dict = defaultdict(list)
+    for row in dup_rows:
+        key = (row[3].lower().strip(), round(row[1], 2))
+        dup_groups[key].append(row)
+
+    from datetime import datetime as _dt
+    for key, group in dup_groups.items():
+        if len(group) < 2:
+            continue
+        group_sorted = sorted(group, key=lambda r: r[4])
+        for i in range(len(group_sorted) - 1):
+            r1, r2 = group_sorted[i], group_sorted[i + 1]
+            try:
+                d1 = _dt.fromisoformat(r1[4])
+                d2 = _dt.fromisoformat(r2[4])
+                hours_apart = abs((d2 - d1).total_seconds()) / 3600
+                if hours_apart <= 48:
+                    severity = "high" if hours_apart <= 2 else ("medium" if hours_apart <= 24 else "low")
+                    all_anomalies.append({
+                        "id": r2[0],
+                        "amount": round(r2[1], 2),
+                        "category": r2[2],
+                        "description": r2[3] or "",
+                        "date": r2[4],
+                        "time": r2[5],
+                        "z_score": 0.0,
+                        "avg_category": 0.0,
+                        "pct_above_avg": 0,
+                        "detection_type": "duplicate_suspect",
+                        "detection_label": f"Possibile duplicato: {r2[3]} €{r2[1]:.2f} già registrato {hours_apart:.0f}h prima",
+                        "severity": severity,
+                        "stats": {
+                            "original_date": r1[4],
+                            "original_time": r1[5],
+                            "hours_apart": round(hours_apart, 1),
+                            "original_tx_id": r1[0],
+                            "amount": round(r2[1], 2),
+                        },
+                    })
+            except Exception:
+                continue
+
+    # ── TIPO 5: unusual_time ───────────────────────────────────────────────
+    time_rows = _q(
+        "SELECT id, amount, category, description, date, time FROM transactions "
+        "WHERE date >= :d AND time IS NOT NULL ORDER BY date DESC",
+        {"d": d60},
+    )
+    by_cat_time: dict = defaultdict(list)
+    for row in time_rows:
+        if row[5]:
+            by_cat_time[row[2]].append(row)
+
+    for cat, cat_time_rows in by_cat_time.items():
+        if len(cat_time_rows) < 10:
+            continue
+        hist_hours_rows = _q(
+            "SELECT time FROM transactions WHERE category = :cat "
+            "AND time IS NOT NULL ORDER BY date DESC LIMIT 50",
+            {"cat": cat},
+        )
+        hours = []
+        for hr in hist_hours_rows:
+            try:
+                hours.append(int(hr[0].split(":")[0]))
+            except Exception:
+                continue
+        if len(hours) < 10:
+            continue
+        usual_start = int(_percentile(hours, 10))
+        usual_end   = int(_percentile(hours, 90))
+        for row in cat_time_rows:
+            try:
+                tx_hour = int(row[5].split(":")[0])
+            except Exception:
+                continue
+            if tx_hour < usual_start - 1 or tx_hour > usual_end + 1:
+                all_anomalies.append({
+                    "id": row[0],
+                    "amount": round(row[1], 2),
+                    "category": cat,
+                    "description": row[3] or "",
+                    "date": row[4],
+                    "time": row[5],
+                    "z_score": 0.0,
+                    "avg_category": 0.0,
+                    "pct_above_avg": 0,
+                    "detection_type": "unusual_time",
+                    "detection_label": (
+                        f"Transazione {cat} alle {row[5]}, "
+                        f"fuori dall'orario abituale ({usual_start:02d}:00–{usual_end:02d}:00)"
+                    ),
+                    "severity": "low",
+                    "stats": {
+                        "tx_time": row[5],
+                        "usual_start": f"{usual_start:02d}:00",
+                        "usual_end": f"{usual_end:02d}:00",
+                        "category": cat,
+                        "sample_size": len(hours),
+                    },
+                })
+
+    # ── SORT (severity ASC, date DESC within group) + CAP ─────────────────
+    _sev = {"high": 0, "medium": 1, "low": 2}
+    all_anomalies.sort(key=lambda x: x.get("date", ""), reverse=True)
+    all_anomalies.sort(key=lambda x: _sev.get(x.get("severity", "low"), 2))
+    return all_anomalies[:20]
+
+
+def get_anomaly_detail(tx_id: int, detection_type: str):
+    import statistics as _stats
+
+    row = _q(
+        "SELECT id, amount, category, description, date, time FROM transactions WHERE id = :id",
+        {"id": tx_id},
+    )
+    if not row:
+        return None
+    tx = row[0]
+    tx_dict = {
+        "id": tx[0], "amount": round(tx[1], 2), "category": tx[2],
+        "description": tx[3] or "", "date": tx[4], "time": tx[5],
+    }
+
+    d60 = _dates(60)
+    d7  = _dates(7)
+
+    if detection_type == "amount_spike":
+        cat_rows = _q(
+            "SELECT amount FROM transactions WHERE category = :cat AND date >= :d",
+            {"cat": tx[2], "d": d60},
+        )
+        amounts = [r[0] for r in cat_rows]
+        if len(amounts) < 2:
+            stats = {}
+        else:
+            mean  = _stats.mean(amounts)
+            stdev = _stats.stdev(amounts)
+            z = (tx[1] - mean) / stdev if stdev > 0 else 0.0
+            stats = {
+                "mean": round(mean, 2), "median": round(_percentile(amounts, 50), 2),
+                "p75": round(_percentile(amounts, 75), 2),
+                "p90": round(_percentile(amounts, 90), 2),
+                "std": round(stdev, 2), "z_score": round(z, 2),
+                "sample_size": len(amounts),
+                "min": round(min(amounts), 2), "max": round(max(amounts), 2),
+            }
+        ctx = _q(
+            "SELECT date, amount, description FROM transactions "
+            "WHERE category = :cat ORDER BY date DESC LIMIT 10",
+            {"cat": tx[2]},
+        )
+        context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
+
+    elif detection_type == "new_merchant":
+        stats = {"first_seen": tx[4], "category": tx[2]}
+        ctx = _q(
+            "SELECT date, amount, description FROM transactions "
+            "WHERE category = :cat ORDER BY date DESC LIMIT 5",
+            {"cat": tx[2]},
+        )
+        context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
+
+    elif detection_type == "frequency_spike":
+        count_7 = _scalar(
+            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d",
+            {"cat": tx[2], "d": d7},
+        ) or 0
+        count_60 = _scalar(
+            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d",
+            {"cat": tx[2], "d": d60},
+        ) or 0
+        avg_weekly = round(count_60 / 8.0, 1)
+        ratio = round(count_7 / avg_weekly, 1) if avg_weekly > 0 else 0.0
+        stats = {
+            "count_this_week": count_7, "avg_weekly": avg_weekly,
+            "ratio": ratio, "category": tx[2],
+        }
+        ctx = _q(
+            "SELECT date, amount, description FROM transactions "
+            "WHERE category = :cat AND date >= :d ORDER BY date DESC",
+            {"cat": tx[2], "d": d7},
+        )
+        context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
+
+    elif detection_type == "duplicate_suspect":
+        # Find the original tx (same description+amount, earlier date)
+        orig = _q(
+            "SELECT id, date, time, amount FROM transactions "
+            "WHERE description = :desc AND ABS(amount - :amt) < 0.02 AND date < :tx_date "
+            "ORDER BY date DESC LIMIT 1",
+            {"desc": tx[3] or "", "amt": tx[1], "tx_date": tx[4]},
+        )
+        if orig:
+            o = orig[0]
+            from datetime import datetime as _dt2
+            try:
+                hours_apart = abs((_dt2.fromisoformat(tx[4]) - _dt2.fromisoformat(o[1])).total_seconds()) / 3600
+            except Exception:
+                hours_apart = 0.0
+            stats = {
+                "original_tx_id": o[0], "original_date": o[1], "original_time": o[2],
+                "hours_apart": round(hours_apart, 1), "amount": round(tx[1], 2),
+            }
+        else:
+            stats = {"amount": round(tx[1], 2)}
+        ctx = _q(
+            "SELECT date, amount, description FROM transactions "
+            "WHERE (description = :desc AND ABS(amount - :amt) < 0.02) "
+            "ORDER BY date DESC LIMIT 5",
+            {"desc": tx[3] or "", "amt": tx[1]},
+        )
+        context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
+
+    elif detection_type == "unusual_time":
+        hist = _q(
+            "SELECT time FROM transactions WHERE category = :cat "
+            "AND time IS NOT NULL ORDER BY date DESC LIMIT 50",
+            {"cat": tx[2]},
+        )
+        hours = []
+        for h in hist:
+            try:
+                hours.append(int(h[0].split(":")[0]))
+            except Exception:
+                continue
+        usual_start = int(_percentile(hours, 10)) if hours else 0
+        usual_end   = int(_percentile(hours, 90)) if hours else 23
+        stats = {
+            "tx_time": tx[5] or "", "category": tx[2],
+            "usual_start": f"{usual_start:02d}:00",
+            "usual_end": f"{usual_end:02d}:00",
+            "sample_size": len(hours),
+        }
+        ctx = _q(
+            "SELECT date, amount, description FROM transactions "
+            "WHERE category = :cat AND time IS NOT NULL ORDER BY date DESC LIMIT 5",
+            {"cat": tx[2]},
+        )
+        context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
+
+    else:
+        stats = {}
+        context = []
+
+    return {"tx": tx_dict, "detection_type": detection_type, "stats": stats, "context": context}
