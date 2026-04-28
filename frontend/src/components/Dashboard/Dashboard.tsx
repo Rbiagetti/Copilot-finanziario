@@ -1195,26 +1195,29 @@ export default function Dashboard() {
                             className="anomaly-card"
                             onClick={() => handleAnomalyClick(a)}
                             disabled={detailLoading}
-                            aria-label={`Dettagli anomalia: ${a.detection_label} (€${a.amount.toFixed(2)})`}
+                            aria-label={`Anomalia ${meta.label}: €${a.amount.toFixed(2)}, clicca per dettagli`}
                           >
-                            {/* riga 1: badge + data + freccia */}
+                            {/* riga 1: badge + data + importo + freccia */}
                             <div className="anomaly-card-top">
-                              <span className={`anomaly-type-badge ${a.detection_type}`}>
-                                {meta.emoji} {meta.label}
-                              </span>
-                              <div className="anomaly-card-meta">
-                                <div className={`anomaly-severity-dot ${a.severity}`} />
-                                <span className="anomaly-card-date">{a.date}</span>
-                                <ChevronLeft size={12} style={{ transform: "rotate(180deg)", color: "var(--text-dim)" }} />
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                                <span className={`anomaly-type-badge ${a.detection_type}`}>
+                                  {meta.emoji} {meta.label}
+                                </span>
+                                <div className={`anomaly-severity-dot ${a.severity}`} style={{ flexShrink: 0 }} />
                               </div>
+                              <span style={{ fontSize: "0.82rem", color: "var(--accent)", fontWeight: 700, flexShrink: 0 }}>
+                                €{a.amount.toFixed(2)}
+                              </span>
                             </div>
-                            {/* riga 2: descrizione + importo */}
-                            <div className="anomaly-card-mid">
-                              <span className="anomaly-card-desc">{a.description || a.category}</span>
-                              <span className="anomaly-card-amount">€{a.amount.toFixed(2)}</span>
+                            {/* riga 2: categoria + data */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", fontSize: "0.78rem" }}>
+                              <span style={{ color: "var(--text-muted)" }}>{a.category}</span>
+                              <span style={{ color: "var(--text-dim)", flexShrink: 0 }}>{a.date}</span>
                             </div>
-                            {/* riga 3: label troncato */}
-                            <span className="anomaly-card-label">{a.detection_label}</span>
+                            {/* riga 3: hint "clicca per dettagli" */}
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontStyle: "italic" }}>
+                              Clicca per dettagli completi →
+                            </span>
                           </button>
                         );
                       })}
