@@ -1153,32 +1153,30 @@ export default function Dashboard() {
                         return (
                           <div
                             key={i}
-                            className="anomaly-row"
-                            style={{ cursor: "pointer", flexDirection: "column", gap: 6 }}
+                            className="anomaly-card"
                             onClick={() => handleAnomalyClick(a)}
                             role="button"
                             tabIndex={0}
                             onKeyDown={e => e.key === "Enter" && handleAnomalyClick(a)}
                           >
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                            {/* riga 1: badge + data + freccia */}
+                            <div className="anomaly-card-top">
                               <span className={`anomaly-type-badge ${a.detection_type}`}>
                                 {meta.emoji} {meta.label}
                               </span>
-                              <div className={`anomaly-severity-dot ${a.severity}`} />
-                              <span style={{ flex: 1, fontWeight: 600, fontSize: "0.85rem" }}>
-                                {a.description || a.category}
-                              </span>
-                              <span style={{ fontWeight: 700, color: "var(--danger)" }}>
-                                €{a.amount.toFixed(2)}
-                              </span>
-                              <ChevronLeft size={14} style={{ transform: "rotate(180deg)", color: "var(--text-dim)", flexShrink: 0 }} />
+                              <div className="anomaly-card-meta">
+                                <div className={`anomaly-severity-dot ${a.severity}`} />
+                                <span className="anomaly-card-date">{a.date}</span>
+                                <ChevronLeft size={12} style={{ transform: "rotate(180deg)", color: "var(--text-dim)" }} />
+                              </div>
                             </div>
-                            <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", paddingLeft: 2 }}>
-                              {a.detection_label}
-                            </span>
-                            <span style={{ fontSize: "0.7rem", color: "var(--text-dim)", paddingLeft: 2 }}>
-                              {a.date}
-                            </span>
+                            {/* riga 2: descrizione + importo */}
+                            <div className="anomaly-card-mid">
+                              <span className="anomaly-card-desc">{a.description || a.category}</span>
+                              <span className="anomaly-card-amount">€{a.amount.toFixed(2)}</span>
+                            </div>
+                            {/* riga 3: label troncato */}
+                            <span className="anomaly-card-label">{a.detection_label}</span>
                           </div>
                         );
                       })}

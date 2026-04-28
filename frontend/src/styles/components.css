@@ -337,18 +337,65 @@
 }
 .anomaly-back-btn:hover { color: var(--text); }
 
+/* tabs: scrollabili su mobile, niente wrap */
 .anomaly-tabs {
-  display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 0.9rem;
+  display: flex; gap: 5px; flex-wrap: nowrap;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; padding-bottom: 2px;
+  margin-bottom: 0.9rem;
 }
+.anomaly-tabs::-webkit-scrollbar { display: none; }
 .anomaly-tab {
-  padding: 3px 9px; border-radius: var(--radius-pill);
-  font-size: 0.71rem; font-weight: 500; cursor: pointer;
+  flex-shrink: 0;
+  padding: 4px 11px; border-radius: var(--radius-pill);
+  font-size: 0.72rem; font-weight: 500; cursor: pointer;
   border: 1px solid var(--glass-border);
   background: transparent; color: var(--text-muted);
-  transition: all var(--duration-fast);
+  transition: all var(--duration-fast); white-space: nowrap;
 }
 .anomaly-tab.active {
   background: var(--accent); color: white; border-color: transparent;
+}
+
+/* card a 3 righe, mobile-first */
+.anomaly-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+@media (hover: hover) and (pointer: fine) {
+  .anomaly-card:hover { background: var(--glass-2); }
+}
+.anomaly-card-top {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
+}
+.anomaly-card-meta {
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+}
+.anomaly-card-date {
+  font-size: 0.72rem; color: var(--text-dim);
+}
+.anomaly-card-mid {
+  display: flex; align-items: baseline;
+  justify-content: space-between; gap: 8px;
+}
+.anomaly-card-desc {
+  font-weight: 600; font-size: 0.88rem;
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; flex: 1; min-width: 0;
+}
+.anomaly-card-amount {
+  font-weight: 700; font-size: 1rem;
+  color: var(--accent); flex-shrink: 0;
+}
+.anomaly-card-label {
+  font-size: 0.72rem; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; display: block;
 }
 
 @media (max-width: 768px) {
