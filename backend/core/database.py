@@ -11,9 +11,20 @@ if DATABASE_URL.startswith("postgres://"):
 
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 
+_pg_kwargs = {} if _is_sqlite else {
+    # Testa ogni connessione prima di usarla — scarta quelle stale
+    "pool_pre_ping": True,
+    # Ricicla le connessioni ogni 10 min per evitare il timeout lato Postgres
+    "pool_recycle": 600,
+    # Pool dimensionato per un'app single-tenant
+    "pool_size": 5,
+    "max_overflow": 10,
+}
+
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if _is_sqlite else {},
+    **_pg_kwargs,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
