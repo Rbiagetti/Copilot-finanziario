@@ -569,7 +569,9 @@ button, a, [role="button"], input[type="submit"], input[type="button"] {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    padding: 1rem !important;
+    /* Rispetta notch/dynamic island in alto e nav bar in basso */
+    padding: calc(env(safe-area-inset-top, 0px) + 1rem) 1rem
+             calc(var(--bottomnav-h, 64px) + env(safe-area-inset-bottom, 0px) + 1rem) !important;
     z-index: 9999 !important;
     background: rgba(0,0,0,0.6) !important;
     backdrop-filter: blur(4px) !important;
@@ -577,13 +579,17 @@ button, a, [role="button"], input[type="submit"], input[type="button"] {
   .modal-box {
     position: relative !important;
     border-radius: var(--radius-xl) !important;
-    max-height: calc(100dvh - var(--bottomnav-h) - env(safe-area-inset-bottom, 0px) - 2rem) !important;
+    /* Altezza massima che non supera la zona sicura */
+    max-height: calc(100dvh
+      - env(safe-area-inset-top, 0px)
+      - var(--bottomnav-h, 64px)
+      - env(safe-area-inset-bottom, 0px)
+      - 2rem) !important;
     overflow-y: auto !important;
     padding: 1.5rem 1.25rem !important;
     width: 100% !important;
     max-width: 500px !important;
     margin: 0 !important;
-    margin-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 

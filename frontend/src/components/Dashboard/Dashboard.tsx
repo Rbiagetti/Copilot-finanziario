@@ -241,7 +241,6 @@ function ChartHeader({ title, infoTitle, infoBody }: { title: string; infoTitle:
 export default function Dashboard() {
   const [rawHistory, setRawHistory] = useState<FullHistoryTransaction[]>([]);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [anomaliesLoading, setAnomaliesLoading] = useState(false);
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -280,29 +279,29 @@ export default function Dashboard() {
   const customizeRef = useFocusTrap(showCustomize);
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomaliesCache, setAnomaliesCache } = useAppStore();
+  // anomalies letto direttamente dallo store — sopravvive al remount del componente
+  const anomalies = anomaliesCache.anomalies;
   const cc = useChartColors();
   const modalRef = useFocusTrap(!!modalContent);
 
   // Carica anomalie separatamente — non blocca la dashboard.
   // Cache in Zustand: sopravvive alla navigazione, una sola chiamata per sessione
   // finché non scade il TTL o l'utente forza il refresh.
+  // Non usa useState locale: legge e scrive direttamente lo store.
   const loadAnomalies = async (force = false) => {
     const CACHE_TTL = 10 * 60 * 1000; // 10 minuti — analisi costosa
-    if (!force && anomaliesCache.loadedAt && Date.now() - anomaliesCache.loadedAt < CACHE_TTL) {
-      // Cache ancora valida: ripristina senza fetch
-      setAnomalies(anomaliesCache.anomalies);
+    // Leggi il valore corrente dello store direttamente (evita stale closure)
+    const cached = useAppStore.getState().anomaliesCache;
+    if (!force && cached.loadedAt && Date.now() - cached.loadedAt < CACHE_TTL) {
+      // Cache ancora valida: nessuna fetch, i dati sono già in anomaliesCache.anomalies
       return;
     }
     setAnomaliesLoading(true);
     try {
       const res = await getAnomalies();
-      const data = res.data.anomalies || [];
-      setAnomalies(data);
-      setAnomaliesCache(data);
+      setAnomaliesCache(res.data.anomalies || []);
     } catch (e) {
       console.warn("Impossibile caricare anomalie:", e);
-      // Se abbiamo dati vecchi in cache, usali come fallback
-      if (anomaliesCache.anomalies.length > 0) setAnomalies(anomaliesCache.anomalies);
     } finally {
       setAnomaliesLoading(false);
     }
