@@ -16,6 +16,7 @@ interface AnomalyState {
   generated_at: string | null;
   has_new_transactions: boolean;
   loading: boolean;
+  refreshing: boolean;
 }
 
 interface AppState {
@@ -30,6 +31,7 @@ interface AppState {
   setDashboardCache: (data: Omit<DashboardCache, "loadedAt">) => void;
   setAnomalies: (response: { anomalies: Anomaly[]; count: number; by_type: Record<string, number>; generated_at: string | null }) => void;
   setAnomaliesLoading: (val: boolean) => void;
+  setAnomaliesRefreshing: (val: boolean) => void;
   markTransactionsAsNew: () => void;
   invalidateDashboardCache: () => void;
 }
@@ -56,6 +58,7 @@ export const useAppStore = create<AppState>((set) => ({
     generated_at: null,
     has_new_transactions: false,
     loading: false,
+    refreshing: false,
   },
   setView: (view) => {
     localStorage.setItem("currentView", view);
@@ -77,11 +80,15 @@ export const useAppStore = create<AppState>((set) => ({
         generated_at: response.generated_at,
         has_new_transactions: false,
         loading: false,
+        refreshing: false,
       },
     });
   },
   setAnomaliesLoading: (val) => set((state) => ({
     anomalies: { ...state.anomalies, loading: val }
+  })),
+  setAnomaliesRefreshing: (val) => set((state) => ({
+    anomalies: { ...state.anomalies, refreshing: val }
   })),
   markTransactionsAsNew: () => set((state) => ({
     anomalies: { ...state.anomalies, has_new_transactions: true }

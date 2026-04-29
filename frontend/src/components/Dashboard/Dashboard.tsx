@@ -277,7 +277,7 @@ export default function Dashboard() {
   const isVisible = (id: string) => !hiddenCards.has(id);
   const customizeRef = useFocusTrap(showCustomize);
 
-  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, markTransactionsAsNew } = useAppStore();
+  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
   const anomalyState = anomalies;
   const cc = useChartColors();
@@ -704,7 +704,7 @@ export default function Dashboard() {
         </div>
         <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
           <div className="kpi-icon" style={{ color: "var(--danger)" }}>
-            {anomalies.loading && anomalyState.data.length === 0
+            {anomalies.refreshing && anomalyState.data.length === 0
               ? <RefreshCw size={20} className="spin" />
               : <AlertTriangle size={20} />
             }
@@ -712,7 +712,7 @@ export default function Dashboard() {
           <div className="kpi-content">
             <span className="kpi-label">Eventi Anomali</span>
             <span className="kpi-value">
-              {anomalies.loading && anomalyState.data.length === 0 ? "analisi…" : `${anomalyState.data.length} rilevati`}
+              {anomalies.refreshing && anomalyState.data.length === 0 ? "analisi…" : `${anomalyState.data.length} rilevati`}
             </span>
           </div>
         </div>
@@ -1177,14 +1177,14 @@ export default function Dashboard() {
                           className="btn-small btn-primary"
                           onClick={async (e) => {
                             e.stopPropagation();
-                            setAnomaliesLoading(true);
+                            setAnomaliesRefreshing(true);
                             try {
                               const res = await refreshAnomalies();
                               setAnomalies(res.data);
                             } catch (err) {
                               console.error("Errore refresh anomalie:", err);
                             } finally {
-                              setAnomaliesLoading(false);
+                              setAnomaliesRefreshing(false);
                             }
                           }}
                         >
@@ -1201,13 +1201,13 @@ export default function Dashboard() {
                         >{t.label}</button>
                       ))}
                     </div>
-                    {anomalies.loading && (
+                    {anomalies.refreshing && (
                       <div className="anomaly-loading-banner">
                         <RefreshCw size={14} className="spin" />
                         <span>Analisi in corso…</span>
                       </div>
                     )}
-                    {!anomalies.loading && filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
+                    {!anomalies.refreshing && filtered.length === 0 && <p className="text-dim">Nessuna anomalia in questa categoria.</p>}
                     <div className="anomaly-list">
                       {filtered.map((a, i) => {
                         const meta = TYPE_META[a.detection_type] ?? { emoji: "❓", label: a.detection_type };
