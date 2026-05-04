@@ -74,9 +74,13 @@ async def refresh_anomalies(
 
 
 @router.get("/anomalies/{tx_id}")
-async def anomaly_detail(tx_id: int, detection_type: str = "amount_spike"):
-    """Dettaglio statistico completo per una singola anomalia (calcolato on-demand)."""
-    detail = await asyncio.to_thread(get_anomaly_detail, tx_id, detection_type)
+async def anomaly_detail(
+    tx_id: int,
+    detection_type: str = "amount_spike",
+    current_user_id: str = Depends(get_current_user),
+):
+    """Dettaglio statistico completo per una singola anomalia (calcolato on-demand) — filtrato per user_id."""
+    detail = await asyncio.to_thread(get_anomaly_detail, tx_id, detection_type, current_user_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Transazione non trovata")
     return detail

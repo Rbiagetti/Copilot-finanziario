@@ -2305,12 +2305,12 @@ def get_anomalies() -> list:
     return all_anomalies[:20]
 
 
-def get_anomaly_detail(tx_id: int, detection_type: str):
+def get_anomaly_detail(tx_id: int, detection_type: str, user_id: str):
     import statistics as _stats
 
     row = _q(
-        "SELECT id, amount, category, description, date, time FROM transactions WHERE id = :id",
-        {"id": tx_id},
+        "SELECT id, amount, category, description, date, time FROM transactions WHERE id = :id AND user_id = :user_id",
+        {"id": tx_id, "user_id": user_id},
     )
     if not row:
         return None
@@ -2325,8 +2325,8 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
 
     if detection_type == "amount_spike":
         cat_rows = _q(
-            "SELECT amount FROM transactions WHERE category = :cat AND date >= :d",
-            {"cat": tx[2], "d": d60},
+            "SELECT amount FROM transactions WHERE category = :cat AND date >= :d AND user_id = :user_id",
+            {"cat": tx[2], "d": d60, "user_id": user_id},
         )
         amounts = [r[0] for r in cat_rows]
         if len(amounts) < 2:
@@ -2345,8 +2345,8 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
             }
         ctx = _q(
             "SELECT date, amount, description FROM transactions "
-            "WHERE category = :cat ORDER BY date DESC LIMIT 10",
-            {"cat": tx[2]},
+            "WHERE category = :cat AND user_id = :user_id ORDER BY date DESC LIMIT 10",
+            {"cat": tx[2], "user_id": user_id},
         )
         context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
 
@@ -2354,19 +2354,19 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
         stats = {"first_seen": tx[4], "category": tx[2]}
         ctx = _q(
             "SELECT date, amount, description FROM transactions "
-            "WHERE category = :cat ORDER BY date DESC LIMIT 5",
-            {"cat": tx[2]},
+            "WHERE category = :cat AND user_id = :user_id ORDER BY date DESC LIMIT 5",
+            {"cat": tx[2], "user_id": user_id},
         )
         context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
 
     elif detection_type == "frequency_spike":
         count_7 = _scalar(
-            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d",
-            {"cat": tx[2], "d": d7},
+            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d AND user_id = :user_id",
+            {"cat": tx[2], "d": d7, "user_id": user_id},
         ) or 0
         count_60 = _scalar(
-            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d",
-            {"cat": tx[2], "d": d60},
+            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d AND user_id = :user_id",
+            {"cat": tx[2], "d": d60, "user_id": user_id},
         ) or 0
         avg_weekly = round(count_60 / 8.0, 1)
         ratio = round(count_7 / avg_weekly, 1) if avg_weekly > 0 else 0.0
@@ -2376,8 +2376,8 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
         }
         ctx = _q(
             "SELECT date, amount, description FROM transactions "
-            "WHERE category = :cat AND date >= :d ORDER BY date DESC",
-            {"cat": tx[2], "d": d7},
+            "WHERE category = :cat AND date >= :d AND user_id = :user_id ORDER BY date DESC",
+            {"cat": tx[2], "d": d7, "user_id": user_id},
         )
         context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
 
@@ -2385,9 +2385,9 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
         # Find the original tx (same description+amount, earlier date)
         orig = _q(
             "SELECT id, date, time, amount FROM transactions "
-            "WHERE description = :desc AND ABS(amount - :amt) < 0.02 AND date < :tx_date "
+            "WHERE description = :desc AND ABS(amount - :amt) < 0.02 AND date < :tx_date AND user_id = :user_id "
             "ORDER BY date DESC LIMIT 1",
-            {"desc": tx[3] or "", "amt": tx[1], "tx_date": tx[4]},
+            {"desc": tx[3] or "", "amt": tx[1], "tx_date": tx[4], "user_id": user_id},
         )
         if orig:
             o = orig[0]
@@ -2404,17 +2404,17 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
             stats = {"amount": round(tx[1], 2)}
         ctx = _q(
             "SELECT date, amount, description FROM transactions "
-            "WHERE (description = :desc AND ABS(amount - :amt) < 0.02) "
+            "WHERE (description = :desc AND ABS(amount - :amt) < 0.02 AND user_id = :user_id) "
             "ORDER BY date DESC LIMIT 5",
-            {"desc": tx[3] or "", "amt": tx[1]},
+            {"desc": tx[3] or "", "amt": tx[1], "user_id": user_id},
         )
         context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
 
     elif detection_type == "unusual_time":
         hist = _q(
             "SELECT time FROM transactions WHERE category = :cat "
-            "AND time IS NOT NULL ORDER BY date DESC LIMIT 50",
-            {"cat": tx[2]},
+            "AND time IS NOT NULL AND user_id = :user_id ORDER BY date DESC LIMIT 50",
+            {"cat": tx[2], "user_id": user_id},
         )
         hours = []
         for h in hist:
@@ -2432,8 +2432,8 @@ def get_anomaly_detail(tx_id: int, detection_type: str):
         }
         ctx = _q(
             "SELECT date, amount, description FROM transactions "
-            "WHERE category = :cat AND time IS NOT NULL ORDER BY date DESC LIMIT 5",
-            {"cat": tx[2]},
+            "WHERE category = :cat AND time IS NOT NULL AND user_id = :user_id ORDER BY date DESC LIMIT 5",
+            {"cat": tx[2], "user_id": user_id},
         )
         context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
 

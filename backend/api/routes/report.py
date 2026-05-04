@@ -340,14 +340,18 @@ async def monthly_report(
     row = db.query(
         func.coalesce(func.sum(Transaction.amount), 0.0),
         func.count(Transaction.id),
-    ).filter(Transaction.date >= fd, Transaction.date <= ld).one()
+    ).filter(
+        (Transaction.date >= fd) & (Transaction.date <= ld) & (Transaction.user_id == current_user_id)
+    ).one()
     total_month = round(float(row[0]), 2)
     count_month = int(row[1])
     avg_tx = round(total_month / count_month, 2) if count_month else 0.0
 
     prev_row = db.query(
         func.coalesce(func.sum(Transaction.amount), 0.0),
-    ).filter(Transaction.date >= pf, Transaction.date <= pl).scalar()
+    ).filter(
+        (Transaction.date >= pf) & (Transaction.date <= pl) & (Transaction.user_id == current_user_id)
+    ).scalar()
     total_prev = round(float(prev_row), 2)
 
     if total_prev > 0:
@@ -358,7 +362,9 @@ async def monthly_report(
     # ── BLOCCO B — categorie ─────────────────────────────────────────────────
     cat_rows = (
         db.query(Transaction.category, func.sum(Transaction.amount), func.count(Transaction.id))
-        .filter(Transaction.date >= fd, Transaction.date <= ld)
+        .filter(
+            (Transaction.date >= fd) & (Transaction.date <= ld) & (Transaction.user_id == current_user_id)
+        )
         .group_by(Transaction.category)
         .order_by(func.sum(Transaction.amount).desc())
         .all()
@@ -376,7 +382,9 @@ async def monthly_report(
     # ── BLOCCO C — top 10 ────────────────────────────────────────────────────
     top_txs = (
         db.query(Transaction)
-        .filter(Transaction.date >= fd, Transaction.date <= ld)
+        .filter(
+            (Transaction.date >= fd) & (Transaction.date <= ld) & (Transaction.user_id == current_user_id)
+        )
         .order_by(Transaction.amount.desc())
         .limit(10)
         .all()
@@ -387,13 +395,16 @@ async def monthly_report(
     ]
 
     # ── BLOCCO D — budget ────────────────────────────────────────────────────
-    budgets = db.query(Budget).filter(Budget.active == True).all()
+    budgets = db.query(Budget).filter(
+        (Budget.active == True) & (Budget.user_id == current_user_id)
+    ).all()
     budget_rows = []
     for b in budgets:
         spent_row = db.query(func.coalesce(func.sum(Transaction.amount), 0.0)).filter(
-            Transaction.category == b.category,
-            Transaction.date >= fd,
-            Transaction.date <= ld,
+            (Transaction.category == b.category) &
+            (Transaction.date >= fd) &
+            (Transaction.date <= ld) &
+            (Transaction.user_id == current_user_id),
         ).scalar()
         spent = round(float(spent_row), 2)
         pct = round(spent / b.amount * 100, 1) if b.amount else 0.0
@@ -501,14 +512,18 @@ async def generate_monthly_report(
         row = db.query(
             func.coalesce(func.sum(Transaction.amount), 0.0),
             func.count(Transaction.id),
-        ).filter(Transaction.date >= fd, Transaction.date <= ld).one()
+        ).filter(
+            (Transaction.date >= fd) & (Transaction.date <= ld) & (Transaction.user_id == current_user_id)
+        ).one()
         total_month = round(float(row[0]), 2)
         count_month = int(row[1])
         avg_tx = round(total_month / count_month, 2) if count_month else 0.0
 
         prev_row = db.query(
             func.coalesce(func.sum(Transaction.amount), 0.0),
-        ).filter(Transaction.date >= pf, Transaction.date <= pl).scalar()
+        ).filter(
+            (Transaction.date >= pf) & (Transaction.date <= pl) & (Transaction.user_id == current_user_id)
+        ).scalar()
         total_prev = round(float(prev_row), 2)
 
         delta_pct = round((total_month - total_prev) / total_prev * 100, 1) if total_prev > 0 else 0.0
@@ -516,7 +531,9 @@ async def generate_monthly_report(
         # Categorie
         cat_rows = (
             db.query(Transaction.category, func.sum(Transaction.amount), func.count(Transaction.id))
-            .filter(Transaction.date >= fd, Transaction.date <= ld)
+            .filter(
+                (Transaction.date >= fd) & (Transaction.date <= ld) & (Transaction.user_id == current_user_id)
+            )
             .group_by(Transaction.category)
             .order_by(func.sum(Transaction.amount).desc())
             .all()
@@ -534,7 +551,9 @@ async def generate_monthly_report(
         # Top 10
         top_txs = (
             db.query(Transaction)
-            .filter(Transaction.date >= fd, Transaction.date <= ld)
+            .filter(
+                (Transaction.date >= fd) & (Transaction.date <= ld) & (Transaction.user_id == current_user_id)
+            )
             .order_by(Transaction.amount.desc())
             .limit(10)
             .all()
@@ -545,13 +564,16 @@ async def generate_monthly_report(
         ]
 
         # Budget
-        budgets = db.query(Budget).filter(Budget.active == True).all()
+        budgets = db.query(Budget).filter(
+            (Budget.active == True) & (Budget.user_id == current_user_id)
+        ).all()
         budget_rows = []
         for b in budgets:
             spent_row = db.query(func.coalesce(func.sum(Transaction.amount), 0.0)).filter(
-                Transaction.category == b.category,
-                Transaction.date >= fd,
-                Transaction.date <= ld,
+                (Transaction.category == b.category) &
+                (Transaction.date >= fd) &
+                (Transaction.date <= ld) &
+                (Transaction.user_id == current_user_id),
             ).scalar()
             spent = round(float(spent_row), 2)
             pct = round(spent / b.amount * 100, 1) if b.amount else 0.0

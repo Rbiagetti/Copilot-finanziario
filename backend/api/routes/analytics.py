@@ -8,19 +8,28 @@ import calendar
 
 from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import DashboardResponse, FullHistoryResponse
+from backend.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 
 @router.get("/full-history", response_model=List[FullHistoryResponse])
-async def get_full_history(db: Session = Depends(get_db)):
-    """Restituisce tutte le transazioni con campi minimi per aggregazione frontend."""
-    return db.query(Transaction).order_by(Transaction.date.desc()).all()
+async def get_full_history(
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Restituisce tutte le transazioni con campi minimi per aggregazione frontend — filtrate per user_id."""
+    return db.query(Transaction).filter(
+        Transaction.user_id == current_user_id
+    ).order_by(Transaction.date.desc()).all()
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
-async def get_dashboard(db: Session = Depends(get_db)):
-    """Dashboard overview: totali, variazione, categorie, trend giornaliero."""
+async def get_dashboard(
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Dashboard overview: totali, variazione, categorie, trend giornaliero — filtrato per user_id."""
     today = date.today()
     first_of_month = today.replace(day=1)
     if today.month == 1:
@@ -31,7 +40,10 @@ async def get_dashboard(db: Session = Depends(get_db)):
     # Totale mese corrente
     total_month = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.date >= first_of_month.isoformat())
+        .filter(
+            (Transaction.date >= first_of_month.isoformat()) &
+            (Transaction.user_id == current_user_id)
+        )
         .scalar()
     )
 
@@ -39,8 +51,9 @@ async def get_dashboard(db: Session = Depends(get_db)):
     total_prev = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
         .filter(
-            Transaction.date >= first_prev.isoformat(),
-            Transaction.date < first_of_month.isoformat(),
+            (Transaction.date >= first_prev.isoformat()) &
+            (Transaction.date < first_of_month.isoformat()) &
+            (Transaction.user_id == current_user_id)
         )
         .scalar()
     )
@@ -50,7 +63,10 @@ async def get_dashboard(db: Session = Depends(get_db)):
     # Spese per categoria (mese corrente)
     cat_rows = (
         db.query(Transaction.category, func.sum(Transaction.amount))
-        .filter(Transaction.date >= first_of_month.isoformat())
+        .filter(
+            (Transaction.date >= first_of_month.isoformat()) &
+            (Transaction.user_id == current_user_id)
+        )
         .group_by(Transaction.category)
         .all()
     )
@@ -61,7 +77,10 @@ async def get_dashboard(db: Session = Depends(get_db)):
     thirty_ago = (today - timedelta(days=30)).isoformat()
     daily_rows = (
         db.query(Transaction.date, func.sum(Transaction.amount))
-        .filter(Transaction.date >= thirty_ago)
+        .filter(
+            (Transaction.date >= thirty_ago) &
+            (Transaction.user_id == current_user_id)
+        )
         .group_by(Transaction.date)
         .order_by(Transaction.date)
         .all()
@@ -83,8 +102,11 @@ async def get_dashboard(db: Session = Depends(get_db)):
 
 
 @router.get("/forecast")
-async def get_forecast(db: Session = Depends(get_db)):
-    """Proiezione spese a fine mese basata su media mobile ponderata (ultimi 14gg)."""
+async def get_forecast(
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Proiezione spese a fine mese basata su media mobile ponderata (ultimi 14gg) — filtrata per user_id."""
     today = date.today()
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     days_elapsed = today.day
@@ -94,7 +116,10 @@ async def get_forecast(db: Session = Depends(get_db)):
     fourteen_ago = (today - timedelta(days=14)).isoformat()
     daily_rows = (
         db.query(Transaction.date, func.sum(Transaction.amount))
-        .filter(Transaction.date >= fourteen_ago)
+        .filter(
+            (Transaction.date >= fourteen_ago) &
+            (Transaction.user_id == current_user_id)
+        )
         .group_by(Transaction.date)
         .order_by(Transaction.date)
         .all()
@@ -119,7 +144,10 @@ async def get_forecast(db: Session = Depends(get_db)):
     first_of_month = today.replace(day=1)
     month_so_far = float(
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.date >= first_of_month.isoformat())
+        .filter(
+            (Transaction.date >= first_of_month.isoformat()) &
+            (Transaction.user_id == current_user_id)
+        )
         .scalar()
     )
 
@@ -136,8 +164,12 @@ async def get_forecast(db: Session = Depends(get_db)):
 
 
 @router.get("/monthly-history")
-async def get_monthly_history(months: int = 6, db: Session = Depends(get_db)):
-    """Totale spese per mese negli ultimi N mesi."""
+async def get_monthly_history(
+    months: int = 6,
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Totale spese per mese negli ultimi N mesi — filtrato per user_id."""
     today = date.today()
     result = []
     for i in range(months - 1, -1, -1):
@@ -156,8 +188,9 @@ async def get_monthly_history(months: int = 6, db: Session = Depends(get_db)):
         total = float(
             db.query(func.coalesce(func.sum(Transaction.amount), 0))
             .filter(
-                Transaction.date >= first.isoformat(),
-                Transaction.date <= last.isoformat(),
+                (Transaction.date >= first.isoformat()) &
+                (Transaction.date <= last.isoformat()) &
+                (Transaction.user_id == current_user_id)
             )
             .scalar()
         )
