@@ -73,6 +73,7 @@ const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle }: {
 export default function TransactionList() {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -101,10 +102,17 @@ export default function TransactionList() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError(false);
     const params = buildParams();
+    // Timeout di sicurezza: se dopo 10s è ancora in loading, mostra errore + ricarica
+    const safetyTimer = setTimeout(() => {
+      setLoading(curr => { if (curr) { setLoadError(true); return false; } return curr; });
+    }, 10000);
     Promise.allSettled([getTransactions(params), getTransactionCount(params)])
       .then(([txRes, countRes]) => {
+        clearTimeout(safetyTimer);
         if (txRes.status === "fulfilled") setTxs(txRes.value.data);
+        else setLoadError(true);
         if (countRes.status === "fulfilled") setSummary(countRes.value.data);
       })
       .finally(() => setLoading(false));
@@ -365,7 +373,14 @@ export default function TransactionList() {
           )}
         </div>
 
-        {loading ? (
+        {loadError ? (
+          <div style={{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"1rem", padding:"3rem"}}>
+            <p style={{color:"var(--text-muted)", fontSize:"0.9rem"}}>Impossibile caricare le transazioni.</p>
+            <button className="btn-primary" style={{padding:"0.6rem 1.5rem", width:"auto"}} onClick={() => window.location.reload()}>
+              Ricarica pagina
+            </button>
+          </div>
+        ) : loading ? (
           <div className="loading" style={{display:"flex", alignItems:"center", justifyContent:"center", gap:"0.75rem", padding:"3rem"}}>
             <span className="spin" style={{width:24, height:24, border:"2px solid var(--accent)", borderTopColor:"transparent", borderRadius:"50%", flexShrink:0}} />
             <span>Caricamento...</span>
