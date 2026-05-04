@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createTransaction, parseNatural } from "../../api/client";
 import { PlusCircle, Mic, MicOff, MessageSquare, Keyboard } from "lucide-react";
 import toast from "react-hot-toast";
@@ -32,6 +32,9 @@ export default function TransactionForm({ onAdded }: Props) {
   // Smart mode (NL + voice)
   const [nlText, setNlText] = useState("");
   const [recording, setRecording] = useState(false);
+  // Testo confermato (isFinal) accumulato tra sessioni di riconoscimento.
+  // Necessario perché ogni auto-restart del service reinizia i result da 0.
+  const confirmedTextRef = useRef("");
   const [submitting, setSubmitting] = useState(false);
   
   const { autoStartVoice, setAutoStartVoice, invalidateDashboardCache, markTransactionsAsNew } = useAppStore();
@@ -120,11 +123,16 @@ export default function TransactionForm({ onAdded }: Props) {
       return;
     }
 
+    // Inizia ad accumulare dal testo già presente nel campo
+    confirmedTextRef.current = nlText.trimEnd() ? nlText.trimEnd() + " " : "";
+
     voiceService.start({
       onResult: (transcript, isFinal) => {
-        setNlText(transcript);
+        // Mostra: testo confermato precedente + transcript corrente (interim o final)
+        setNlText(confirmedTextRef.current + transcript);
         if (isFinal) {
-          // Opzionale: gestire autosubmit se la frase è completa
+          // Aggiungi al confermato così l'auto-restart non perde nulla
+          confirmedTextRef.current += transcript + " ";
         }
       },
       onError: (err) => {
@@ -133,6 +141,7 @@ export default function TransactionForm({ onAdded }: Props) {
       },
       onEnd: () => {
         setRecording(false);
+        confirmedTextRef.current = ""; // reset per la prossima sessione vocale
       }
     });
 
