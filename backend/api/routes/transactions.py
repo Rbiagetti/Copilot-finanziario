@@ -30,6 +30,7 @@ async def create_transaction(
         data.category = "altro"
 
     tx = Transaction(
+        user_id=current_user_id,
         amount=data.amount,
         category=data.category,
         description=data.description,
@@ -62,10 +63,11 @@ async def list_transactions(
     search: Optional[str] = None,
     limit: int = Query(default=100, le=500),
     offset: int = 0,
+    current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Lista transazioni con filtri opzionali."""
-    q = db.query(Transaction)
+    """Lista transazioni con filtri opzionali — filtrate per user_id."""
+    q = db.query(Transaction).filter(Transaction.user_id == current_user_id)
     if category:
         q = q.filter(Transaction.category == category)
     if date_from:
@@ -89,14 +91,15 @@ async def count_transactions(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     search: Optional[str] = None,
+    current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Conta transazioni con gli stessi filtri e restituisce anche il totale €."""
+    """Conta transazioni con gli stessi filtri e restituisce anche il totale € — filtrate per user_id."""
     from sqlalchemy import func as sqlfunc, or_
     q = db.query(
         sqlfunc.count(Transaction.id),
         sqlfunc.coalesce(sqlfunc.sum(Transaction.amount), 0),
-    )
+    ).filter(Transaction.user_id == current_user_id)
     if category:
         q = q.filter(Transaction.category == category)
     if date_from:
@@ -180,8 +183,14 @@ async def export_transactions_csv(
 
 
 @router.get("/{tx_id}", response_model=TransactionResponse)
-async def get_transaction(tx_id: int, db: Session = Depends(get_db)):
-    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+async def get_transaction(
+    tx_id: int,
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    tx = db.query(Transaction).filter(
+        (Transaction.id == tx_id) & (Transaction.user_id == current_user_id)
+    ).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
     return tx
@@ -189,12 +198,14 @@ async def get_transaction(tx_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{tx_id}", response_model=TransactionResponse)
 async def update_transaction(
-    tx_id: int, 
-    data: TransactionUpdate, 
+    tx_id: int,
+    data: TransactionUpdate,
     current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+    tx = db.query(Transaction).filter(
+        (Transaction.id == tx_id) & (Transaction.user_id == current_user_id)
+    ).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
     for field, value in data.model_dump(exclude_unset=True).items():
@@ -215,11 +226,13 @@ async def update_transaction(
 
 @router.delete("/{tx_id}")
 async def delete_transaction(
-    tx_id: int, 
+    tx_id: int,
     current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+    tx = db.query(Transaction).filter(
+        (Transaction.id == tx_id) & (Transaction.user_id == current_user_id)
+    ).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
     # Salva info per invalidazione prima di eliminare

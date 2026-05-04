@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Text, DateTime, ForeignKey, Index
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 
@@ -34,6 +34,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
     amount = Column(Float, nullable=False)
     category = Column(String, nullable=False)
     subcategory = Column(String, nullable=True)
@@ -52,6 +53,7 @@ class Budget(Base):
     __tablename__ = "budgets"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
     category = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     period = Column(String, default="monthly")
@@ -63,6 +65,7 @@ class ChatHistory(Base):
     __tablename__ = "chat_history"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     metadata_json = Column(Text, nullable=True)
