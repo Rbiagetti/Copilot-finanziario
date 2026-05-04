@@ -34,6 +34,7 @@ interface AppState {
   setAnomaliesRefreshing: (val: boolean) => void;
   markTransactionsAsNew: () => void;
   invalidateDashboardCache: () => void;
+  reset: () => void;
 }
 
 const getInitialView = (): View => {
@@ -96,4 +97,17 @@ export const useAppStore = create<AppState>((set) => ({
   invalidateDashboardCache: () => set((state) => ({
     dashboardCache: { ...state.dashboardCache, loadedAt: null }
   })),
+  reset: () => set({
+    dashboardCache: { rawHistory: [], forecast: null, loadedAt: null },
+    dashboardFilter: {},
+    anomalies: {
+      data: [],
+      count: 0,
+      by_type: {},
+      generated_at: null,
+      has_new_transactions: false,
+      loading: false,
+      refreshing: false,
+    },
+  }),
 }));

@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import type { Session } from "@supabase/supabase-js";
+import { useAppStore } from "./appStore";
 
 interface AuthState {
   session: Session | null;
@@ -27,11 +28,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
 
       // Listen for auth changes (login, logout, token refresh)
-      supabase.auth.onAuthStateChange((_event, session) => {
-        set({ 
-          session, 
-          isAuthenticated: !!session, 
-          isLoading: false 
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT") {
+          // Pulisce tutta la cache dati al logout — evita che utente B veda dati di utente A
+          useAppStore.getState().reset();
+        }
+        set({
+          session,
+          isAuthenticated: !!session,
+          isLoading: false
         });
       });
     } catch (error) {
