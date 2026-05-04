@@ -381,9 +381,23 @@ export default function TransactionList() {
             </button>
           </div>
         ) : loading ? (
-          <div className="loading" style={{display:"flex", alignItems:"center", justifyContent:"center", gap:"0.75rem", padding:"3rem"}}>
-            <span className="spin" style={{width:24, height:24, border:"2px solid var(--accent)", borderTopColor:"transparent", borderRadius:"50%", flexShrink:0}} />
-            <span>Caricamento...</span>
+          <div className="tx-table tx-skeleton-list" aria-busy="true" aria-label="Caricamento transazioni">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="tx-row tx-row--skeleton">
+                <div className="skeleton skeleton-icon" style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0 }} />
+                <div className="tx-info" style={{ gap: "0.35rem" }}>
+                  <div className="skeleton skeleton-text" style={{ width: "40%" }} />
+                  <div className="skeleton skeleton-text" style={{ width: "65%", opacity: 0.6 }} />
+                </div>
+                <div className="skeleton skeleton-text" style={{ width: 70 }} />
+                <div className="skeleton skeleton-text" style={{ width: 55 }} />
+                <div style={{ display: "flex", gap: "0.4rem" }}>
+                  {[...Array(3)].map((_, j) => (
+                    <div key={j} className="skeleton" style={{ width: 28, height: 28, borderRadius: 8 }} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : txs.length === 0 ? (
           <div className="tx-empty-state">

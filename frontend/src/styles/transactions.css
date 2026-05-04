@@ -115,6 +115,14 @@
 .tx-actions { display: flex; gap: 0.25rem; }
 .tx-recurring { border-color: rgba(255,140,66,0.2) !important; }
 
+/* Skeleton loading rows — mimics tx-row layout without content */
+.tx-row--skeleton {
+  pointer-events: none;
+  border-color: transparent !important;
+}
+.tx-row--skeleton:hover { transform: none; background: var(--glass-0); }
+.tx-skeleton-list { animation: fadeIn 0.2s ease-out; }
+
 /* === TX FILTERS === */
 .tx-filters { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1rem; }
 

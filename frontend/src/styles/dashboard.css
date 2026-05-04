@@ -547,22 +547,17 @@
   padding: 0 2px;
 }
 
-/* === SKELETON LOADER === */
+/* === SKELETON LOADER (extends .skeleton from base.css) === */
 .skeleton-icon {
   width: 40px; height: 40px;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
+  /* shimmer via .skeleton base class — duplicated here for specificity */
   background: linear-gradient(90deg, var(--glass-1) 25%, var(--glass-2) 50%, var(--glass-1) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }
-.skeleton-chart {
-  height: 220px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--glass-1) 25%, var(--glass-2) 50%, var(--glass-1) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
-}
+/* .skeleton-chart is now defined in base.css — dashboard override adds no extra styles */
 
 /* === PATTERN TABS (dentro chart-header) === */
 .pattern-tabs {

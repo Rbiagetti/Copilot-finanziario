@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import toast from "react-hot-toast";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { createPortal } from "react-dom";
 import {
@@ -516,19 +517,22 @@ export default function Dashboard() {
     setAnomalyTypeFilter("all");
   };
 
-  const handleAnomalyClick = async (anomaly: Anomaly) => {
+  // Optimistic UI: switch to detail immediately, fetch stats in background
+  const handleAnomalyClick = useCallback(async (anomaly: Anomaly) => {
+    // Instant view switch — no double-click needed
     setSelectedAnomaly(anomaly);
     setAnomalyView("detail");
+    setAnomalyDetail(null);
     setDetailLoading(true);
     try {
       const res = await getAnomalyDetail(anomaly.id, anomaly.detection_type);
-      setAnomalyDetail(res.data);
+      if (isMountedRef.current) setAnomalyDetail(res.data);
     } catch {
-      setAnomalyDetail(null);
+      if (isMountedRef.current) setAnomalyDetail(null);
     } finally {
-      setDetailLoading(false);
+      if (isMountedRef.current) setDetailLoading(false);
     }
-  };
+  }, []);
 
   const handleDrilldown = (cat?: string) => {
     setDashboardFilter({ category: cat });
@@ -708,14 +712,14 @@ export default function Dashboard() {
             <span className="kpi-value">{stats.count}</span>
           </div>
         </div>
-        <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Forecast AI", type: "forecast" })}>
+        <div className="kpi-card has-drilldown is-clickable" onClick={() => setModalContent({ title: "Forecast AI", type: "forecast" })}>
           <div className="kpi-icon" style={{ color: "var(--warning)" }}><Target size={20} /></div>
           <div className="kpi-content">
             <span className="kpi-label">Target Mese</span>
             <span className="kpi-value">€{forecast?.projected_total.toFixed(0) || "---"}</span>
           </div>
         </div>
-        <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
+        <div className="kpi-card has-drilldown is-clickable" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
           <div className="kpi-icon" style={{ color: anomalyLoadError ? "var(--text-dim)" : "var(--danger)" }}>
             {(anomalies.loading || anomalies.refreshing) && anomalyState.data.length === 0
               ? <RefreshCw size={20} className="spin" />
@@ -1233,7 +1237,7 @@ export default function Dashboard() {
                         return (
                           <button
                             key={i}
-                            className="anomaly-card"
+                            className={`anomaly-card is-clickable${detailLoading ? " is-loading" : ""}`}
                             onClick={() => handleAnomalyClick(a)}
                             disabled={detailLoading}
                             aria-label={`Anomalia ${meta.label}: €${a.amount.toFixed(2)}, clicca per dettagli`}
@@ -1310,10 +1314,15 @@ export default function Dashboard() {
                       <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: 0, marginTop: 4 }}>{a.detection_label}</p>
                     </div>
 
-                    {/* Spinner durante caricamento */}
+                    {/* Skeleton stats while loading — mostra struttura immediata */}
                     {detailLoading && (
-                      <div style={{ display: "flex", justifyContent: "center", padding: "1rem" }}>
-                        <RefreshCw size={18} className="spin" />
+                      <div className="anomaly-stat-grid" style={{ marginBottom: "0.75rem" }}>
+                        {[...Array(6)].map((_, i) => (
+                          <div key={i} className="anomaly-stat-cell">
+                            <div className="skeleton-line short" style={{ height: 10, marginBottom: 6 }} />
+                            <div className="skeleton-line" style={{ height: 16 }} />
+                          </div>
+                        ))}
                       </div>
                     )}
 

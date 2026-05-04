@@ -202,6 +202,84 @@ h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: var(--glass-2); border-radius: 3px; }
 
+/* === GLOBAL UI STATE CLASSES === */
+
+/* Skeleton shimmer — base class for all placeholder loaders */
+.skeleton {
+  background: linear-gradient(90deg, var(--glass-1) 25%, var(--glass-2) 50%, var(--glass-1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+.skeleton-text  { height: 13px; border-radius: 6px; }
+.skeleton-title { height: 20px; border-radius: 8px; }
+.skeleton-card  { height: 80px; border-radius: var(--radius-md); }
+.skeleton-row   { height: 44px; border-radius: var(--radius-sm); }
+.skeleton-chart { height: 220px; border-radius: var(--radius-sm); }
+
+/* is-loading: dims the element and blocks pointer events */
+.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: wait;
+}
+
+/* is-disabled: visual-only disabled state (use alongside [disabled]) */
+.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* is-pending: subtle pulsing while an async action is in flight */
+.is-pending {
+  animation: pulse-border 1.6s ease-in-out infinite;
+}
+
+/* is-clickable: makes non-button elements look interactive */
+.is-clickable {
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-spring-snappy),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+.is-clickable:hover {
+  background: var(--glass-1);
+  transform: translateY(-1px);
+}
+.is-clickable:active { transform: scale(0.98); }
+
+/* empty-state: centered placeholder for empty data sections */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1.5rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+.empty-state svg { opacity: 0.4; }
+.empty-state p   { font-size: 0.875rem; max-width: 28ch; margin: 0; }
+
+/* typing-dots: inline 3-dot animation (alternative to typing-indicator block) */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.typing-dots span {
+  width: 6px; height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  opacity: 0.5;
+  animation: bounce 1.4s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
 /* === REDUCED MOTION === */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
