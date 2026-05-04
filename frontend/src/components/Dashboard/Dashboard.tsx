@@ -704,7 +704,7 @@ export default function Dashboard() {
         </div>
         <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
           <div className="kpi-icon" style={{ color: "var(--danger)" }}>
-            {anomalies.refreshing && anomalyState.data.length === 0
+            {(anomalies.loading || anomalies.refreshing) && anomalyState.data.length === 0
               ? <RefreshCw size={20} className="spin" />
               : <AlertTriangle size={20} />
             }
@@ -712,7 +712,9 @@ export default function Dashboard() {
           <div className="kpi-content">
             <span className="kpi-label">Eventi Anomali</span>
             <span className="kpi-value">
-              {anomalies.refreshing && anomalyState.data.length === 0 ? "analisi…" : `${anomalyState.data.length} rilevati`}
+              {(anomalies.loading || anomalies.refreshing) && anomalyState.data.length === 0
+                ? "analisi…"
+                : `${anomalyState.data.length} rilevati`}
             </span>
           </div>
         </div>
