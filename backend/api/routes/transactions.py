@@ -122,11 +122,12 @@ async def export_transactions_csv(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     search: Optional[str] = None,
+    current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Esporta transazioni in formato CSV con gli stessi filtri della lista."""
+    """Esporta transazioni in formato CSV con gli stessi filtri della lista — filtrate per user_id."""
     from sqlalchemy import or_, func as sqlfunc
-    q = db.query(Transaction)
+    q = db.query(Transaction).filter(Transaction.user_id == current_user_id)
     if category:
         q = q.filter(Transaction.category == category)
     if date_from:

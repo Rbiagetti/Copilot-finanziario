@@ -18,10 +18,12 @@ _DETECTION_TYPES = ("amount_spike", "new_merchant", "frequency_spike", "duplicat
 
 
 @router.get("/briefing")
-async def briefing():
-    """Briefing AI giornaliero con 3 insight e un'azione consigliata. Cache 1h."""
+async def briefing(
+    current_user_id: str = Depends(get_current_user),
+):
+    """Briefing AI giornaliero con 3 insight e un'azione consigliata. Cache 1h — filtrato per user_id."""
     # generate_briefing chiama Groq (I/O) — eseguito in thread pool per non bloccare l'event loop
-    return await asyncio.to_thread(generate_briefing)
+    return await asyncio.to_thread(generate_briefing, current_user_id)
 
 
 @router.get("/anomalies")

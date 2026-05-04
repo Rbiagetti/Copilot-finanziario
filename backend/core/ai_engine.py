@@ -268,30 +268,30 @@ def _month_start(months_back: int = 0) -> str:
     return d.isoformat()
 
 
-def build_context() -> str:
-    """Costruisce il contesto del DB per il prompt AI."""
+def build_context(user_id: str) -> str:
+    """Costruisce il contesto del DB per il prompt AI — filtrato per user_id."""
     d30 = _dates(30)
     d60 = _dates(60)
 
     schema = "transactions(id, amount REAL, category TEXT, description TEXT, date TEXT)"
-    total_all = _scalar("SELECT COUNT(*) FROM transactions") or 0
-    date_range = _q("SELECT MIN(date), MAX(date) FROM transactions")
+    total_all = _scalar("SELECT COUNT(*) FROM transactions WHERE user_id = :user_id", {"user_id": user_id}) or 0
+    date_range = _q("SELECT MIN(date), MAX(date) FROM transactions WHERE user_id = :user_id", {"user_id": user_id})
     dr = date_range[0] if date_range else (None, None)
-    grand_total = round(_scalar("SELECT SUM(amount) FROM transactions") or 0, 2)
+    grand_total = round(_scalar("SELECT SUM(amount) FROM transactions WHERE user_id = :user_id", {"user_id": user_id}) or 0, 2)
 
-    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d", {"d": d30})
+    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d AND user_id = :user_id", {"d": d30, "user_id": user_id})
     last_30_total = round(row[0][0] or 0, 2) if row else 0
     last_30_count = row[0][1] or 0 if row else 0
 
     prev_30 = round(_scalar(
-        "SELECT SUM(amount) FROM transactions WHERE date >= :d60 AND date < :d30",
-        {"d60": d60, "d30": d30}
+        "SELECT SUM(amount) FROM transactions WHERE date >= :d60 AND date < :d30 AND user_id = :user_id",
+        {"d60": d60, "d30": d30, "user_id": user_id}
     ) or 0, 2)
 
     cat_30 = _q(
         "SELECT category, COUNT(*), SUM(amount), AVG(amount) FROM transactions "
-        "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC",
-        {"d": d30}
+        "WHERE date >= :d AND user_id = :user_id GROUP BY category ORDER BY SUM(amount) DESC",
+        {"d": d30, "user_id": user_id}
     )
 
     total_30_pct = round((last_30_total - prev_30) / prev_30 * 100, 1) if prev_30 > 0 else 0
@@ -1997,13 +1997,19 @@ Regole OBBLIGATORIE:
 _briefing_cache: dict = {"data": None, "ts": 0.0}
 
 
-def generate_briefing() -> dict:
+def generate_briefing(user_id: str) -> dict:
     import time
     now = time.time()
-    if _briefing_cache["data"] and (now - _briefing_cache["ts"]) < 3600:
-        return _briefing_cache["data"]
+    # Per-user cache key: use (user_id, timestamp)
+    cache_key = (user_id, "briefing")
+    if cache_key not in _briefing_cache:
+        _briefing_cache[cache_key] = {"data": None, "ts": 0}
 
-    context = build_context()
+    cache_entry = _briefing_cache[cache_key]
+    if cache_entry["data"] and (now - cache_entry["ts"]) < 3600:
+        return cache_entry["data"]
+
+    context = build_context(user_id)
     try:
         raw = _llm_call(
             "briefing",
@@ -2022,8 +2028,8 @@ def generate_briefing() -> dict:
             result = json.loads(m.group()) if m else None
 
         if result and "insights" in result:
-            _briefing_cache["data"] = result
-            _briefing_cache["ts"] = now
+            cache_entry["data"] = result
+            cache_entry["ts"] = now
             return result
     except Exception:
         pass
