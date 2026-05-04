@@ -211,11 +211,6 @@ export default function TransactionList() {
       toast.error("Inserisci un importo valido (> 0)");
       return;
     }
-    // M-5: blocca date future
-    if (editState.date > new Date().toISOString().slice(0, 10)) {
-      toast.error("La data non può essere nel futuro");
-      return;
-    }
     setSaving(true);
     try {
       invalidateDashboardCache();
@@ -465,7 +460,6 @@ export default function TransactionList() {
                 <div className="form-group">
                   <label>Data</label>
                   <input type="date" value={editState.date}
-                    max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => setEditState({ ...editState, date: e.target.value })} />
                 </div>
                 <div className="form-group">
