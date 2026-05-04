@@ -22,6 +22,7 @@ interface EditState {
   category: string;
   description: string;
   date: string;
+  time: string;
   tags: string;
   is_recurring: boolean;
 }
@@ -180,6 +181,7 @@ export default function TransactionList() {
       category: tx.category,
       description: tx.description || "",
       date: tx.date,
+      time: tx.time || "",
       tags: tx.tags || "",
       is_recurring: tx.is_recurring ?? false,
     });
@@ -201,6 +203,7 @@ export default function TransactionList() {
         category: editState.category,
         description: editState.description,
         date: editState.date,
+        time: editState.time || undefined,
         tags: editState.tags || undefined,
         is_recurring: editState.is_recurring,
       });
@@ -415,11 +418,18 @@ export default function TransactionList() {
                 <input type="text" value={editState.description}
                   onChange={(e) => setEditState({ ...editState, description: e.target.value })} />
               </div>
-              <div className="form-group">
-                <label>Data</label>
-                <input type="date" value={editState.date}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setEditState({ ...editState, date: e.target.value })} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Data</label>
+                  <input type="date" value={editState.date}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setEditState({ ...editState, date: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Orario</label>
+                  <input type="time" value={editState.time}
+                    onChange={(e) => setEditState({ ...editState, time: e.target.value })} />
+                </div>
               </div>
               <div className="form-group">
                 <label>Tag (separati da virgola)</label>

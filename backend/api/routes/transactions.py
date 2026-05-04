@@ -273,14 +273,22 @@ async def parse_natural_language(
         base_url="https://api.groq.com/openai/v1",
     )
 
+    today = date.today()
+    now_time = datetime.now().strftime("%H:%M")
+
     system_prompt = (
         "Sei un parser di spese personali. "
-        "Estrai da testo libero in italiano: importo, categoria e nota. "
+        "Estrai da testo libero in italiano: importo, categoria, nota, data e ora. "
         "Rispondi SOLO con JSON valido, nessun testo extra. "
-        f'Formato: {{"amount": float, "category": str, "note": str}} '
+        f'Formato: {{"amount": float, "category": str, "note": str, "date": str, "time": str}} '
         f"Categorie disponibili: {', '.join(CATEGORIES)} "
         "Se la categoria non è chiara, usa 'altro'. "
-        "Se manca l'importo, usa 0.0."
+        "Se manca l'importo, usa 0.0. "
+        f"Oggi è {today.strftime('%d %B %Y')} ({today.isoformat()}). "
+        "Per 'date': usa formato YYYY-MM-DD. Se non specificata usa la data di oggi. "
+        "Riconosci espressioni come 'ieri', 'l'altro ieri', 'lunedì', '4 maggio', 'stamattina'. "
+        "Per 'time': usa formato HH:MM (24h). Se non specificata usa null. "
+        "Riconosci espressioni come 'alle 18', 'alle 18:30', 'stamattina' (→ 09:00), 'a pranzo' (→ 13:00), 'a cena' (→ 20:00)."
     )
 
     response = client.chat.completions.create(
@@ -290,7 +298,7 @@ async def parse_natural_language(
             {"role": "user", "content": data.text},
         ],
         temperature=0,
-        max_tokens=100,
+        max_tokens=150,
     )
 
     raw = response.choices[0].message.content.strip()
@@ -302,13 +310,24 @@ async def parse_natural_language(
     if parsed.get("amount", 0) <= 0:
         raise HTTPException(400, "Importo non trovato nel testo")
 
+    # Valida e normalizza la data parsata
+    tx_date = today.isoformat()
+    if parsed.get("date"):
+        try:
+            date.fromisoformat(parsed["date"])  # valida formato
+            tx_date = parsed["date"]
+        except ValueError:
+            pass  # fallback a oggi
+
+    tx_time = parsed.get("time") or now_time
+
     tx = Transaction(
         user_id=current_user_id,
         amount=parsed["amount"],
         category=parsed.get("category", "altro"),
         description=parsed.get("note", ""),
-        date=date.today().isoformat(),
-        time=datetime.now().strftime("%H:%M"),
+        date=tx_date,
+        time=tx_time,
         source="natural",
     )
     db.add(tx)
