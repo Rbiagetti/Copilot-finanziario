@@ -303,6 +303,7 @@ async def parse_natural_language(
         raise HTTPException(400, "Importo non trovato nel testo")
 
     tx = Transaction(
+        user_id=current_user_id,
         amount=parsed["amount"],
         category=parsed.get("category", "altro"),
         description=parsed.get("note", ""),
