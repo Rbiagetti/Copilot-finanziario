@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { signOut } from "../../lib/supabase";
 import { LogOut } from "lucide-react";
 import toast from "react-hot-toast";
 import MonthlyReport from "./MonthlyReport";
+import { useAuthStore } from "../../store/authStore";
 
 export default function SettingsPanel() {
   const [loggingOut, setLoggingOut] = useState(false);
+  const { logout } = useAuthStore();
 
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      await signOut();
+      await logout(); // M-6: usa authStore.logout() — pulisce cache e chiama signOut
       toast.success("Disconnesso");
     } catch {
       toast.error("Errore durante il logout");

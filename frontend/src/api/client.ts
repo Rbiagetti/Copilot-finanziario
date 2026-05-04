@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getToken } from "../lib/supabase";
+import toast from "react-hot-toast";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1",
@@ -15,14 +16,23 @@ api.interceptors.request.use(async (config) => {
 });
 
 // Gestione errori globali (es. 401 Unauthorized)
+let _isHandling401 = false; // evita loop multipli se più request falliscono in parallelo
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      console.warn("Sessione scaduta o non valida. Disconnessione...");
-      const { signOut } = await import("../lib/supabase");
-      await signOut();
-      window.location.reload(); // Forza il reset dell'app allo stato di login
+    if (error.response?.status === 401 && !_isHandling401) {
+      _isHandling401 = true;
+      toast.error("Sessione scaduta. Effettua di nuovo il login.", { duration: 3000 });
+      try {
+        const { signOut } = await import("../lib/supabase");
+        await signOut();
+      } catch {
+        // ignora errori di signOut (es. rete offline)
+      }
+      setTimeout(() => {
+        _isHandling401 = false;
+        window.location.replace("/login");
+      }, 1500); // attende che il toast sia visibile
     }
     return Promise.reject(error);
   }

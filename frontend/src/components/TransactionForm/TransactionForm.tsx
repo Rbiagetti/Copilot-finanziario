@@ -61,6 +61,11 @@ export default function TransactionForm({ onAdded }: Props) {
       toast.error("Inserisci un importo valido");
       return;
     }
+    // M-5: blocca date future
+    if (date > new Date().toISOString().slice(0, 10)) {
+      toast.error("La data non può essere nel futuro");
+      return;
+    }
     setSubmitting(true);
     try {
       invalidateDashboardCache();
@@ -90,8 +95,13 @@ export default function TransactionForm({ onAdded }: Props) {
     setSubmitting(true);
     try {
       const res = await parseNatural(nlText.trim());
-      markTransactionsAsNew();
       const tx = res.data;
+      // A-6: valida importo post-parse — il backend può restituire 0 su testo ambiguo
+      if (!tx.amount || tx.amount <= 0) {
+        toast.error("Importo non trovato. Prova a essere più specifico (es. 'caffè 1.50')");
+        return;
+      }
+      markTransactionsAsNew();
       toast.success(`€${tx.amount.toFixed(2)} salvato in ${tx.category} — "${tx.description}"`);
       setNlText("");
       onAdded?.();

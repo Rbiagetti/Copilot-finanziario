@@ -118,7 +118,16 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { invalidateDashboardCache, markTransactionsAsNew } = useAppStore();
+  const { invalidateDashboardCache, markTransactionsAsNew, dashboardFilter, setDashboardFilter } = useAppStore();
+
+  // A-4: Al mount, consuma dashboardFilter se impostato dalla Dashboard
+  useEffect(() => {
+    const { category } = dashboardFilter;
+    if (category) {
+      setFilter(category);
+      setDashboardFilter({}); // consuma e resetta il filtro dopo averlo applicato
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearFilters = () => {
     setFilter(""); setSearch(""); setSearchInput(""); setDaysRange(365); setSortBy("date_desc");
@@ -192,6 +201,11 @@ export default function TransactionList() {
     const num = parseFloat(editState.amount);
     if (!num || num <= 0) {
       toast.error("Inserisci un importo valido (> 0)");
+      return;
+    }
+    // M-5: blocca date future
+    if (editState.date > new Date().toISOString().slice(0, 10)) {
+      toast.error("La data non può essere nel futuro");
       return;
     }
     setSaving(true);

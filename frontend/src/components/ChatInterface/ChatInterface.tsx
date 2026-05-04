@@ -278,7 +278,8 @@ export default function ChatInterface() {
     setLoading(true);
 
     try {
-      const history = messages.map((m) => ({ role: m.role, content: m.content }));
+      // B-1: tronca history agli ultimi 20 messaggi — evita payload crescenti e costi LLM
+      const history = messages.slice(-20).map((m) => ({ role: m.role, content: m.content }));
       const res = await sendChat(msg, history);
       const data = res.data;
       setMessages((prev) => [
@@ -346,9 +347,15 @@ export default function ChatInterface() {
                 <ThinkingTrace steps={msg.reasoning_steps} />
               )}
               <div className="msg-text" dangerouslySetInnerHTML={{
-                __html: msg.content
-                  .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                  .replace(/\n/g, "<br/>"),
+                __html: (() => {
+                  // C-2: Escape HTML prima di applicare formatting — previene XSS
+                  const div = document.createElement("div");
+                  div.textContent = msg.content;
+                  const escaped = div.innerHTML;
+                  return escaped
+                    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                    .replace(/\n/g, "<br/>");
+                })(),
               }} />
 
               {/* Tabella dati */}

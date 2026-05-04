@@ -63,9 +63,11 @@ export default function BudgetPanel() {
   };
 
   const handleDelete = async (b: BudgetStatusWithId) => {
+    // M-3: check id prima di procedere — evita DELETE /budgets/undefined
+    if (!b.id) { toast.error("ID budget non disponibile"); return; }
     if (!confirm(`Eliminare il budget per ${b.category}?`)) return;
     try {
-      await deleteBudget(b.id!);
+      await deleteBudget(b.id);
       toast.success(`Budget ${b.category} eliminato`);
       load();
     } catch {

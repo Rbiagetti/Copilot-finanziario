@@ -15,7 +15,7 @@ const BudgetPanel = lazy(() => import("./components/BudgetPanel/BudgetPanel"));
 const SettingsPanel = lazy(() => import("./components/Settings/SettingsPanel"));
 
 const LoadingFallback = () => (
-  <div className="flex-col" style={{ height: "100vh", alignItems: "center", justifyContent: "center" }}>
+  <div style={{ display: "flex", flexDirection: "column", height: "100vh", alignItems: "center", justifyContent: "center" }}>
     <div className="spin" style={{ width: 32, height: 32, border: "3px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%" }} />
   </div>
 );

@@ -253,6 +253,8 @@ export default function Dashboard() {
   const [daysBack, setDaysBack] = useState(90);
   const [catFilter, setCatFilter] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [anomalyLoadError, setAnomalyLoadError] = useState(false);
+  const isMountedRef = useRef(true);
   const [patternTab, setPatternTab] = useState<"orario" | "giornaliero">("giornaliero");
   const [showMomInfo, setShowMomInfo] = useState(false);
   const [momA, setMomA] = useState<string>("");   // mese "corrente" (barra piena)
@@ -277,6 +279,12 @@ export default function Dashboard() {
   const isVisible = (id: string) => !hiddenCards.has(id);
   const customizeRef = useFocusTrap(showCustomize);
 
+  // C-1: cleanup flag — evita setState su componente smontato (race condition su navigazione veloce)
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
   const anomalyState = anomalies;
@@ -296,13 +304,15 @@ export default function Dashboard() {
       return;
     }
     setAnomaliesLoading(true);
+    setAnomalyLoadError(false);
     try {
       const res = await getAnomalies();
-      setAnomalies(res.data);
+      if (isMountedRef.current) setAnomalies(res.data);
     } catch (e) {
       console.warn("Impossibile caricare anomalie:", e);
+      if (isMountedRef.current) setAnomalyLoadError(true);
     } finally {
-      setAnomaliesLoading(false);
+      if (isMountedRef.current) setAnomaliesLoading(false);
     }
   };
 
@@ -325,15 +335,18 @@ export default function Dashboard() {
       ]);
       const rawHistory = hist.data;
       const forecast = fore.data;
+      if (!isMountedRef.current) return;
       setRawHistory(rawHistory);
       setForecast(forecast);
       setBudgets(budg.data);
       setDashboardCache({ rawHistory, forecast });
+      setErrorMsg(null); // M-2: reset errore se fetch completata con successo
     } catch (e: any) {
+      if (!isMountedRef.current) return;
       console.error("Errore Dashboard:", e);
       setErrorMsg("Errore di caricamento dati analitici.");
     }
-    setLoading(false);
+    if (isMountedRef.current) setLoading(false);
     // Avvia il caricamento anomalie in background dopo che la dashboard è pronta
     loadAnomalies(force);
   };
@@ -703,7 +716,7 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="kpi-card has-drilldown" onClick={() => setModalContent({ title: "Anomalie", type: "anomalies" })}>
-          <div className="kpi-icon" style={{ color: "var(--danger)" }}>
+          <div className="kpi-icon" style={{ color: anomalyLoadError ? "var(--text-dim)" : "var(--danger)" }}>
             {(anomalies.loading || anomalies.refreshing) && anomalyState.data.length === 0
               ? <RefreshCw size={20} className="spin" />
               : <AlertTriangle size={20} />
@@ -714,6 +727,8 @@ export default function Dashboard() {
             <span className="kpi-value">
               {(anomalies.loading || anomalies.refreshing) && anomalyState.data.length === 0
                 ? "analisi…"
+                : anomalyLoadError && anomalyState.data.length === 0
+                ? "⚠️ n/d"
                 : `${anomalyState.data.length} rilevati`}
             </span>
           </div>
@@ -1177,6 +1192,7 @@ export default function Dashboard() {
                         <span>Anomalie aggiornabili</span>
                         <button
                           className="btn-small btn-primary"
+                          disabled={anomalies.refreshing}
                           onClick={async (e) => {
                             e.stopPropagation();
                             setAnomaliesRefreshing(true);
@@ -1185,6 +1201,7 @@ export default function Dashboard() {
                               setAnomalies(res.data);
                             } catch (err) {
                               console.error("Errore refresh anomalie:", err);
+                              toast.error("Errore durante il refresh anomalie");
                             } finally {
                               setAnomaliesRefreshing(false);
                             }

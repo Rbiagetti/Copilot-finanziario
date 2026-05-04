@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../../store/appStore";
 import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut } from "lucide-react";
-import { signOut } from "../../lib/supabase";
+import { useAuthStore } from "../../store/authStore";
 import toast from "react-hot-toast";
 
 const NAV_ITEMS = [
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const { currentView, setView } = useAppStore();
+  const { logout } = useAuthStore();
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -23,7 +24,7 @@ export default function Sidebar() {
     e.stopPropagation();
     setLoggingOut(true);
     try {
-      await signOut();
+      await logout(); // M-6: usa authStore.logout() — pulisce cache e chiama signOut
       toast.success("Disconnesso");
     } catch {
       toast.error("Errore durante il logout");
