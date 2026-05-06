@@ -126,7 +126,7 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { invalidateDashboardCache, markTransactionsAsNew, dashboardFilter, setDashboardFilter } = useAppStore();
+  const { markTransactionsAsNew, dashboardFilter, setDashboardFilter } = useAppStore();
 
   // A-4: Al mount, consuma dashboardFilter se impostato dalla Dashboard
   useEffect(() => {
@@ -175,7 +175,6 @@ export default function TransactionList() {
   const handleDelete = async (id: number) => {
     if (!confirm("Eliminare questa transazione?")) return;
     try {
-      invalidateDashboardCache();
       markTransactionsAsNew();
       await deleteTransaction(id);
       toast.success("Transazione eliminata");
@@ -213,7 +212,6 @@ export default function TransactionList() {
     }
     setSaving(true);
     try {
-      invalidateDashboardCache();
       markTransactionsAsNew();
       await updateTransaction(editState.tx.id, {
         amount: parseFloat(editState.amount),

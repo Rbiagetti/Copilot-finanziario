@@ -37,7 +37,7 @@ export default function TransactionForm({ onAdded }: Props) {
   const confirmedTextRef = useRef("");
   const [submitting, setSubmitting] = useState(false);
   
-  const { autoStartVoice, setAutoStartVoice, invalidateDashboardCache, markTransactionsAsNew } = useAppStore();
+  const { autoStartVoice, setAutoStartVoice, markTransactionsAsNew } = useAppStore();
 
   useEffect(() => {
     if (autoStartVoice) {
@@ -71,7 +71,6 @@ export default function TransactionForm({ onAdded }: Props) {
     }
     setSubmitting(true);
     try {
-      invalidateDashboardCache();
       markTransactionsAsNew();
       await createTransaction({
         amount: numAmount,
@@ -104,7 +103,6 @@ export default function TransactionForm({ onAdded }: Props) {
         toast.error("Importo non trovato. Prova a essere più specifico (es. 'caffè 1.50')");
         return;
       }
-      invalidateDashboardCache();
       markTransactionsAsNew();
       toast.success(`€${tx.amount.toFixed(2)} salvato in ${tx.category} — "${tx.description}"`);
       setNlText("");
