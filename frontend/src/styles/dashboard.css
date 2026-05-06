@@ -449,10 +449,16 @@
 .filters-panel {
   position: absolute;
   top: calc(100% + 8px);
-  /* Centrato sotto il bottone Filtri, non tocca i bordi */
-  left: 50%;
-  transform: translateX(-50%);
+  /* Default: allineato a destra del collapsible container.
+     Funziona correttamente quando il pulsante è vicino al bordo destro
+     (Dashboard header, TransactionList header). Il pannello cresce verso
+     sinistra e non esce mai a destra. */
+  right: 0;
+  left: auto;
+  transform: none;
   width: 240px;
+  /* Clamp: non esce mai dal viewport anche su schermi strettissimi */
+  max-width: min(240px, calc(100vw - 1.5rem));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -466,11 +472,10 @@
   z-index: 30;
   animation: fadeIn var(--duration-fast) var(--ease-out) both;
 }
-/* Variante allineata a destra (Transactions) — deve stare DOPO .filters-panel */
-.filters-panel--right {
-  left: auto;
-  right: 0;
-  transform: none;
+/* Variante allineata a sinistra — pulsante vicino al bordo sinistro */
+.filters-panel--left {
+  right: auto;
+  left: 0;
 }
 .filters-panel .filter-row {
   display: flex;

@@ -321,7 +321,7 @@ export default function TransactionList() {
               {filtersOpen && (
                 <>
                 <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
-                <div className="filters-panel filters-panel--right">
+                <div className="filters-panel">
                   <div className="filter-row">
                     <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select" aria-label="Categoria">
                       <option value="">Tutte le categorie</option>
