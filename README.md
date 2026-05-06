@@ -1,40 +1,53 @@
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.11x-009688?logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Deploy](https://img.shields.io/badge/deploy-Render%20%2B%20Vercel-black)
 
 # FinCopilot — Copilota Finanziario AI
 
-Applicazione web per la gestione delle finanze personali con un assistente AI conversazionale.
-Registra spese, monitora budget, visualizza trend e interroga i tuoi dati in linguaggio naturale.
-Pensato per uso personale: si avvia in 5 minuti su qualsiasi macchina con Python e Node.
+Applicazione web per la gestione delle finanze personali con assistente AI conversazionale in italiano.
+Registra spese, monitora budget, analizza trend e interroga i tuoi dati in linguaggio naturale.
+
+> **Stato:** Beta privata — funzionante in produzione su Render + Vercel.
 
 ---
 
-## Stack
+## Cosa fa
+
+- **Dashboard** — KPI, grafici spese per categoria, trend mensile, confronto mese precedente, forecast fine mese, heatmap annuale
+- **Anomaly Detection** — 5 tipi di anomalia (importo anomalo, merchant nuovo, frequenza, duplicato sospetto, orario insolito) con dettaglio statistico
+- **AI Chat** — 12+ funzioni analitiche, routing deterministico + LLM, risposta in linguaggio naturale con thinking trace
+- **Budget** — impostazione e monitoraggio per categoria con alert visivi (ok / warning / over)
+- **Report mensile** — PDF generato automaticamente con narrativa AI e anomalie del mese
+- **Export CSV** — con filtri categoria, periodo e ricerca attivi
+
+---
+
+## Stack tecnico
 
 | Layer | Tecnologia |
 |---|---|
 | Backend | FastAPI · SQLAlchemy · SQLite (dev) |
 | AI | Groq API · Llama 3.3 70B · prompt engineering custom |
-| Frontend | React 18 · Vite · TypeScript |
+| Auth | Supabase (JWT) |
+| Frontend | React 19 · Vite · TypeScript |
 | Stato | Zustand |
 | Grafici | Recharts |
-| Auth | Supabase (JWT) |
 | Deploy | Render.com (backend) · Vercel (frontend) |
 
 ---
 
 ## Prerequisiti
 
-- Python >= 3.11
-- Node >= 18
-- Account [Groq](https://console.groq.com) gratuito per la API key
-- Account [Supabase](https://supabase.com) gratuito per l'autenticazione
+- Python ≥ 3.11
+- Node ≥ 18
+- Account [Groq](https://console.groq.com) — gratuito, per la API key
+- Account [Supabase](https://supabase.com) — gratuito, per l'autenticazione
 
 ---
 
-## Setup in 5 minuti
+## Avvio in 5 minuti
 
 ```bash
 # 1. Clone
@@ -46,67 +59,36 @@ python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env              # poi edita con le tue chiavi (vedi sezione Env)
+cp .env.example .env              # compila GROQ_API_KEY e credenziali Supabase
 uvicorn backend.main:app --reload
-# API disponibile su http://localhost:8000
-# Docs interattive su http://localhost:8000/docs
+# → http://localhost:8000
+# → Docs API: http://localhost:8000/docs
 
 # 3. Frontend (nuovo terminale)
 cd frontend
 cp .env.example .env              # già preconfigurato per localhost
-npm install
-npm run dev
-# App disponibile su http://localhost:5173
+npm install && npm run dev
+# → http://localhost:5173
 ```
 
 ---
 
 ## Variabili d'ambiente
 
-### Backend — `.env` (root)
-
-```env
-# Obbligatoria — ottienila su https://console.groq.com
-GROQ_API_KEY=gsk_...
-
-# DB locale (default: SQLite, non modificare per sviluppo)
-DATABASE_URL=sqlite:///./data/fincopilot.db
-
-# Supabase — per validare i JWT in arrivo dal frontend
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-
-# Debug opzionali
-AI_DEBUG_ROUTING=0      # 1 = log routing AI in console
-AI_DISABLE_LLM=0        # 1 = disabilita chiamate Groq (mock responses)
-```
-
-### Frontend — `frontend/.env`
-
-```env
-VITE_API_URL=http://localhost:8000/api/v1
-VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
-```
-
-Copia `frontend/.env.example` → `frontend/.env` e compila con le stesse credenziali Supabase.
+Vedi `.env.example` (backend) e `frontend/.env.example` (frontend).
+Le variabili Supabase sono le stesse per entrambi.
 
 ---
 
-## Come eseguire i test
+## Test
 
 ```bash
-# Attiva venv se non attivo
-source venv/bin/activate
-
-# Test deterministici — non richiedono GROQ_API_KEY
+# Test deterministici — no API key richiesta
 pytest backend/tests/test_ai_routing.py -v
 
 # Backtesting conversazionale — richiede GROQ_API_KEY nel .env
 pytest backend/tests/test_chat_backtest.py -v -s
-
-# Report HTML del backtest (generato automaticamente dopo il run)
-open backend/tests/backtest_report.html
+# Report: backend/tests/backtest_report.html
 ```
 
 ---
@@ -114,11 +96,10 @@ open backend/tests/backtest_report.html
 ## Reset del DB di sviluppo
 
 ```bash
-# Elimina il DB locale e ricrealo da zero (SQLite)
 rm -f data/fincopilot.db
 uvicorn backend.main:app --reload   # le tabelle vengono ricreate all'avvio
 
-# Carica dati di test realistici (90 transazioni, 3 mesi)
+# Carica 90 transazioni di test realistiche (3 mesi)
 python -m backend.tests.seed_test_data
 ```
 
@@ -146,7 +127,7 @@ fincopilot/
 │   │   └── utils/           # Utilities (voiceService, analyticsUtils)
 │   └── index.html
 ├── data/                    # Solo schema SQL o seed statici — mai *.db
-├── docs/                    # Documentazione tecnica (ai_engine.md, repo_audit.md)
+├── docs/                    # Documentazione tecnica
 ├── .env.example             # Template variabili d'ambiente backend
 ├── requirements.txt
 └── render.yaml              # Config deploy Render.com
@@ -154,28 +135,25 @@ fincopilot/
 
 ---
 
-## Funzionalità
-
-- **Dashboard** — totale mese, trend giornaliero, top categorie, variazione mese precedente
-- **Transazioni** — inserimento manuale, parsing linguaggio naturale, import, tag, export CSV
-- **Budget** — limiti per categoria con alert visivi (ok / warning / over)
-- **Chat AI** — 12+ funzioni analitiche (statistiche, ricerca merchant, anomalie, previsione, what-if)
-- **Briefing giornaliero** — insight automatici all'apertura dell'app
-- **ThinkingTrace** — traccia i passi di ragionamento dell'AI nella chat (collassabile)
-
----
-
 ## Roadmap
 
-- [x] Fase 1 — Dashboard, inserimento manuale, budget
-- [x] Fase 1 — Chat AI con routing multi-funzione
-- [x] Fase 1 — Backtesting conversazionale (60 test case)
-- [ ] Fase 2 — Import bancario automatico (CSV OFX/CAMT)
-- [ ] Fase 2 — Multi-account e trasferimenti interni
-- [ ] Fase 2 — Notifiche push budget superato
+- [x] Dashboard con AI analytics e anomaly detection
+- [x] Chat AI con routing deterministico + LLM
+- [x] Report mensile PDF con narrativa AI
+- [x] Export CSV, budget per categoria
+- [x] Backtesting conversazionale (60 test case)
+- [ ] Import CSV bancario (BNCR, Fineco, N26)
+- [ ] Notifiche push budget superato
+- [ ] App mobile (PWA installabile)
 
 ---
 
 ## Licenza
 
-MIT © Roberto Biagetti
+MIT — vedi [LICENSE](LICENSE)
+
+---
+
+## Autore
+
+Roberto Biagetti · [GitHub](https://github.com/Rbiagetti)

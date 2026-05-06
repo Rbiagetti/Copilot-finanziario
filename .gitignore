@@ -1,54 +1,52 @@
-# Python
+# ── Python ────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.so
 *.egg-info/
 build/
+dist/
 venv/
 .venv/
 .pytest_cache/
 
-# DB locali (mai committare il DB di sviluppo)
+# ── Database (mai committare il DB locale) ────────────────
 *.db
 *.sqlite
 *.sqlite3
 data/*.db
 
-# Env
+# ── Variabili d'ambiente ──────────────────────────────────
 .env
 .env.local
 .env.*.local
 .env.production
 
-# Frontend
+# ── Frontend ──────────────────────────────────────────────
 node_modules/
-dist/
 frontend/dist/
 .vite/
 
-# OS
+# ── OS ────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
 
-# Editor
+# ── Editor ────────────────────────────────────────────────
 .idea/
 .vscode/settings.json
 *.code-workspace
 
-# Log e temporanei
+# ── Log e temporanei ──────────────────────────────────────
 *.log
 *.bak
 *.tmp
 *.orig
 
-# Test artifacts
+# ── Test artifacts ────────────────────────────────────────
 backend/tests/backtest_report.html
 
-# Claude artifacts
+# ── Claude / AI tools ─────────────────────────────────────
 .claude/
-
-# Deployment / altri
-db_path
+graphify-out/
