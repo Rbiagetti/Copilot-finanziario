@@ -1028,6 +1028,13 @@
 }
 
 /* === DASHBOARD RESPONSIVE === */
+/* Header controls: icona-only su mobile — tutti e 3 i pulsanti
+   restano su una riga, "Filtri" rimane a destra → pannello non va mai fuori schermo */
+@media (max-width: 540px) {
+  .filters-toggle > span:not(.filters-badge) { display: none; }
+  .filters-toggle { padding: 8px 10px; gap: 4px; }
+}
+
 @media (max-width: 767px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; margin-bottom: 1.25rem; }
   .kpi-card { padding: 0.75rem; gap: 0.55rem; }
