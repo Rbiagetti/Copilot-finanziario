@@ -244,6 +244,7 @@ export default function Dashboard() {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<{ title: string; type: "anomalies" | "forecast" } | null>(null);
   const [anomalyView, setAnomalyView] = useState<"list" | "detail">("list");
@@ -286,7 +287,7 @@ export default function Dashboard() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  const { setView, setDashboardFilter, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
+  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
   const anomalyState = anomalies;
   const cc = useChartColors();
@@ -318,30 +319,48 @@ export default function Dashboard() {
   };
 
   const loadAll = async (force = false) => {
-    // History + forecast: sempre freschi al mount — nessuna cache TTL.
-    // L'utente vuole vedere i dati aggiornati ogni volta che apre la dashboard.
-    // Le anomalie invece hanno TTL proprio e si aggiornano solo manualmente.
-    setLoading(true);
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minuti
+    const cacheValid = !force
+      && dashboardCache.loadedAt
+      && Date.now() - dashboardCache.loadedAt < CACHE_TTL;
+
+    if (cacheValid) {
+      // Cache fresca: mostra dati in memoria, ricarica solo budget (live) e anomalie in bg
+      setRawHistory(dashboardCache.rawHistory);
+      setForecast(dashboardCache.forecast);
+      setLoading(false);
+      getBudgetStatus().then(r => { if (isMountedRef.current) setBudgets(r.data); }).catch(() => {});
+      loadAnomalies(false);
+      return;
+    }
+
+    // Caricamento iniziale (loading = skeleton) vs refresh manuale (refreshing = spinner nel bottone)
+    if (force) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setErrorMsg(null);
     try {
       const [hist, fore, budg] = await Promise.all([
         getFullHistory(), getForecast(), getBudgetStatus(),
       ]);
-      const rawHistory = hist.data;
-      const forecast = fore.data;
       if (!isMountedRef.current) return;
-      setRawHistory(rawHistory);
-      setForecast(forecast);
+      setRawHistory(hist.data);
+      setForecast(fore.data);
       setBudgets(budg.data);
-      setDashboardCache({ rawHistory, forecast });
-      setErrorMsg(null); // M-2: reset errore se fetch completata con successo
+      setDashboardCache({ rawHistory: hist.data, forecast: fore.data });
+      setErrorMsg(null);
     } catch (e: any) {
       if (!isMountedRef.current) return;
       console.error("Errore Dashboard:", e);
       setErrorMsg("Errore di caricamento dati analitici.");
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-    if (isMountedRef.current) setLoading(false);
-    // Avvia il caricamento anomalie in background dopo che la dashboard è pronta
     loadAnomalies(force);
   };
 
@@ -627,6 +646,16 @@ export default function Dashboard() {
           </div>
           {/* Wrapper con position:relative → il pannello si posiziona rispetto a questo */}
           <div style={{ position: "relative", display: "flex", alignItems: "flex-start", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              className="filters-toggle"
+              onClick={() => loadAll(true)}
+              disabled={refreshing}
+              aria-label="Aggiorna dashboard"
+              title="Forza aggiornamento dati"
+            >
+              <RefreshCw size={14} className={refreshing ? "spin" : ""} />
+              <span>{refreshing ? "Aggiornamento…" : "Aggiorna"}</span>
+            </button>
             <button
               className="filters-toggle"
               onClick={() => setShowCustomize(true)}
