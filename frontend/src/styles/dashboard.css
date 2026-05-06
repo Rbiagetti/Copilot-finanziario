@@ -456,9 +456,9 @@
   right: 0;
   left: auto;
   transform: none;
-  width: 240px;
+  width: 260px;
   /* Clamp: non esce mai dal viewport anche su schermi strettissimi */
-  max-width: min(240px, calc(100vw - 1.5rem));
+  max-width: min(260px, calc(100vw - 1.5rem));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -494,6 +494,45 @@
   outline: none;
   color: var(--text);
 }
+/* Multi-select categoria */
+.filter-row--cats {
+  align-items: flex-start !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+.cat-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+}
+.cat-checkboxes-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 4px;
+}
+.cat-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color var(--duration-fast);
+}
+.cat-checkbox-label:hover { color: var(--accent); }
+.cat-checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .filters-reset {
   display: inline-flex;
   align-items: center;

@@ -109,16 +109,28 @@ function HeatmapCalendar({ transactions }: { transactions: import("../../api/cli
     return m;
   }, [transactions]);
 
-  // Genera le settimane degli ultimi 364 giorni partendo da lunedì
-  const { weeks, monthLabels } = useMemo(() => {
+  // Genera le settimane dalla prima transazione disponibile (max 1 anno)
+  const { weeks, monthLabels, rangeLabel } = useMemo(() => {
     const today = new Date();
-    const start = new Date(today);
-    start.setDate(start.getDate() - 364);
-    const dow0 = start.getDay(); // 0=Dom
-    start.setDate(start.getDate() - (dow0 === 0 ? 6 : dow0 - 1)); // arretra a lunedì
+
+    // Calcola il punto di partenza: prima transazione o max 1 anno fa
+    const allDates = Object.keys(map).sort();
+    let startBase = new Date(today);
+    if (allDates.length > 0) {
+      const firstTx = new Date(allDates[0] + "T12:00:00");
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      startBase = firstTx < oneYearAgo ? oneYearAgo : firstTx;
+    } else {
+      startBase.setDate(startBase.getDate() - 90);
+    }
+
+    // Arretra al lunedì precedente
+    const dow0 = startBase.getDay();
+    startBase.setDate(startBase.getDate() - (dow0 === 0 ? 6 : dow0 - 1));
 
     const weeks: { date: string; total: number; dow: number }[][] = [];
-    const cur = new Date(start);
+    const cur = new Date(startBase);
     const monthLabels: { label: string; wIdx: number }[] = [];
 
     while (cur <= today) {
@@ -138,7 +150,14 @@ function HeatmapCalendar({ transactions }: { transactions: import("../../api/cli
       weeks[wIdx].push({ date: dateStr, total: map[dateStr] || 0, dow });
       cur.setDate(cur.getDate() + 1);
     }
-    return { weeks, monthLabels };
+
+    // Label periodo dinamica
+    const monthsSpan = weeks.length / 4.33;
+    const rangeLabel = monthsSpan >= 11
+      ? "Attività di spesa — anno"
+      : `Attività di spesa — ${startBase.toLocaleDateString("it-IT", { month: "short", year: "numeric" })} › oggi`;
+
+    return { weeks, monthLabels, rangeLabel };
   }, [map]);
 
   const allTotals = Object.values(map).filter(v => v > 0);
@@ -158,11 +177,11 @@ function HeatmapCalendar({ transactions }: { transactions: import("../../api/cli
   return (
     <div className="heatmap-wrap" ref={wrapRef}>
       {/* Etichette mesi */}
-      <div className="heatmap-months-row" style={{ paddingLeft: 28, position: "relative", height: 16 }}>
+      <div className="heatmap-months-row" style={{ paddingLeft: 30, position: "relative", height: 16 }}>
         {monthLabels.map((m, i) => (
           <span
             key={i}
-            style={{ position: "absolute", left: 28 + m.wIdx * (CELL + GAP), fontSize: "0.62rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}
+            style={{ position: "absolute", left: 30 + m.wIdx * (CELL + GAP), fontSize: "0.62rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}
           >
             {m.label}
           </span>
@@ -170,10 +189,16 @@ function HeatmapCalendar({ transactions }: { transactions: import("../../api/cli
       </div>
 
       <div style={{ display: "flex", gap: 4, alignItems: "flex-start" }}>
-        {/* Etichette giorni */}
-        <div className="heatmap-day-labels">
+        {/* Etichette giorni — stessa griglia del chart: repeat(7, CELL) gap GAP */}
+        <div style={{
+          display: "grid",
+          gridTemplateRows: `repeat(7, ${CELL}px)`,
+          gap: GAP,
+          width: 26,
+          flexShrink: 0,
+        }}>
           {["Lun","","Mer","","Ven","","Dom"].map((d, i) => (
-            <span key={i} style={{ fontSize: "0.58rem", color: "var(--text-dim)", height: CELL + GAP, display: "flex", alignItems: "center" }}>{d}</span>
+            <span key={i} style={{ fontSize: "0.58rem", color: "var(--text-dim)", lineHeight: `${CELL}px`, overflow: "hidden" }}>{d}</span>
           ))}
         </div>
 
@@ -253,7 +278,7 @@ export default function Dashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [anomalyTypeFilter, setAnomalyTypeFilter] = useState<string>("all");
   const [daysBack, setDaysBack] = useState(90);
-  const [catFilter, setCatFilter] = useState("");
+  const [catFilters, setCatFilters] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [anomalyLoadError, setAnomalyLoadError] = useState(false);
   const isMountedRef = useRef(true);
@@ -384,17 +409,17 @@ export default function Dashboard() {
       cutoff.setDate(cutoff.getDate() - daysBack);
       if (t.date < cutoff.toISOString().slice(0, 10)) return false;
     }
-    if (catFilter && t.category !== catFilter) return false;
+    if (catFilters.length > 0 && !catFilters.includes(t.category)) return false;
     return true;
-  }), [rawHistory, daysBack, catFilter]);
+  }), [rawHistory, daysBack, catFilters]);
 
   // ── FILTRO CATEGORIA SOLO ──────────────────────────────────────────
   // Usato da chart con selettore mese proprio (MoM, Curva cumulativa)
   // e dall'Heatmap (sempre 12 mesi): rispettano la categoria selezionata
   // ma NON il periodo globale perché hanno il proprio controllo temporale
   const catFilteredHistory = useMemo(
-    () => catFilter ? rawHistory.filter(t => t.category === catFilter) : rawHistory,
-    [rawHistory, catFilter]
+    () => catFilters.length > 0 ? rawHistory.filter(t => catFilters.includes(t.category)) : rawHistory,
+    [rawHistory, catFilters]
   );
 
   const monthlyTrend = useMemo(() => getMonthlyTrend(filteredData, "month"), [filteredData]);
@@ -677,43 +702,57 @@ export default function Dashboard() {
               >
                 <SlidersHorizontal size={14} />
                 <span>Filtri</span>
-                {(daysBack !== 90 || catFilter) && (
-                  <span className="filters-badge">{(daysBack !== 90 ? 1 : 0) + (catFilter ? 1 : 0)}</span>
+                {(daysBack !== 90 || catFilters.length > 0) && (
+                  <span className="filters-badge">{(daysBack !== 90 ? 1 : 0) + (catFilters.length > 0 ? catFilters.length : 0)}</span>
                 )}
                 <ChevronDown size={14} className="filters-chevron" />
               </button>
-
-              {filtersOpen && (
-                <>
-                  <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
-                  <div className="filters-panel">
-                    <div className="filter-row">
-                      <Calendar size={14} className="text-dim" />
-                      <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
-                        <option value={7}>Ultima settimana</option>
-                        <option value={30}>Ultimo mese</option>
-                        <option value={90}>Ultimi 3 mesi</option>
-                        <option value={180}>Ultimi 6 mesi</option>
-                        <option value={365}>Ultimo anno</option>
-                        <option value={9999}>Tutto</option>
-                      </select>
-                    </div>
-                    <div className="filter-row">
-                      <Filter size={14} className="text-dim" />
-                      <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="input-minimal">
-                        <option value="">Tutte le categorie</option>
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    {(daysBack !== 90 || catFilter) && (
-                      <button className="filters-reset" onClick={() => { setDaysBack(90); setCatFilter(""); }}>
-                        <X size={12} /> Reset
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
+
+            {filtersOpen && (
+              <>
+                <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
+                <div className="filters-panel">
+                  <div className="filter-row">
+                    <Calendar size={14} className="text-dim" style={{ flexShrink: 0 }} />
+                    <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
+                      <option value={7}>Ultima settimana</option>
+                      <option value={30}>Ultimo mese</option>
+                      <option value={90}>Ultimi 3 mesi</option>
+                      <option value={180}>Ultimi 6 mesi</option>
+                      <option value={365}>Ultimo anno</option>
+                      <option value={9999}>Tutto</option>
+                    </select>
+                  </div>
+                  <div className="filter-row filter-row--cats">
+                    <Filter size={14} className="text-dim" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div className="cat-checkboxes">
+                      <span className="cat-checkboxes-label">
+                        {catFilters.length === 0 ? "Tutte le categorie" : `${catFilters.length} selezionat${catFilters.length === 1 ? "a" : "e"}`}
+                      </span>
+                      {CATEGORIES.map(c => (
+                        <label key={c} className="cat-checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={catFilters.includes(c)}
+                            onChange={e => {
+                              if (e.target.checked) setCatFilters(prev => [...prev, c]);
+                              else setCatFilters(prev => prev.filter(x => x !== c));
+                            }}
+                          />
+                          {c}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {(daysBack !== 90 || catFilters.length > 0) && (
+                    <button className="filters-reset" onClick={() => { setDaysBack(90); setCatFilters([]); }}>
+                      <X size={12} /> Reset
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>{/* end wrapper pulsanti */}
         </div>
       </header>
@@ -1157,12 +1196,25 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* 10. Calendar Heatmap — attività di spesa anno */}
+        {/* 10. Calendar Heatmap — attività di spesa */}
         {isVisible("heatmap") && rawHistory.length > 0 && (
           <div className="chart-card card-glass chart-full">
             <ChartHeader
-              title="Attività di spesa — anno"
-              infoTitle="Heatmap annuale"
+              title={(() => {
+                const map: Record<string, number> = {};
+                catFilteredHistory.forEach((t: import("../../api/client").FullHistoryTransaction) => { map[t.date] = (map[t.date] || 0) + t.amount; });
+                const dates = Object.keys(map).sort();
+                if (dates.length === 0) return "Attività di spesa";
+                const today = new Date();
+                const firstTx = new Date(dates[0] + "T12:00:00");
+                const oneYearAgo = new Date(today); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                const start = firstTx < oneYearAgo ? oneYearAgo : firstTx;
+                const months = (today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
+                return months >= 11
+                  ? "Attività di spesa — anno"
+                  : `Attività di spesa — ${start.toLocaleDateString("it-IT", { month: "short", year: "numeric" })} › oggi`;
+              })()}
+              infoTitle="Heatmap attività"
               infoBody="Mostra l'intensità di spesa giorno per giorno negli ultimi 12 mesi, come il grafico dei contributi su GitHub. Colori più scuri = spesa più alta quel giorno. Ideale per vedere pattern stagionali, periodi di spesa intensa o mesi tranquilli."
             />
             <HeatmapCalendar transactions={catFilteredHistory} />
