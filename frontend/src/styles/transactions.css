@@ -131,6 +131,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  position: relative; /* ancora per .filters-panel assoluto */
 }
 .tx-filters-top .search-box { flex: 1; }
 .tx-filters-top .filters-collapsible { flex-shrink: 0; }

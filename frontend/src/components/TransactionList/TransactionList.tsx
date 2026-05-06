@@ -301,7 +301,8 @@ export default function TransactionList() {
               )}
             </div>
 
-            {/* Filtri collassabili identici alla Dashboard */}
+            {/* Filtri collassabili — pannello fuori dal collapsible così il backdrop
+                non copre il bottone (fix doppio tap) */}
             <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
               <button
                 className="filters-toggle"
@@ -318,8 +319,9 @@ export default function TransactionList() {
                 )}
                 <ChevronDown size={14} className="filters-chevron" />
               </button>
-              {filtersOpen && (
-                <>
+            </div>
+            {filtersOpen && (
+              <>
                 <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
                 <div className="filters-panel">
                   <div className="filter-row">
@@ -353,9 +355,8 @@ export default function TransactionList() {
                     </button>
                   )}
                 </div>
-                </>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           {summary && (

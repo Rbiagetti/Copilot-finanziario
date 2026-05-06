@@ -392,6 +392,9 @@
 .filters-collapsible {
   position: relative;
   display: inline-block;
+  /* Sopra il backdrop (z-index 29): il bottone rimane cliccabile anche quando
+     il pannello è aperto → niente doppio tap per riaprire */
+  z-index: 31;
 }
 .filters-toggle {
   display: inline-flex;

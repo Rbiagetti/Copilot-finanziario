@@ -280,6 +280,8 @@ export default function Dashboard() {
   const [daysBack, setDaysBack] = useState(90);
   const [catFilters, setCatFilters] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
+  const filtresBtnRef = useRef<HTMLButtonElement>(null);
   const [anomalyLoadError, setAnomalyLoadError] = useState(false);
   const isMountedRef = useRef(true);
   const [patternTab, setPatternTab] = useState<"orario" | "giornaliero">("giornaliero");
@@ -311,6 +313,20 @@ export default function Dashboard() {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
+
+  // Posizione pannello filtri: fixed centrato sotto il bottone, clamped al viewport
+  useEffect(() => {
+    if (filtersOpen && filtresBtnRef.current) {
+      const rect = filtresBtnRef.current.getBoundingClientRect();
+      const PANEL_W = 260;
+      const MARGIN = 12;
+      const idealLeft = rect.left + rect.width / 2 - PANEL_W / 2;
+      const left = Math.max(MARGIN, Math.min(idealLeft, window.innerWidth - PANEL_W - MARGIN));
+      setPanelPos({ top: rect.bottom + 8, left });
+    } else {
+      setPanelPos(null);
+    }
+  }, [filtersOpen]);
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
@@ -695,6 +711,7 @@ export default function Dashboard() {
 
             <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
               <button
+                ref={filtresBtnRef}
                 className="filters-toggle"
                 onClick={() => setFiltersOpen(o => !o)}
                 aria-expanded={filtersOpen}
@@ -709,10 +726,13 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {filtersOpen && (
+            {filtersOpen && panelPos && (
               <>
                 <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
-                <div className="filters-panel">
+                <div
+                  className="filters-panel"
+                  style={{ position: "fixed", top: panelPos.top, left: panelPos.left, width: 260 }}
+                >
                   <div className="filter-row">
                     <Calendar size={14} className="text-dim" style={{ flexShrink: 0 }} />
                     <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
