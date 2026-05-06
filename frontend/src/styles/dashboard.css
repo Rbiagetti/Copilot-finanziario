@@ -459,9 +459,10 @@
   right: 0;
   left: auto;
   transform: none;
-  width: 260px;
-  /* Clamp: non esce mai dal viewport anche su schermi strettissimi */
-  max-width: min(260px, calc(100vw - 1.5rem));
+  width: 300px;
+  /* Clamp: non esce mai dal viewport anche su schermi strettissimi.
+     Su mobile lascia solo 12px di margine per dare spazio alle chips. */
+  max-width: min(300px, calc(100vw - 24px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -497,43 +498,52 @@
   outline: none;
   color: var(--text);
 }
-/* Multi-select categoria */
-.filter-row--cats {
-  align-items: flex-start !important;
-  padding-top: 8px !important;
-  padding-bottom: 8px !important;
-}
-.cat-checkboxes {
+/* Multi-select categoria — pill chips */
+.cat-chips-section {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  flex: 1;
-}
-.cat-checkboxes-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--glass-border);
-  margin-bottom: 4px;
-}
-.cat-checkbox-label {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 5px 0;
-  font-size: 0.8rem;
-  color: var(--text);
-  cursor: pointer;
-  border-radius: 6px;
-  transition: color var(--duration-fast);
 }
-.cat-checkbox-label:hover { color: var(--accent); }
-.cat-checkbox-label input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
+.cat-chips-title {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  min-height: 36px;          /* touch target comodo */
+  background: var(--glass-1);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
   cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.cat-chip:hover {
+  border-color: rgba(255,182,141,0.3);
+  color: var(--text);
+}
+.cat-chip--on {
+  background: rgba(255,140,66,0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .filters-reset {

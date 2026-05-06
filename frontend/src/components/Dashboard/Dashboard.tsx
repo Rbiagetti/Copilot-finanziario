@@ -318,7 +318,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (filtersOpen && filtresBtnRef.current) {
       const rect = filtresBtnRef.current.getBoundingClientRect();
-      const PANEL_W = 260;
+      const PANEL_W = Math.min(300, window.innerWidth - 24);
       const MARGIN = 12;
       const idealLeft = rect.left + rect.width / 2 - PANEL_W / 2;
       const left = Math.max(MARGIN, Math.min(idealLeft, window.innerWidth - PANEL_W - MARGIN));
@@ -731,7 +731,7 @@ export default function Dashboard() {
                 <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
                 <div
                   className="filters-panel"
-                  style={{ position: "fixed", top: panelPos.top, left: panelPos.left, width: 260 }}
+                  style={{ position: "fixed", top: panelPos.top, left: panelPos.left }}
                 >
                   <div className="filter-row">
                     <Calendar size={14} className="text-dim" style={{ flexShrink: 0 }} />
@@ -744,25 +744,28 @@ export default function Dashboard() {
                       <option value={9999}>Tutto</option>
                     </select>
                   </div>
-                  <div className="filter-row filter-row--cats">
-                    <Filter size={14} className="text-dim" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <div className="cat-checkboxes">
-                      <span className="cat-checkboxes-label">
-                        {catFilters.length === 0 ? "Tutte le categorie" : `${catFilters.length} selezionat${catFilters.length === 1 ? "a" : "e"}`}
-                      </span>
-                      {CATEGORIES.map(c => (
-                        <label key={c} className="cat-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={catFilters.includes(c)}
-                            onChange={e => {
-                              if (e.target.checked) setCatFilters(prev => [...prev, c]);
-                              else setCatFilters(prev => prev.filter(x => x !== c));
+                  <div className="cat-chips-section">
+                    <span className="cat-chips-title">
+                      {catFilters.length === 0 ? "Tutte le categorie" : `${catFilters.length} selezionat${catFilters.length === 1 ? "a" : "e"}`}
+                    </span>
+                    <div className="cat-chips">
+                      {CATEGORIES.map(c => {
+                        const active = catFilters.includes(c);
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            className={`cat-chip${active ? " cat-chip--on" : ""}`}
+                            onClick={() => {
+                              if (active) setCatFilters(prev => prev.filter(x => x !== c));
+                              else setCatFilters(prev => [...prev, c]);
                             }}
-                          />
-                          {c}
-                        </label>
-                      ))}
+                          >
+                            <span>{EMOJI_MAP[c]}</span>
+                            <span className="capitalize">{c}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                   {(daysBack !== 90 || catFilters.length > 0) && (
