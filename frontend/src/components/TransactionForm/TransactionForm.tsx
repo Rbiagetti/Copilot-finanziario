@@ -104,6 +104,7 @@ export default function TransactionForm({ onAdded }: Props) {
         toast.error("Importo non trovato. Prova a essere più specifico (es. 'caffè 1.50')");
         return;
       }
+      invalidateDashboardCache();
       markTransactionsAsNew();
       toast.success(`€${tx.amount.toFixed(2)} salvato in ${tx.category} — "${tx.description}"`);
       setNlText("");

@@ -286,7 +286,7 @@ export default function Dashboard() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
+  const { setView, setDashboardFilter, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
   // anomalies letto direttamente dallo store — sopravvive al remount del componente
   const anomalyState = anomalies;
   const cc = useChartColors();
@@ -318,16 +318,9 @@ export default function Dashboard() {
   };
 
   const loadAll = async (force = false) => {
-    if (!force && dashboardCache.loadedAt && Date.now() - dashboardCache.loadedAt < 5 * 60 * 1000) {
-      setRawHistory(dashboardCache.rawHistory);
-      setForecast(dashboardCache.forecast);
-      setLoading(false);
-      // Budget non è in cache — lo fetchamo sempre (dati live)
-      getBudgetStatus().then(r => setBudgets(r.data)).catch(() => {});
-      // Anomalie: ricarica in background se cache scaduta
-      loadAnomalies(false);
-      return;
-    }
+    // History + forecast: sempre freschi al mount — nessuna cache TTL.
+    // L'utente vuole vedere i dati aggiornati ogni volta che apre la dashboard.
+    // Le anomalie invece hanno TTL proprio e si aggiornano solo manualmente.
     setLoading(true);
     setErrorMsg(null);
     try {
