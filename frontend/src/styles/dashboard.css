@@ -408,6 +408,8 @@
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
+  touch-action: manipulation;  /* elimina 300ms delay iOS */
+  -webkit-tap-highlight-color: transparent;
   transition:
     border-color var(--duration-fast) var(--ease-out),
     background var(--duration-fast) var(--ease-out),
@@ -528,6 +530,8 @@
   font-size: 0.78rem;
   color: var(--text-muted);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     background var(--duration-fast) var(--ease-out),
     border-color var(--duration-fast) var(--ease-out),
@@ -559,6 +563,8 @@
   font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: color var(--duration-fast), border-color var(--duration-fast);
 }
 .filters-reset:hover {

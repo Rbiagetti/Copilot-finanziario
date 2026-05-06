@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useMemo, memo } from "react";
+import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
-import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, SlidersHorizontal, ChevronDown, CalendarDays } from "lucide-react";
+import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, ListFilter, ChevronDown, CalendarDays } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
@@ -87,6 +87,21 @@ export default function TransactionList() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [groupByDate, setGroupByDate] = useState(false);
   const modalRef = useFocusTrap(!!editState);
+  const txFiltersBtnRef = useRef<HTMLButtonElement>(null);
+  const txFiltersPanelRef = useRef<HTMLDivElement>(null);
+
+  // Chiudi panel filtri al tap fuori — no backdrop, zero conflitti iOS/z-index
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const handler = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (txFiltersBtnRef.current?.contains(t)) return;
+      if (txFiltersPanelRef.current?.contains(t)) return;
+      setFiltersOpen(false);
+    };
+    document.addEventListener("pointerdown", handler, { capture: true });
+    return () => document.removeEventListener("pointerdown", handler, { capture: true });
+  }, [filtersOpen]);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string> = {};
@@ -301,16 +316,15 @@ export default function TransactionList() {
               )}
             </div>
 
-            {/* Filtri collassabili — pannello fuori dal collapsible così il backdrop
-                non copre il bottone (fix doppio tap) */}
             <div className={`filters-collapsible ${filtersOpen ? "open" : ""}`}>
               <button
+                ref={txFiltersBtnRef}
                 className="filters-toggle"
                 onClick={() => setFiltersOpen(o => !o)}
                 aria-expanded={filtersOpen}
                 aria-label="Apri filtri"
               >
-                <SlidersHorizontal size={14} />
+                <ListFilter size={14} />
                 <span>Filtri</span>
                 {hasFilters && (
                   <span className="filters-badge">
@@ -321,41 +335,38 @@ export default function TransactionList() {
               </button>
             </div>
             {filtersOpen && (
-              <>
-                <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
-                <div className="filters-panel">
-                  <div className="filter-row">
-                    <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select" aria-label="Categoria">
-                      <option value="">Tutte le categorie</option>
-                      {Object.entries(EMOJI_MAP).map(([k, v]) => (
-                        <option key={k} value={k}>{v} {k}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="filter-row">
-                    <select value={daysRange} onChange={(e) => setDaysRange(Number(e.target.value))} className="filter-select" aria-label="Periodo">
-                      <option value="365">Tutto il periodo</option>
-                      <option value="1">Oggi</option>
-                      <option value="7">Ultimi 7 giorni</option>
-                      <option value="30">Ultimi 30 giorni</option>
-                      <option value="90">Ultimi 90 giorni</option>
-                    </select>
-                  </div>
-                  <div className="filter-row">
-                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="filter-select" aria-label="Ordine">
-                      <option value="date_desc">Più recenti prima</option>
-                      <option value="date_asc">Meno recenti prima</option>
-                      <option value="amount_desc">Importo più alto</option>
-                      <option value="amount_asc">Importo più basso</option>
-                    </select>
-                  </div>
-                  {hasFilters && (
-                    <button className="filters-reset" onClick={() => { clearFilters(); setFiltersOpen(false); }}>
-                      <X size={12} /> Reset filtri
-                    </button>
-                  )}
+              <div ref={txFiltersPanelRef} className="filters-panel">
+                <div className="filter-row">
+                  <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select" aria-label="Categoria">
+                    <option value="">Tutte le categorie</option>
+                    {Object.entries(EMOJI_MAP).map(([k, v]) => (
+                      <option key={k} value={k}>{v} {k}</option>
+                    ))}
+                  </select>
                 </div>
-              </>
+                <div className="filter-row">
+                  <select value={daysRange} onChange={(e) => setDaysRange(Number(e.target.value))} className="filter-select" aria-label="Periodo">
+                    <option value="365">Tutto il periodo</option>
+                    <option value="1">Oggi</option>
+                    <option value="7">Ultimi 7 giorni</option>
+                    <option value="30">Ultimi 30 giorni</option>
+                    <option value="90">Ultimi 90 giorni</option>
+                  </select>
+                </div>
+                <div className="filter-row">
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="filter-select" aria-label="Ordine">
+                    <option value="date_desc">Più recenti prima</option>
+                    <option value="date_asc">Meno recenti prima</option>
+                    <option value="amount_desc">Importo più alto</option>
+                    <option value="amount_asc">Importo più basso</option>
+                  </select>
+                </div>
+                {hasFilters && (
+                  <button className="filters-reset" onClick={() => { clearFilters(); setFiltersOpen(false); }}>
+                    <X size={12} /> Reset filtri
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

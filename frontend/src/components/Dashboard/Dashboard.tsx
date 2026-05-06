@@ -13,7 +13,7 @@ import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
 import {
   TrendingUp, Euro, AlertTriangle, Target, X, HelpCircle,
-  Calendar, Filter, SlidersHorizontal, ChevronDown, PlusCircle,
+  Calendar, Filter, ListFilter, LayoutDashboard, ChevronDown, PlusCircle,
   BarChart2, Wallet, ArrowRight, TrendingDown, Minus, ChevronLeft, RefreshCw
 } from "lucide-react";
 import { getMonthlyTrend, getCategoryData, getRecurringData, getCalendarData, getTimeOfDayData, getCategoryMoM, getAvailableMonths } from "../../utils/analyticsUtils";
@@ -282,6 +282,7 @@ export default function Dashboard() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
   const filtresBtnRef = useRef<HTMLButtonElement>(null);
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
   const [anomalyLoadError, setAnomalyLoadError] = useState(false);
   const isMountedRef = useRef(true);
   const [patternTab, setPatternTab] = useState<"orario" | "giornaliero">("giornaliero");
@@ -326,6 +327,20 @@ export default function Dashboard() {
     } else {
       setPanelPos(null);
     }
+  }, [filtersOpen]);
+
+  // Chiudi il pannello filtri al click/tap fuori — no backdrop, nessun conflitto z-index/iOS
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const handler = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (filtresBtnRef.current?.contains(t)) return;   // tap sul bottone → onClick gestisce
+      if (filtersPanelRef.current?.contains(t)) return; // tap dentro il panel → lascia passare
+      setFiltersOpen(false);
+    };
+    // capture:true → il listener gira prima di qualsiasi handler dell'elemento
+    document.addEventListener("pointerdown", handler, { capture: true });
+    return () => document.removeEventListener("pointerdown", handler, { capture: true });
   }, [filtersOpen]);
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache, anomalies, setAnomalies, setAnomaliesLoading, setAnomaliesRefreshing, markTransactionsAsNew } = useAppStore();
@@ -702,7 +717,7 @@ export default function Dashboard() {
               onClick={() => setShowCustomize(true)}
               aria-label="Personalizza dashboard"
             >
-              <SlidersHorizontal size={14} />
+              <LayoutDashboard size={14} />
               <span>Personalizza</span>
               {hiddenCards.size > 0 && (
                 <span className="filters-badge">{hiddenCards.size}</span>
@@ -717,7 +732,7 @@ export default function Dashboard() {
                 aria-expanded={filtersOpen}
                 aria-label="Apri filtri"
               >
-                <SlidersHorizontal size={14} />
+                <ListFilter size={14} />
                 <span>Filtri</span>
                 {(daysBack !== 90 || catFilters.length > 0) && (
                   <span className="filters-badge">{(daysBack !== 90 ? 1 : 0) + (catFilters.length > 0 ? catFilters.length : 0)}</span>
@@ -727,12 +742,11 @@ export default function Dashboard() {
             </div>
 
             {filtersOpen && panelPos && (
-              <>
-                <div className="filter-backdrop" onClick={() => setFiltersOpen(false)} />
-                <div
-                  className="filters-panel"
-                  style={{ position: "fixed", top: panelPos.top, left: panelPos.left }}
-                >
+              <div
+                ref={filtersPanelRef}
+                className="filters-panel"
+                style={{ position: "fixed", top: panelPos.top, left: panelPos.left }}
+              >
                   <div className="filter-row">
                     <Calendar size={14} className="text-dim" style={{ flexShrink: 0 }} />
                     <select value={daysBack} onChange={e => setDaysBack(Number(e.target.value))} className="input-minimal">
@@ -773,8 +787,7 @@ export default function Dashboard() {
                       <X size={12} /> Reset
                     </button>
                   )}
-                </div>
-              </>
+              </div>
             )}
           </div>{/* end wrapper pulsanti */}
         </div>
