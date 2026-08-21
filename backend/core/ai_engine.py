@@ -261,6 +261,20 @@ def _dates(days_ago: int = 0) -> str:
     return (date.today() - timedelta(days=days_ago)).isoformat()
 
 
+def _valid_iso_date(s) -> str | None:
+    """Valida una stringa data ISO 'YYYY-MM-DD'. Rifiuta formati errati e date future
+    oltre oggi (i dati storici non arrivano dal futuro). Ritorna None se non valida."""
+    if not isinstance(s, str):
+        return None
+    try:
+        d = date.fromisoformat(s.strip())
+    except ValueError:
+        return None
+    if d > date.today():
+        return None
+    return d.isoformat()
+
+
 def _eur(v) -> str:
     """Formatta un importo in euro sempre con 2 decimali (es. 554.0 -> '554.00').
     Fonte unica per evitare incongruenze come '€554.0' vs '€554.00' in tabelle/risposte."""
@@ -435,9 +449,20 @@ def _fn_query_spending(db_path: str, params: dict) -> dict:
     top_n = params.get("top_n")
     search = params.get("search")
 
-    cutoff = _dates(period_days)
+    # Range assoluto (date_from/date_to già validate e ordinate da _sanitize_params) ha
+    # priorità su period_days/months: una domanda tipo "tra il 14 e il 16 agosto" deve
+    # filtrare esattamente quel range, non un numero di giorni relativi a oggi.
+    date_from = _valid_iso_date(params.get("date_from"))
+    date_to = _valid_iso_date(params.get("date_to"))
+    use_absolute_range = bool(date_from and date_to)
+
+    if use_absolute_range:
+        cutoff, today = date_from, date_to
+    else:
+        cutoff, today = _dates(period_days), _dates()
+
     where = ["date >= :d AND date <= :_today"]
-    sql_params: dict = {"d": cutoff, "_today": _dates()}
+    sql_params: dict = {"d": cutoff, "_today": today}
     if category:
         where.append("category = :cat")
         sql_params["cat"] = category
@@ -451,7 +476,10 @@ def _fn_query_spending(db_path: str, params: dict) -> dict:
             sql_params["q"] = f"%{q}%"
     where_sql = " AND ".join(where)
 
-    label_bits = [f"ultimi {period_days}gg"]
+    if use_absolute_range:
+        label_bits = [f"dal {cutoff[8:10]}/{cutoff[5:7]}/{cutoff[:4]} al {today[8:10]}/{today[5:7]}/{today[:4]}"]
+    else:
+        label_bits = [f"ultimi {period_days}gg"]
     if category:
         label_bits.append(f"categoria {category}")
     if exclude_category:
@@ -1451,13 +1479,32 @@ ECCEZIONI — NON usare search per domande GENERICHE (senza merchant specifico):
 - "totale spese" → query_spending(group_by="none") o query_spending(group_by="category")
 - "spese di questa settimana" → query_spending(period_days=7, group_by="none")
 
-PERIODO IMPLICITO:
+PERIODO IMPLICITO (relativo a oggi — __TODAY__):
 - "questa settimana" → period_days=7 | "questo mese" → period_days=30
 - "ultimi 2 mesi" → period_days=60 | "ultimi 3 mesi" → period_days=90
 - "ultimi 6 mesi" → period_days=180 | "ieri" → period_days=1
 - "sempre" / "storico" → period_days=365 | nessun periodo → usa il default
 - "ultimi N giorni" (qualsiasi N, es. "ultimi 3 giorni", "ultimi 10 giorni") → period_days=N esatto,
   scegli SEMPRE query_spending, MAI 0 funzioni per questo tipo di domanda
+
+PERIODO ASSOLUTO — la domanda cita date/un range specifico invece che "ultimi N giorni/mesi":
+- Se la domanda specifica un range di date esplicito ("tra il 14 e il 16 agosto", "dal 3 al 10
+  luglio", "nel weekend del 5-6 luglio", "il 20 agosto"), NON usare period_days/months: calcola
+  le date ISO esatte (YYYY-MM-DD) e passa query_spending(date_from=..., date_to=...).
+  Per una singola data, date_from = date_to = quella data.
+- Anno: se non specificato usa l'anno corrente (oggi è __TODAY__). Se il giorno/mese risultante
+  cade nel futuro rispetto a oggi, usa l'anno precedente invece (l'utente si riferisce sempre al
+  passato quando chiede "quanto ho speso").
+- Esempi (oggi = __TODAY__):
+  - "quanto ho speso tra il 14 e il 16 agosto?" → query_spending(date_from="__TODAY_YEAR__-08-14", date_to="__TODAY_YEAR__-08-16", group_by="none")
+  - "spese del 20 luglio" → query_spending(date_from="__TODAY_YEAR__-07-20", date_to="__TODAY_YEAR__-07-20", group_by="none")
+  - "dal 1 al 15 giugno per categoria" → query_spending(date_from="__TODAY_YEAR__-06-01", date_to="__TODAY_YEAR__-06-15", group_by="category")
+- CONTINUITÀ CONVERSAZIONALE: se la domanda è un follow-up implicito su un range di date appena
+  discusso nel turno precedente ("mostrami l'elenco completo", "quali sono i dettagli", "e per
+  categoria X in quel periodo?"), riusa LO STESSO date_from/date_to del turno precedente — non
+  tornare a period_days di default. Se serve solo l'elenco delle transazioni invece di
+  un'aggregazione, usa query_spending con lo stesso date_from/date_to più top_n (es. top_n=50)
+  così la tabella elenca le righe invece di aggregarle.
 
 ESCLUSIONE/INCLUSIONE CATEGORIA — ragiona sul SIGNIFICATO, non su parole chiave:
 - Se l'utente vuole il totale/statistiche CON una categoria esclusa dal computo (qualunque sia la
@@ -1468,10 +1515,12 @@ ESCLUSIONE/INCLUSIONE CATEGORIA — ragiona sul SIGNIFICATO, non su parole chiav
   numeri di due chiamate diverse.
 
 FUNZIONI DISPONIBILI (rispetta i range indicati):
-- query_spending(period_days=30 range 1..365, months=null range 1..24, group_by="category"|"day"|"weekday"|"month"|"none",
+- query_spending(period_days=30 range 1..365, months=null range 1..24, date_from=null "YYYY-MM-DD",
+  date_to=null "YYYY-MM-DD", group_by="category"|"day"|"weekday"|"month"|"none",
   category=null, exclude_category=null, top_n=null range 1..50, search=null): funzione universale
   per spese — usala per QUALSIASI domanda su totali, distribuzione per categoria, trend, top spese,
-  andamento mensile di una categoria, media per giorno settimana o ricerca merchant
+  andamento mensile di una categoria, media per giorno settimana o ricerca merchant. Se date_from
+  E date_to sono entrambe valorizzate hanno priorità su period_days/months (vedi PERIODO ASSOLUTO).
 - month_vs_month(): confronto mese corrente vs precedente per categoria
 - year_end_forecast(): proiezione spese fine anno da media giornaliera
 - budget_status(): stato budget attivi con semaforo ok/warning/exceeded
@@ -1645,6 +1694,18 @@ def _sanitize_params(name: str, params: dict) -> dict:
     if "tag" in params and params["tag"] is not None:
         t = re.sub(r"[^a-z0-9_]", "", str(params["tag"]).lower()).strip()
         params["tag"] = t[:30] if t else None
+    if "date_from" in params or "date_to" in params:
+        d_from = _valid_iso_date(params.get("date_from"))
+        d_to = _valid_iso_date(params.get("date_to"))
+        # Range assoluto valido solo se ENTRAMBI gli estremi sono date reali — un solo estremo
+        # valido è ambiguo (periodo aperto non supportato dalle funzioni) e va scartato invece
+        # di produrre silenziosamente un filtro sbagliato.
+        if d_from and d_to:
+            if d_from > d_to:
+                d_from, d_to = d_to, d_from
+            params["date_from"], params["date_to"] = d_from, d_to
+        else:
+            params["date_from"] = params["date_to"] = None
     return params
 
 
@@ -1776,8 +1837,19 @@ def _answer_in_perimeter(question: str, compact_context: str) -> dict:
     return _parse_ai_response(raw)
 
 
+def _render_function_selector_prompt() -> str:
+    """Inietta la data odierna nel prompt del router (placeholder testuali, non .format(),
+    perché il prompt contiene JSON letterale con parentesi graffe che .format() romperebbe)."""
+    today = date.today()
+    return (
+        FUNCTION_SELECTOR_PROMPT
+        .replace("__TODAY_YEAR__", str(today.year))
+        .replace("__TODAY__", today.isoformat())
+    )
+
+
 def _select_function(question: str, history) -> dict:
-    messages = [{"role": "system", "content": FUNCTION_SELECTOR_PROMPT}]
+    messages = [{"role": "system", "content": _render_function_selector_prompt()}]
     clean_history = _sanitize_history(history)
     # Pass only last 2 user turns for context
     for h in clean_history[-2:]:
