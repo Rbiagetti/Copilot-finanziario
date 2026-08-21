@@ -33,8 +33,6 @@ from backend.core.ai_engine import (
     MAX_PERIOD_DAYS,
     MAX_CATEGORY_TREND_MONTHS,
     MAX_MULTI_SUMMARY_CHARS,
-    MACRO_INTENTS,
-    _match_macro_intent,
     _build_multi_summary,
 )
 
@@ -352,31 +350,31 @@ def test_prefilter_textual_passes(question):
 class TestValidateRouterOutput:
     def test_unknown_function_discarded(self):
         r = _validate_router_output({"use_function": {"name": "bad_fn", "params": {}}, "in_perimeter": True})
-        assert r["use_function"] is None
+        assert r["use_functions"] == []
 
     def test_period_days_clipped_high(self):
         r = _validate_router_output({"use_function": {"name": "spending_by_category", "params": {"period_days": 10000}}, "in_perimeter": True})
-        assert r["use_function"]["params"]["period_days"] == MAX_PERIOD_DAYS
+        assert r["use_functions"][0]["params"]["period_days"] == MAX_PERIOD_DAYS
 
     def test_period_days_clipped_low(self):
         r = _validate_router_output({"use_function": {"name": "spending_by_category", "params": {"period_days": 0}}, "in_perimeter": True})
-        assert r["use_function"]["params"]["period_days"] == 1
+        assert r["use_functions"][0]["params"]["period_days"] == 1
 
     def test_n_clipped_high(self):
         r = _validate_router_output({"use_function": {"name": "top_transactions", "params": {"n": 9999}}, "in_perimeter": True})
-        assert r["use_function"]["params"]["n"] == MAX_TOP_N
+        assert r["use_functions"][0]["params"]["n"] == MAX_TOP_N
 
     def test_chart_type_normalized(self):
         r = _validate_router_output({"use_function": {"name": "spending_by_category", "params": {"chart_type": "radar"}}, "in_perimeter": True})
-        assert r["use_function"]["params"]["chart_type"] == "bar"
+        assert r["use_functions"][0]["params"]["chart_type"] == "bar"
 
     def test_invalid_category_nulled(self):
         r = _validate_router_output({"use_function": {"name": "top_transactions", "params": {"category": "robotica"}}, "in_perimeter": True})
-        assert r["use_function"]["params"]["category"] is None
+        assert r["use_functions"][0]["params"]["category"] is None
 
     def test_valid_category_kept(self):
         r = _validate_router_output({"use_function": {"name": "top_transactions", "params": {"category": "cibo"}}, "in_perimeter": True})
-        assert r["use_function"]["params"]["category"] == "cibo"
+        assert r["use_functions"][0]["params"]["category"] == "cibo"
 
     def test_in_perimeter_false(self):
         r = _validate_router_output({"use_function": None, "in_perimeter": False})
@@ -419,48 +417,6 @@ class TestSanitizeHistory:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Macro-intent matching
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TestMacroIntent:
-    @pytest.mark.parametrize("question,expected", [
-        ("fammi un'analisi completa del mese",         "full_monthly_review"),
-        ("riassunto del mese",                         "full_monthly_review"),
-        ("panoramica delle mie spese",                 "full_monthly_review"),
-        ("dimmi tutto sulle mie finanze",              "full_monthly_review"),
-        ("come sto andando con le spese?",             "full_monthly_review"),
-        ("dove posso risparmiare questo mese?",        "savings_audit"),
-        ("come tagliare le spese?",                    "savings_audit"),
-        ("ottimizzare spese fisse",                    "savings_audit"),
-        ("come ridurre spesa mensile",                 "savings_audit"),
-        ("come sto cambiando nelle abitudini?",        "trend_overview"),
-        ("trend generale delle mie spese",             "trend_overview"),
-        ("evoluzione spese negli ultimi mesi",         "trend_overview"),
-    ])
-    def test_trigger_matches(self, question, expected):
-        assert _match_macro_intent(question) == expected
-
-    @pytest.mark.parametrize("question", [
-        "quanto ho speso in cibo?",
-        "mostrami le top 5 transazioni",
-        "qual è il mio budget?",
-        "stima fine anno",
-    ])
-    def test_non_matching_returns_none(self, question):
-        assert _match_macro_intent(question) is None
-
-    def test_case_insensitive(self):
-        assert _match_macro_intent("ANALISI COMPLETA") == "full_monthly_review"
-        assert _match_macro_intent("Dove Posso Risparmiare") == "savings_audit"
-
-    def test_all_intents_in_catalog(self):
-        for intent_name, intent in MACRO_INTENTS.items():
-            for fn_name, _ in intent["functions"]:
-                from backend.core.ai_engine import FUNCTION_CATALOG
-                assert fn_name in FUNCTION_CATALOG, f"{fn_name} not in FUNCTION_CATALOG (intent={intent_name})"
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Multi-summary builder
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -497,43 +453,43 @@ class TestWhatIfValidation:
 
     def test_horizon_months_clipped_high(self):
         r = self._route({"horizon_months": 999})
-        assert r["use_function"]["params"]["horizon_months"] == 60
+        assert r["use_functions"][0]["params"]["horizon_months"] == 60
 
     def test_horizon_months_clipped_low(self):
         r = self._route({"horizon_months": 0})
-        assert r["use_function"]["params"]["horizon_months"] == 1
+        assert r["use_functions"][0]["params"]["horizon_months"] == 1
 
     def test_monthly_delta_clipped_high(self):
         r = self._route({"monthly_delta": 99999})
-        assert r["use_function"]["params"]["monthly_delta"] == 10000
+        assert r["use_functions"][0]["params"]["monthly_delta"] == 10000
 
     def test_monthly_delta_clipped_low(self):
         r = self._route({"monthly_delta": -99999})
-        assert r["use_function"]["params"]["monthly_delta"] == -10000
+        assert r["use_functions"][0]["params"]["monthly_delta"] == -10000
 
     def test_monthly_target_clipped(self):
         r = self._route({"monthly_target": 99999})
-        assert r["use_function"]["params"]["monthly_target"] == 50000
+        assert r["use_functions"][0]["params"]["monthly_target"] == 50000
 
     def test_monthly_target_zero_floor(self):
         r = self._route({"monthly_target": -100})
-        assert r["use_function"]["params"]["monthly_target"] == 0
+        assert r["use_functions"][0]["params"]["monthly_target"] == 0
 
     def test_percent_change_clipped_low(self):
         r = self._route({"percent_change": -200})
-        assert r["use_function"]["params"]["percent_change"] == -100
+        assert r["use_functions"][0]["params"]["percent_change"] == -100
 
     def test_percent_change_clipped_high(self):
         r = self._route({"percent_change": 5000})
-        assert r["use_function"]["params"]["percent_change"] == 1000
+        assert r["use_functions"][0]["params"]["percent_change"] == 1000
 
     def test_valid_category_kept(self):
         r = self._route({"category": "svago", "monthly_delta": -50})
-        assert r["use_function"]["params"]["category"] == "svago"
+        assert r["use_functions"][0]["params"]["category"] == "svago"
 
     def test_invalid_category_nulled(self):
         r = self._route({"category": "ristorante", "monthly_delta": -50})
-        assert r["use_function"]["params"]["category"] is None
+        assert r["use_functions"][0]["params"]["category"] is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
