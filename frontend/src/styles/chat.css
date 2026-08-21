@@ -328,6 +328,21 @@
   .msg-text { font-size: 0.82rem; padding: 0.6rem 0.85rem; }
   .followup-btn { font-size: 0.72rem; padding: 0.35rem 0.65rem; }
   .msg-chart-container { padding: 0.75rem; }
+
+  /* Tabelle nei messaggi: su schermi stretti niente scroll orizzontale nascosto —
+     le colonne vanno a capo e si comprimono per stare nella larghezza disponibile. */
+  .chat-table { table-layout: fixed; font-size: 0.72rem; }
+  .chat-table th {
+    white-space: normal;
+    padding: 0.45rem 0.5rem;
+    font-size: 0.62rem;
+    word-break: break-word;
+  }
+  .chat-table td {
+    padding: 0.45rem 0.5rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
