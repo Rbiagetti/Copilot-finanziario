@@ -739,14 +739,6 @@ button, a, [role="button"], input[type="submit"], input[type="button"] {
   background: var(--glass-border);
 }
 
-.settings-linked-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--success);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
 
 .login-switch {
   text-align: center;
