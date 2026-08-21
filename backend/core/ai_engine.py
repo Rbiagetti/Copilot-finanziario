@@ -489,9 +489,13 @@ def _fn_query_spending(db_path: str, params: dict) -> dict:
     # Modalità elenco transazioni: ricerca testuale o top N — forzano una tabella, non un'aggregazione
     if search or top_n:
         n = max(1, min(MAX_TOP_N, int(top_n or 20)))
+        # Default "amount DESC" per le classiche "top spese"; "chronological" per richieste
+        # esplicite di ordine cronologico (es. "in ordine cronologico", "elenco per data").
+        sort_by = params.get("sort_by")
+        order_sql = "date ASC, amount DESC" if sort_by == "chronological" else "amount DESC"
         rows = _q(
             f"SELECT date, category, description, amount FROM transactions WHERE {where_sql} "
-            f"ORDER BY amount DESC LIMIT :n",
+            f"ORDER BY {order_sql} LIMIT :n",
             {**sql_params, "n": n}
         )
         return {
@@ -1499,6 +1503,7 @@ PERIODO ASSOLUTO — la domanda cita date/un range specifico invece che "ultimi 
   - "quanto ho speso tra il 14 e il 16 agosto?" → query_spending(date_from="__TODAY_YEAR__-08-14", date_to="__TODAY_YEAR__-08-16", group_by="none")
   - "spese del 20 luglio" → query_spending(date_from="__TODAY_YEAR__-07-20", date_to="__TODAY_YEAR__-07-20", group_by="none")
   - "dal 1 al 15 giugno per categoria" → query_spending(date_from="__TODAY_YEAR__-06-01", date_to="__TODAY_YEAR__-06-15", group_by="category")
+  - "dettaglio di tutte in ordine cronologico tra il 13 e il 17 agosto" → query_spending(date_from="__TODAY_YEAR__-08-13", date_to="__TODAY_YEAR__-08-17", top_n=50, sort_by="chronological")
 - CONTINUITÀ CONVERSAZIONALE: se la domanda è un follow-up implicito su un range di date appena
   discusso nel turno precedente ("mostrami l'elenco completo", "quali sono i dettagli", "e per
   categoria X in quel periodo?"), riusa LO STESSO date_from/date_to del turno precedente — non
@@ -1517,10 +1522,15 @@ ESCLUSIONE/INCLUSIONE CATEGORIA — ragiona sul SIGNIFICATO, non su parole chiav
 FUNZIONI DISPONIBILI (rispetta i range indicati):
 - query_spending(period_days=30 range 1..365, months=null range 1..24, date_from=null "YYYY-MM-DD",
   date_to=null "YYYY-MM-DD", group_by="category"|"day"|"weekday"|"month"|"none",
-  category=null, exclude_category=null, top_n=null range 1..50, search=null): funzione universale
-  per spese — usala per QUALSIASI domanda su totali, distribuzione per categoria, trend, top spese,
-  andamento mensile di una categoria, media per giorno settimana o ricerca merchant. Se date_from
-  E date_to sono entrambe valorizzate hanno priorità su period_days/months (vedi PERIODO ASSOLUTO).
+  category=null, exclude_category=null, top_n=null range 1..50, search=null,
+  sort_by="amount"|"chronological"): funzione universale per spese — usala per QUALSIASI domanda
+  su totali, distribuzione per categoria, trend, top spese, andamento mensile di una categoria,
+  media per giorno settimana o ricerca merchant. Se date_from E date_to sono entrambe valorizzate
+  hanno priorità su period_days/months (vedi PERIODO ASSOLUTO). sort_by si applica SOLO alla
+  modalità elenco (search o top_n valorizzati): default "amount" (più costose prima); usa
+  "chronological" quando l'utente chiede esplicitamente ordine per data/cronologico (es. "in
+  ordine cronologico", "elenco per data", "una dietro l'altra nel tempo") — in quel caso, se
+  top_n non è già impostato dalla domanda, imposta top_n=50 così l'elenco non si aggrega.
 - month_vs_month(): confronto mese corrente vs precedente per categoria
 - year_end_forecast(): proiezione spese fine anno da media giornaliera
 - budget_status(): stato budget attivi con semaforo ok/warning/exceeded
@@ -1691,6 +1701,9 @@ def _sanitize_params(name: str, params: dict) -> dict:
     if "group_by" in params:
         if params["group_by"] not in ("category", "day", "weekday", "month", "none"):
             params["group_by"] = "category"
+    if "sort_by" in params:
+        if params["sort_by"] not in ("amount", "chronological"):
+            params["sort_by"] = "amount"
     if "tag" in params and params["tag"] is not None:
         t = re.sub(r"[^a-z0-9_]", "", str(params["tag"]).lower()).strip()
         params["tag"] = t[:30] if t else None
