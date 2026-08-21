@@ -21,3 +21,29 @@ export async function signUp(email: string, password: string) {
 export async function signOut() {
   return supabase.auth.signOut();
 }
+
+/** Login/registrazione con Google. Scope di default (openid/email/profile) — nessun
+ * permesso aggiuntivo richiesto: l'app non può accedere a Gmail, Drive o altro. */
+export async function signInWithGoogle() {
+  return supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin },
+  });
+}
+
+/** Collega l'identità Google all'account attualmente loggato (stesso user_id, stessi dati —
+ * a differenza di un login Google "a fresco" che creerebbe un utente nuovo). Richiede una
+ * sessione attiva (va chiamata da loggati) e "Allow manual linking" abilitato su Supabase. */
+export async function linkGoogleIdentity() {
+  return supabase.auth.linkIdentity({
+    provider: "google",
+    options: { redirectTo: window.location.origin },
+  });
+}
+
+/** Elenco provider collegati all'utente corrente (es. ["email", "google"]). */
+export async function getLinkedProviders(): Promise<string[]> {
+  const { data, error } = await supabase.auth.getUserIdentities();
+  if (error || !data) return [];
+  return data.identities.map((i) => i.provider);
+}
