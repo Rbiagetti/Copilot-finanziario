@@ -8,7 +8,7 @@ import type { FullHistoryTransaction } from "../../api/client";
 import { useChartColors } from "../../hooks/useTheme";
 import { useAppStore } from "../../store/appStore";
 import {
-  TrendingUp, Euro, Calendar, ListFilter, BarChart2, PlusCircle, RefreshCw
+  TrendingUp, Euro, Calendar, ListFilter, BarChart2, PlusCircle, RefreshCw, Wallet
 } from "lucide-react";
 import { getRecurringData, getCategoryData } from "../../utils/analyticsUtils";
 
@@ -124,10 +124,12 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     const totalCurrent = currentMonthTxs.reduce((s, t) => s + t.amount, 0);
     const totalPrev = prevMonthTxs.reduce((s, t) => s + t.amount, 0);
+    const totalAll = rawHistory.reduce((s, t) => s + t.amount, 0);
     const daysElapsed = now.getDate();
     return {
       totalCurrent,
       totalPrev,
+      totalAll,
       countCurrent: currentMonthTxs.length,
       countTotal: rawHistory.length,
       avgPerDay: daysElapsed > 0 ? totalCurrent / daysElapsed : 0,
@@ -148,7 +150,7 @@ export default function Dashboard() {
         <div className="skeleton-line" style={{ height: 14, width: 280, marginTop: 6 }} />
       </header>
       <div className="kpi-grid" style={{ marginBottom: "2rem" }}>
-        {[...Array(5)].map((_, i) => (
+        {[...Array(6)].map((_, i) => (
           <div key={i} className="kpi-card" style={{ pointerEvents: "none" }}>
             <div className="skeleton-icon" />
             <div style={{ flex: 1 }}>
@@ -230,6 +232,13 @@ export default function Dashboard() {
           <div className="kpi-content">
             <span className="kpi-label">Spese mese scorso</span>
             <span className="kpi-value">€{stats.totalPrev.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</span>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon" style={{ color: "var(--accent)" }}><Wallet size={20} /></div>
+          <div className="kpi-content">
+            <span className="kpi-label">Spesa totale</span>
+            <span className="kpi-value">€{stats.totalAll.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</span>
           </div>
         </div>
         <div className="kpi-card">

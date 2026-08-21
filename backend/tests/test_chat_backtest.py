@@ -175,12 +175,12 @@ TEST_CASES: list[TC] = [
 
     TC("TC-B02", "spese alimentari", "category_routing",
        "spese alimentari di questo mese",
-       expected_function=_ef("spending_by_category", "category_drill"),
+       expected_function=_ef("query_spending", "category_drill"),
        answer_must_contain=["€"]),
 
     TC("TC-B03", "taxi e trasporti", "category_routing",
        "taxi e trasporti",
-       expected_function=_ef("spending_by_category", "category_drill"),
+       expected_function=_ef("query_spending", "category_drill"),
        answer_must_contain=["€"]),
 
     TC("TC-B04", "abbonamenti attivi", "category_routing",
@@ -197,7 +197,7 @@ TEST_CASES: list[TC] = [
 
     TC("TC-B06", "spese di casa", "category_routing",
        "spese di casa",
-       expected_function=_ef("category_drill", "spending_by_category"),
+       expected_function=_ef("category_drill", "query_spending"),
        answer_must_contain=["€"]),
 
     TC("TC-B07", "mangiare fuori", "category_routing",
@@ -208,7 +208,7 @@ TEST_CASES: list[TC] = [
 
     TC("TC-B08", "svago e divertimento", "category_routing",
        "svago e divertimento",
-       expected_function=_ef("spending_by_category", "category_drill"),
+       expected_function=_ef("query_spending", "category_drill"),
        answer_must_contain=["€"]),
 
     TC("TC-B09", "streaming", "category_routing",
@@ -219,24 +219,24 @@ TEST_CASES: list[TC] = [
 
     TC("TC-B10", "tech spese", "category_routing",
        "quanto spendo di tech?",
-       expected_function=_ef("search_transactions", "summary_stats", None),
+       expected_function=_ef("search_transactions", "query_spending", None),
        answer_must_not_contain=["non posso", "fuori perimetro"]),
 
     # ── GROUP C: DATE RANGE IMPLICITO (8) ─────────────────────────────────────
     TC("TC-C01", "questa settimana", "date_range",
        "questa settimana",
-       expected_function=_ef("summary_stats", "spending_by_category"),
+       expected_function="query_spending",
        params_must_contain={"period_days": 7},
        answer_must_contain=["€"]),
 
     TC("TC-C02", "ultimo mese", "date_range",
        "ultimo mese",
-       expected_function=_ef("spending_by_category", "summary_stats"),
+       expected_function="query_spending",
        params_must_contain={"period_days": 30}),
 
     TC("TC-C03", "ultimi 3 mesi", "date_range",
        "ultimi 3 mesi",
-       expected_function="spending_by_category",
+       expected_function="query_spending",
        params_must_contain={"period_days": 90}),
 
     TC("TC-C04", "IKEA 6 mesi", "date_range",
@@ -262,7 +262,7 @@ TEST_CASES: list[TC] = [
 
     TC("TC-C08", "spese di ieri", "date_range",
        "spese di ieri",
-       expected_function=_ef("summary_stats", "top_transactions"),
+       expected_function="query_spending",
        params_must_contain={"period_days": 1},
        answer_must_not_contain=["non posso"]),
 
@@ -321,7 +321,7 @@ TEST_CASES: list[TC] = [
     TC("TC-E01", "analisi completa del mese", "multi_function",
        "fammi un'analisi completa del mese",
        min_functions=2,
-       functions_must_include=["spending_by_category"],
+       functions_must_include=["query_spending"],
        max_llm_calls=2,
        answer_must_contain=["€"],
        chart_data_expected=True),
@@ -329,7 +329,7 @@ TEST_CASES: list[TC] = [
     TC("TC-E02", "come sto andando", "multi_function",
        "come sto andando?",
        min_functions=2,
-       functions_must_include=["spending_by_category"],
+       functions_must_include=["query_spending"],
        max_llm_calls=2,
        answer_must_contain=["€"]),
 
@@ -350,7 +350,7 @@ TEST_CASES: list[TC] = [
     TC("TC-E05", "panoramica finanziaria", "multi_function",
        "panoramica finanziaria",
        min_functions=2,
-       functions_must_include=["spending_by_category"],
+       functions_must_include=["query_spending"],
        max_llm_calls=2,
        answer_must_contain=["€"]),
 
@@ -394,7 +394,7 @@ TEST_CASES: list[TC] = [
            {"role": "user",      "content": "top 5 spese del mese"},
            {"role": "assistant", "content": "Ecco le top 5 transazioni del mese..."},
        ],
-       expected_function="top_transactions",
+       expected_function="query_spending",
        params_must_contain={"category": "cibo"},
        answer_must_not_contain=["non capisco", "puoi chiarire"]),
 
@@ -414,7 +414,7 @@ TEST_CASES: list[TC] = [
            {"role": "user",      "content": "analisi cibo"},
            {"role": "assistant", "content": "Nell'ultimo mese hai speso €480 di cibo..."},
        ],
-       expected_function=_ef("momentum", "category_trend"),
+       expected_function=_ef("momentum", "query_spending"),
        answer_must_contain=["€"],
        answer_must_not_contain=["cosa intendi", "di cosa parli"]),
 
@@ -440,7 +440,7 @@ TEST_CASES: list[TC] = [
            {"role": "user",      "content": "ok e gli abbonamenti?"},
            {"role": "assistant", "content": "Abbonamenti attivi: Netflix, Spotify..."},
        ],
-       expected_function=_ef("anomalies", "subscriptions_audit"),
+       expected_function="subscriptions_audit",
        answer_must_not_contain=["non posso"],
        max_llm_calls=2),
 
@@ -458,7 +458,7 @@ TEST_CASES: list[TC] = [
 
     TC("TC-H03", "quanto ho speso (generico)", "edge",
        "quanto ho speso",
-       expected_function=_ef("summary_stats", "spending_by_category"),
+       expected_function="query_spending",
        answer_must_contain=["€"]),
 
     TC("TC-H04", "ho speso troppo (testuale)", "edge",

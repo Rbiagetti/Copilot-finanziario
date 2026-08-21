@@ -83,7 +83,7 @@
 
 /* === BODY & BACKGROUND ORB === */
 body {
-  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
   background: radial-gradient(circle at top right, #4a2712 0%, #2b1a11 55%, #1e130d 100%);
   background-attachment: fixed;
   color: var(--text);
@@ -142,7 +142,7 @@ h3 {
   color: var(--text);
 }
 h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
-  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
 }
 .loading, .empty, .error {
   text-align: center;

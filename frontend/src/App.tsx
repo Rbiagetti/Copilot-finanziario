@@ -136,7 +136,7 @@ function App() {
             backdropFilter: "blur(20px)",
             WebkitBackdropFilter: "blur(20px)",
             borderRadius: "18px",
-            fontFamily: "Plus Jakarta Sans, -apple-system, sans-serif",
+            fontFamily: "Inter, -apple-system, sans-serif",
           },
         }}
       />

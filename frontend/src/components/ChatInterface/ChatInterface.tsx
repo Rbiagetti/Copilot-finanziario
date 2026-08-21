@@ -38,6 +38,77 @@ const COLORS = [
   "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#64748b",
 ];
 
+// C-2: Escape HTML prima di applicare qualunque formatting — previene XSS
+function escapeHtml(raw: string): string {
+  const div = document.createElement("div");
+  div.textContent = raw;
+  return div.innerHTML;
+}
+
+// Markdown-lite: bold, elenchi puntati/numerati raggruppati in <ul>/<ol>, paragrafi separati.
+// Input già passato attraverso escapeHtml, quindi è sicuro inserire i tag generati qui.
+function formatMarkdownLite(content: string): string {
+  const escaped = escapeHtml(content);
+
+  // Guardia: se "**" compare un numero dispari di volte (bold non chiuso dal modello),
+  // rimuove l'ultima occorrenza per evitare di mostrare asterischi grezzi in UI.
+  const starCount = (escaped.match(/\*\*/g) || []).length;
+  const safe = starCount % 2 === 1
+    ? (() => {
+        const idx = escaped.lastIndexOf("**");
+        return escaped.slice(0, idx) + escaped.slice(idx + 2);
+      })()
+    : escaped;
+
+  const withInline = safe.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+  const lines = withInline.split("\n");
+  const htmlBlocks: string[] = [];
+  let listBuffer: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+
+  const flushList = () => {
+    if (listBuffer.length > 0 && listType) {
+      htmlBlocks.push(`<${listType}>${listBuffer.map((li) => `<li>${li}</li>`).join("")}</${listType}>`);
+      listBuffer = [];
+      listType = null;
+    }
+  };
+
+  let paraBuffer: string[] = [];
+  const flushPara = () => {
+    if (paraBuffer.length > 0) {
+      htmlBlocks.push(`<p>${paraBuffer.join("<br/>")}</p>`);
+      paraBuffer = [];
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    // Accetta bullet "- ", "* ", "• " ed elenchi numerati "1. " / "1) "
+    const bulletMatch = line.match(/^[-*•]\s+(.*)$/);
+    const numberedMatch = line.match(/^\d+[.)]\s+(.*)$/);
+
+    if (bulletMatch || numberedMatch) {
+      flushPara();
+      const nextType: "ul" | "ol" = bulletMatch ? "ul" : "ol";
+      if (listType && listType !== nextType) flushList();
+      listType = nextType;
+      listBuffer.push((bulletMatch ?? numberedMatch)![1]);
+    } else if (line === "") {
+      flushList();
+      flushPara();
+    } else {
+      flushList();
+      paraBuffer.push(line);
+    }
+  }
+  flushList();
+  flushPara();
+
+  return htmlBlocks.join("");
+}
+
 // ── Chart Error Boundary ─────────────────────────────────────────────────────
 
 interface BoundaryProps { children: ReactNode; onError: () => void; }
@@ -322,12 +393,9 @@ export default function ChatInterface() {
             <p>Chiedimi qualsiasi cosa sulle tue spese.</p>
             <div className="suggestions">
               {[
-                "Analisi completa: dove vanno i miei soldi?",
-                "Quali spese potrei tagliare per risparmiare?",
-                "Top 10 transazioni più costose questo mese",
-                "Confronto mese corrente vs mese precedente",
-                "Distribuzione spese: weekend vs giorni feriali",
-                "Statistiche riassuntive degli ultimi 30 giorni",
+                "Dove vanno i miei soldi questo mese?",
+                "Quali spese potrei tagliare?",
+                "Confronto con il mese scorso",
               ].map((s) => (
                 <button key={s} className="suggestion-btn" onClick={() => handleSend(s)}>
                   {s}
@@ -347,15 +415,7 @@ export default function ChatInterface() {
                 <ThinkingTrace steps={msg.reasoning_steps} />
               )}
               <div className="msg-text" dangerouslySetInnerHTML={{
-                __html: (() => {
-                  // C-2: Escape HTML prima di applicare formatting — previene XSS
-                  const div = document.createElement("div");
-                  div.textContent = msg.content;
-                  const escaped = div.innerHTML;
-                  return escaped
-                    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                    .replace(/\n/g, "<br/>");
-                })(),
+                __html: formatMarkdownLite(msg.content),
               }} />
 
               {/* Tabella dati */}

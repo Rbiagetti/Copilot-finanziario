@@ -261,6 +261,15 @@ def _dates(days_ago: int = 0) -> str:
     return (date.today() - timedelta(days=days_ago)).isoformat()
 
 
+def _eur(v) -> str:
+    """Formatta un importo in euro sempre con 2 decimali (es. 554.0 -> '554.00').
+    Fonte unica per evitare incongruenze come '€554.0' vs '€554.00' in tabelle/risposte."""
+    try:
+        return f"€{float(v or 0):.2f}"
+    except (TypeError, ValueError):
+        return "€0.00"
+
+
 def _month_start(months_back: int = 0) -> str:
     """Primo giorno del mese corrente (o N mesi fa)."""
     d = date.today().replace(day=1)
@@ -280,7 +289,7 @@ def build_context(user_id: str) -> str:
     dr = date_range[0] if date_range else (None, None)
     grand_total = round(_scalar("SELECT SUM(amount) FROM transactions WHERE user_id = :user_id", {"user_id": user_id}) or 0, 2)
 
-    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d AND user_id = :user_id", {"d": d30, "user_id": user_id})
+    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d AND date <= :_today AND user_id = :user_id", {"d": d30, "user_id": user_id, "_today": _dates()})
     last_30_total = round(row[0][0] or 0, 2) if row else 0
     last_30_count = row[0][1] or 0 if row else 0
 
@@ -291,23 +300,23 @@ def build_context(user_id: str) -> str:
 
     cat_30 = _q(
         "SELECT category, COUNT(*), SUM(amount), AVG(amount) FROM transactions "
-        "WHERE date >= :d AND user_id = :user_id GROUP BY category ORDER BY SUM(amount) DESC",
-        {"d": d30, "user_id": user_id}
+        "WHERE date >= :d AND date <= :_today AND user_id = :user_id GROUP BY category ORDER BY SUM(amount) DESC",
+        {"d": d30, "user_id": user_id, "_today": _dates()}
     )
 
     total_30_pct = round((last_30_total - prev_30) / prev_30 * 100, 1) if prev_30 > 0 else 0
     trend = f"+{total_30_pct}%" if total_30_pct >= 0 else f"{total_30_pct}%"
 
     cats_30_str = "\n".join(
-        f"  - {c[0]}: {c[1]} tx, €{round(c[2],2)} "
-        f"({round(c[2]/last_30_total*100) if last_30_total>0 else 0}% del mese), media €{round(c[3],2)}"
+        f"  - {c[0]}: {c[1]} tx, {_eur(round(c[2],2))} "
+        f"({round(c[2]/last_30_total*100) if last_30_total>0 else 0}% del mese), media {_eur(round(c[3],2))}"
         for c in cat_30
     ) if cat_30 else "  (nessuna transazione)"
 
     return (
         f"SCHEMA: {schema}\n"
-        f"STORICO TOTALE: {total_all} transazioni, €{grand_total}, range {dr[0]} → {dr[1]}\n"
-        f"ULTIMI 30 GIORNI: €{last_30_total} ({last_30_count} transazioni, {trend} vs mese precedente €{prev_30})\n"
+        f"STORICO TOTALE: {total_all} transazioni, {_eur(grand_total)}, range {dr[0]} → {dr[1]}\n"
+        f"ULTIMI 30 GIORNI: {_eur(last_30_total)} ({last_30_count} transazioni, {trend} vs mese precedente {_eur(prev_30)})\n"
         f"CATEGORIE ULTIMI 30 GIORNI (usa QUESTI dati per il briefing, NON lo storico):\n{cats_30_str}"
     )
 
@@ -315,33 +324,25 @@ def build_context(user_id: str) -> str:
 # ─── FUNZIONI PRECONFEZIONATE ─────────────────────────────────────────────────
 
 FUNCTION_CATALOG = {
-    "spending_by_category": {
-        "desc": "Spese per categoria in un periodo. Grafico a barre.",
-        "params": "period_days: int=30, exclude_category: str=null",
-    },
-    "daily_trend": {
-        "desc": "Trend giornaliero delle spese. Grafico a linee.",
-        "params": "days: int=30",
-    },
-    "top_transactions": {
-        "desc": "Tabella delle N transazioni piu' costose con dettagli.",
-        "params": "n: int=10, category: str=null, period_days: int=30",
+    "query_spending": {
+        "desc": (
+            "Funzione universale per spese: totali/statistiche, distribuzione per categoria, "
+            "trend giornaliero/mensile, media per giorno della settimana, top N transazioni o "
+            "ricerca testuale — tutto tramite parametri, inclusa esclusione categoria. "
+            "Usala per QUALSIASI domanda su 'quanto ho speso', 'spese per categoria', 'trend', "
+            "'top spese', 'andamento mensile di una categoria', 'media per giorno settimana'."
+        ),
+        "params": (
+            "period_days: int=30, months: int=null (se dato sovrascrive period_days=months*30), "
+            "group_by: 'category'|'day'|'weekday'|'month'|'none'=category, "
+            "category: str=null (filtro incluso), exclude_category: str=null (filtro escluso), "
+            "top_n: int=null (se dato → tabella top N transazioni invece di aggregazione), "
+            "search: str=null (se dato → tabella transazioni che matchano il testo, come Ikea/Amazon)"
+        ),
     },
     "month_vs_month": {
         "desc": "Confronto spese mese corrente vs precedente per categoria.",
         "params": "(nessuno)",
-    },
-    "spending_by_weekday": {
-        "desc": "Media spese per giorno della settimana (Lun-Dom).",
-        "params": "period_days: int=90",
-    },
-    "category_trend": {
-        "desc": "Andamento mensile di una categoria negli ultimi N mesi.",
-        "params": "category: str, months: int=6",
-    },
-    "summary_stats": {
-        "desc": "Statistiche riassuntive: totale, media transazione, n. transazioni, categoria top. Supporta esclusione di una categoria.",
-        "params": "period_days: int=30, exclude_category: str=null",
     },
     "year_end_forecast": {
         "desc": "Proiezione spese fino a fine anno basata sulla media giornaliera recente.",
@@ -406,79 +407,150 @@ _CATALOG_WIKI = "\n".join(
 )
 
 
-def _fn_spending_by_category(db_path: str, params: dict) -> dict:
+def _fn_query_spending(db_path: str, params: dict) -> dict:
+    """Query unificata per spese: aggregazione con filtri periodo/categoria e raggruppamento
+    flessibile, oppure elenco transazioni (top N o ricerca testuale). Sostituisce le vecchie
+    spending_by_category / summary_stats / daily_trend / spending_by_weekday / category_trend /
+    top_transactions: una sola funzione con parametri espliciti invece di 6 funzioni quasi
+    identiche tra cui il router doveva indovinare — riduce la superficie di errore del routing."""
     period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
-    chart_type = params.get("chart_type", "bar")
-    if chart_type not in ("bar", "line", "pie"):
-        chart_type = "bar"
-    exclude_category = params.get("exclude_category")
-    if exclude_category is not None and (not isinstance(exclude_category, str) or exclude_category not in CATEGORIES):
-        exclude_category = None
-    cutoff = _dates(period_days)
-    if exclude_category:
-        rows = _q(
-            "SELECT category, SUM(amount) FROM transactions "
-            "WHERE date >= :d AND category != :excl GROUP BY category ORDER BY SUM(amount) DESC "
-            "LIMIT :lim",
-            {"d": cutoff, "excl": exclude_category, "lim": MAX_CHART_POINTS}
-        )
-    else:
-        rows = _q(
-            "SELECT category, SUM(amount) FROM transactions "
-            "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC "
-            "LIMIT :lim",
-            {"d": cutoff, "lim": MAX_CHART_POINTS}
-        )
-    data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if r[1] and r[1] > 0]
-    title_suffix = f", escl. {exclude_category}" if exclude_category else ""
-    return {
-        "chart_data": {"type": chart_type, "data": data, "title": f"Spese per categoria (ultimi {period_days}gg{title_suffix})"},
-        "table_data": None,
-    }
+    months = params.get("months")
+    if months is not None:
+        try:
+            period_days = max(1, min(MAX_PERIOD_DAYS, int(months) * 30))
+        except (ValueError, TypeError):
+            pass
 
+    group_by = params.get("group_by", "category")
+    if group_by not in ("category", "day", "weekday", "month", "none"):
+        group_by = "category"
 
-def _fn_daily_trend(db_path: str, params: dict) -> dict:
-    days = max(1, min(MAX_PERIOD_DAYS, int(params.get("days", 30))))
-    cutoff = _dates(days)
-    # Take the most recent MAX_CHART_POINTS days, then re-sort ascending for the chart
-    rows = _q(
-        "SELECT date, SUM(amount) FROM transactions "
-        "WHERE date >= :d GROUP BY date ORDER BY date DESC "
-        "LIMIT :lim",
-        {"d": cutoff, "lim": MAX_CHART_POINTS}
-    )
-    rows = sorted(rows, key=lambda r: r[0])
-    data = [{"name": r[0][5:], "value": round(r[1], 2)} for r in rows]
-    return {
-        "chart_data": {"type": "line", "data": data, "title": f"Trend giornaliero (ultimi {days}gg)"},
-        "table_data": None,
-    }
-
-
-def _fn_top_transactions(db_path: str, params: dict) -> dict:
-    n = max(1, min(MAX_TOP_N, int(params.get("n", 10))))
     category = params.get("category")
     if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
         category = None
-    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
+    exclude_category = params.get("exclude_category")
+    if exclude_category is not None and (not isinstance(exclude_category, str) or exclude_category not in CATEGORIES):
+        exclude_category = None
+
+    top_n = params.get("top_n")
+    search = params.get("search")
+
     cutoff = _dates(period_days)
+    where = ["date >= :d AND date <= :_today"]
+    sql_params: dict = {"d": cutoff, "_today": _dates()}
     if category:
+        where.append("category = :cat")
+        sql_params["cat"] = category
+    if exclude_category:
+        where.append("category != :excl")
+        sql_params["excl"] = exclude_category
+    if search:
+        q = re.sub(r"[^a-z0-9\s]", "", str(search).lower()).strip()[:50]
+        if q:
+            where.append("(LOWER(COALESCE(description,'')) LIKE :q OR LOWER(COALESCE(tags,'')) LIKE :q)")
+            sql_params["q"] = f"%{q}%"
+    where_sql = " AND ".join(where)
+
+    label_bits = [f"ultimi {period_days}gg"]
+    if category:
+        label_bits.append(f"categoria {category}")
+    if exclude_category:
+        label_bits.append(f"escl. {exclude_category}")
+    label = ", ".join(label_bits)
+
+    # Modalità elenco transazioni: ricerca testuale o top N — forzano una tabella, non un'aggregazione
+    if search or top_n:
+        n = max(1, min(MAX_TOP_N, int(top_n or 20)))
         rows = _q(
-            "SELECT date, category, description, amount FROM transactions "
-            "WHERE date >= :d AND category = :cat ORDER BY amount DESC LIMIT :n",
-            {"d": cutoff, "cat": category, "n": n}
+            f"SELECT date, category, description, amount FROM transactions WHERE {where_sql} "
+            f"ORDER BY amount DESC LIMIT :n",
+            {**sql_params, "n": n}
         )
-    else:
+        return {
+            "chart_data": None,
+            "table_data": {
+                "headers": ["Data", "Categoria", "Descrizione", "Importo"],
+                "rows": [[r[0], r[1], r[2] or "-", f"{_eur(round(r[3] or 0, 2))}"] for r in rows],
+            },
+        }
+
+    if group_by == "category":
         rows = _q(
-            "SELECT date, category, description, amount FROM transactions "
-            "WHERE date >= :d ORDER BY amount DESC LIMIT :n",
-            {"d": cutoff, "n": n}
+            f"SELECT category, SUM(amount) FROM transactions WHERE {where_sql} "
+            f"GROUP BY category ORDER BY SUM(amount) DESC LIMIT :lim",
+            {**sql_params, "lim": MAX_CHART_POINTS}
         )
+        data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if r[1] and r[1] > 0]
+        return {
+            "chart_data": {"type": "bar", "data": data, "title": f"Spese per categoria ({label})"},
+            "table_data": None,
+        }
+
+    if group_by == "day":
+        rows = _q(
+            f"SELECT date, SUM(amount) FROM transactions WHERE {where_sql} "
+            f"GROUP BY date ORDER BY date DESC LIMIT :lim",
+            {**sql_params, "lim": MAX_CHART_POINTS}
+        )
+        rows = sorted(rows, key=lambda r: r[0])
+        data = [{"name": r[0][5:], "value": round(r[1], 2)} for r in rows]
+        return {
+            "chart_data": {"type": "line", "data": data, "title": f"Trend giornaliero ({label})"},
+            "table_data": None,
+        }
+
+    if group_by == "weekday":
+        from datetime import datetime as _dt
+        rows = _q(f"SELECT date, SUM(amount) FROM transactions WHERE {where_sql} GROUP BY date", sql_params)
+        dow_vals: dict = defaultdict(list)
+        for date_str, total in rows:
+            try:
+                weekday = _dt.strptime(date_str, "%Y-%m-%d").weekday()  # 0=Lun, 6=Dom
+                dow_sun = (weekday + 1) % 7  # 0=Dom, 1=Lun, ..., 6=Sab
+            except ValueError:
+                continue
+            dow_vals[dow_sun].append(total or 0)
+        day_names = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"]
+        data = [
+            {"name": day_names[dow], "value": round(sum(vals) / len(vals), 2)}
+            for dow, vals in sorted(dow_vals.items())
+        ]
+        return {
+            "chart_data": {"type": "bar", "data": data, "title": f"Media spese per giorno della settimana ({label})"},
+            "table_data": None,
+        }
+
+    if group_by == "month":
+        rows = _q(f"SELECT date, amount FROM transactions WHERE {where_sql} ORDER BY date", sql_params)
+        monthly: dict = defaultdict(float)
+        for date_str, amount in rows:
+            monthly[date_str[:7]] += amount or 0
+        sorted_months = sorted(monthly.items())[-MAX_CHART_POINTS:]
+        data = [{"name": k, "value": round(v, 2)} for k, v in sorted_months]
+        title = f"Andamento mensile: {category}" if category else f"Andamento mensile spese ({label})"
+        return {
+            "chart_data": {"type": "line", "data": data, "title": title},
+            "table_data": None,
+        }
+
+    # group_by == "none" → statistiche riassuntive
+    row = _q(f"SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE {where_sql}", sql_params)
+    top_cat = _q(
+        f"SELECT category FROM transactions WHERE {where_sql} GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+        sql_params
+    )
+    total, count, avg = (round(row[0][0] or 0, 2), row[0][1] or 0, round(row[0][2] or 0, 2)) if row else (0, 0, 0)
     return {
         "chart_data": None,
         "table_data": {
-            "headers": ["Data", "Categoria", "Descrizione", "Importo"],
-            "rows": [[r[0], r[1], r[2] or "-", f"€{round(r[3],2)}"] for r in rows],
+            "headers": ["Metrica", "Valore"],
+            "rows": [
+                ["Totale spese", f"{_eur(total)}"],
+                ["Transazioni", str(count)],
+                ["Media per transazione", f"{_eur(avg)}"],
+                ["Categoria top", top_cat[0][0] if top_cat else "-"],
+                ["Periodo analizzato", label],
+            ],
         },
     }
 
@@ -499,7 +571,7 @@ def _fn_month_vs_month(db_path: str, params: dict) -> dict:
     table = {
         "headers": ["Categoria", "Mese corrente", "Mese prec.", "Variazione"],
         "rows": [
-            [r[0], f"€{round(r[1],2)}", f"€{round(r[2],2)}",
+            [r[0], f"{_eur(round(r[1],2))}", f"{_eur(round(r[2],2))}",
              f"+{round((r[1]-r[2])/r[2]*100)}%" if r[2] > 0 else "N/A"]
             for r in rows if (r[1] or 0) > 0 or (r[2] or 0) > 0
         ][:MAX_TABLE_ROWS],
@@ -511,63 +583,13 @@ def _fn_month_vs_month(db_path: str, params: dict) -> dict:
     }
 
 
-def _fn_spending_by_weekday(db_path: str, params: dict) -> dict:
-    from datetime import datetime as _dt
-    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
-    cutoff = _dates(period_days)
-    rows = _q(
-        "SELECT date, SUM(amount) FROM transactions WHERE date >= :d GROUP BY date",
-        {"d": cutoff}
-    )
-    dow_vals: dict = defaultdict(list)
-    for date_str, total in rows:
-        try:
-            weekday = _dt.strptime(date_str, "%Y-%m-%d").weekday()  # 0=Lun, 6=Dom
-            dow_sun = (weekday + 1) % 7  # 0=Dom, 1=Lun, ..., 6=Sab
-        except ValueError:
-            continue
-        dow_vals[dow_sun].append(total or 0)
-
-    day_names = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"]
-    data = [
-        {"name": day_names[dow], "value": round(sum(vals) / len(vals), 2)}
-        for dow, vals in sorted(dow_vals.items())
-    ]
-    return {
-        "chart_data": {"type": "bar", "data": data, "title": "Media spese per giorno della settimana"},
-        "table_data": None,
-    }
-
-
-def _fn_category_trend(db_path: str, params: dict) -> dict:
-    category = params.get("category", "cibo")
-    if not isinstance(category, str) or category not in CATEGORIES:
-        category = "cibo"
-    months = max(1, min(MAX_CATEGORY_TREND_MONTHS, int(params.get("months", 6))))
-    cutoff = _dates(months * 30)
-    rows = _q(
-        "SELECT date, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
-        {"cat": category, "d": cutoff}
-    )
-    monthly: dict = defaultdict(float)
-    for date_str, amount in rows:
-        monthly[date_str[:7]] += amount or 0
-    # Take the most recent MAX_CHART_POINTS months
-    sorted_months = sorted(monthly.items())[-MAX_CHART_POINTS:]
-    data = [{"name": k, "value": round(v, 2)} for k, v in sorted_months]
-    return {
-        "chart_data": {"type": "line", "data": data, "title": f"Andamento mensile: {category}"},
-        "table_data": None,
-    }
-
-
 def _fn_year_end_forecast(db_path: str, params: dict) -> dict:
     today = date.today()
     d30 = _dates(30)
     year_start = today.replace(month=1, day=1).isoformat()
 
-    total_30 = round(_scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d", {"d": d30}) or 0, 2)
-    spent_ytd = round(_scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d", {"d": year_start}) or 0, 2)
+    total_30 = round(_scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d AND date <= :_today", {"d": d30, "_today": _dates()}) or 0, 2)
+    spent_ytd = round(_scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d AND date <= :_today", {"d": year_start, "_today": _dates()}) or 0, 2)
 
     days_remaining = (date(today.year, 12, 31) - today).days
     daily_avg = round(total_30 / 30, 2) if total_30 > 0 else 0
@@ -586,54 +608,11 @@ def _fn_year_end_forecast(db_path: str, params: dict) -> dict:
         "table_data": {
             "headers": ["Metrica", "Valore"],
             "rows": [
-                ["Speso da inizio anno", f"€{spent_ytd}"],
-                ["Media giornaliera (ultimi 30gg)", f"€{daily_avg}"],
+                ["Speso da inizio anno", f"{_eur(spent_ytd)}"],
+                ["Media giornaliera (ultimi 30gg)", f"{_eur(daily_avg)}"],
                 ["Giorni rimasti all'anno", str(days_remaining)],
-                ["Previsto per il resto dell'anno", f"€{projected_remaining}"],
-                ["Totale proiettato anno", f"€{projected_total}"],
-            ],
-        },
-    }
-
-
-def _fn_summary_stats(db_path: str, params: dict) -> dict:
-    period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
-    exclude_category = params.get("exclude_category")
-    if exclude_category is not None and (not isinstance(exclude_category, str) or exclude_category not in CATEGORIES):
-        exclude_category = None
-    cutoff = _dates(period_days)
-    if exclude_category:
-        row = _q(
-            "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d AND category != :excl",
-            {"d": cutoff, "excl": exclude_category}
-        )
-        top_cat = _q(
-            "SELECT category FROM transactions WHERE date >= :d AND category != :excl "
-            "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
-            {"d": cutoff, "excl": exclude_category}
-        )
-    else:
-        row = _q(
-            "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d",
-            {"d": cutoff}
-        )
-        top_cat = _q(
-            "SELECT category FROM transactions WHERE date >= :d "
-            "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
-            {"d": cutoff}
-        )
-    total, count, avg = (round(row[0][0] or 0, 2), row[0][1] or 0, round(row[0][2] or 0, 2)) if row else (0, 0, 0)
-    periodo_label = f"ultimi {period_days}gg" + (f", esclusa categoria {exclude_category}" if exclude_category else "")
-    return {
-        "chart_data": None,
-        "table_data": {
-            "headers": ["Metrica", "Valore"],
-            "rows": [
-                ["Totale spese", f"€{total}"],
-                ["Transazioni", str(count)],
-                ["Media per transazione", f"€{avg}"],
-                ["Categoria top", top_cat[0][0] if top_cat else "-"],
-                ["Periodo analizzato", periodo_label],
+                ["Previsto per il resto dell'anno", f"{_eur(projected_remaining)}"],
+                ["Totale proiettato anno", f"{_eur(projected_total)}"],
             ],
         },
     }
@@ -647,12 +626,12 @@ def _fn_budget_status(db_path: str, params: dict) -> dict:
         "COALESCE(SUM(t.amount), 0) AS spent "
         "FROM budgets b "
         "LEFT JOIN transactions t "
-        "  ON t.category = b.category AND t.date >= :ms "
+        "  ON t.category = b.category AND t.date >= :ms AND t.date <= :_today "
         "WHERE b.active = 1 "
         "GROUP BY b.category, b.amount "
         "ORDER BY (COALESCE(SUM(t.amount), 0) / b.amount) DESC "
         "LIMIT :lim",
-        {"ms": ms, "lim": MAX_TABLE_ROWS}
+        {"ms": ms, "lim": MAX_TABLE_ROWS, "_today": _dates()}
     )
     if not rows:
         return {
@@ -675,7 +654,7 @@ def _fn_budget_status(db_path: str, params: dict) -> dict:
             status = "⚠️ attenzione"
         else:
             status = "🔴 sforato"
-        table_rows.append([cat, f"€{budget}", f"€{spent}", f"{pct}%", status])
+        table_rows.append([cat, f"{_eur(budget)}", f"{_eur(spent)}", f"{pct}%", status])
         chart_data_items.append({"name": cat, "value": pct})
 
     return {
@@ -701,11 +680,11 @@ def _fn_recurring_vs_variable(db_path: str, params: dict) -> dict:
         "  SUM(CASE WHEN is_recurring = 1 THEN amount ELSE 0 END) AS recurring, "
         "  SUM(CASE WHEN is_recurring = 0 OR is_recurring IS NULL THEN amount ELSE 0 END) AS variable "
         "FROM transactions "
-        "WHERE date >= :d "
+        "WHERE date >= :d AND date <= :_today "
         "GROUP BY month "
         "ORDER BY month DESC "
         "LIMIT :lim",
-        {"d": cutoff, "lim": MAX_CHART_POINTS}
+        {"d": cutoff, "lim": MAX_CHART_POINTS, "_today": _dates()}
     )
     rows = sorted(rows, key=lambda r: r[0])  # ri-ordina ascendente
 
@@ -716,7 +695,7 @@ def _fn_recurring_vs_variable(db_path: str, params: dict) -> dict:
         var = round(var or 0, 2)
         total = rec + var
         pct_rec = round(rec / total * 100, 1) if total > 0 else 0
-        table_rows.append([month, f"€{rec}", f"€{var}", f"{pct_rec}%"])
+        table_rows.append([month, f"{_eur(rec)}", f"{_eur(var)}", f"{pct_rec}%"])
         chart_items.append({"name": month, "value": rec})   # bar = quota ricorrente
 
     return {
@@ -760,11 +739,11 @@ def _fn_subscriptions_audit(db_path: str, params: dict) -> dict:
         table_rows.append([
             desc or "-",
             cat or "-",
-            f"€{avg_amt}",
+            f"{_eur(avg_amt)}",
             str(count),
             first or "-",
             last or "-",
-            f"€{annualized}",
+            f"{_eur(annualized)}",
         ])
 
     return {
@@ -784,9 +763,9 @@ def _fn_category_volatility(db_path: str, params: dict) -> dict:
     cutoff = _dates(period_days)
     rows = _q(
         "SELECT category, substr(date,1,7) AS month, SUM(amount) AS monthly_total "
-        "FROM transactions WHERE date >= :d "
+        "FROM transactions WHERE date >= :d AND date <= :_today "
         "GROUP BY category, month ORDER BY category, month",
-        {"d": cutoff}
+        {"d": cutoff, "_today": _dates()}
     )
     cat_months: dict = defaultdict(list)
     for cat, _m, total in rows:
@@ -812,7 +791,7 @@ def _fn_category_volatility(db_path: str, params: dict) -> dict:
         "table_data": {
             "headers": ["Categoria", "Media mensile", "StdDev", "Volatilità (CV%)", "Mesi"],
             "rows": [
-                [r[0], f"€{r[1]}", f"€{r[2]}", f"{r[3]}% — {r[4]}", str(r[5])]
+                [r[0], f"{_eur(r[1])}", f"{_eur(r[2])}", f"{r[3]}% — {r[4]}", str(r[5])]
                 for r in results[:MAX_TABLE_ROWS]
             ],
         },
@@ -846,8 +825,8 @@ def _fn_frequency_analysis(db_path: str, params: dict) -> dict:
 
     if category:
         rows = _q(
-            "SELECT date, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
-            {"cat": category, "d": cutoff}
+            "SELECT date, amount FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today ORDER BY date",
+            {"cat": category, "d": cutoff, "_today": _dates()}
         )
         if not rows:
             return {"chart_data": None, "table_data": {"headers": ["Info"], "rows": [["Nessuna transazione trovata."]]}}
@@ -862,13 +841,13 @@ def _fn_frequency_analysis(db_path: str, params: dict) -> dict:
             "chart_data": {"type": "line", "data": chart_items, "title": f"Gap tra transazioni: {category} (giorni)"},
             "table_data": {
                 "headers": ["Categoria", "Transazioni", "Gap medio (gg)", "Media €", "Mediana €"],
-                "rows": [[category, str(n), str(avg_gap), f"€{mean_amt}", f"€{median_amt}"]],
+                "rows": [[category, str(n), str(avg_gap), f"{_eur(mean_amt)}", f"{_eur(median_amt)}"]],
             },
         }
     else:
         rows = _q(
-            "SELECT category, date, amount FROM transactions WHERE date >= :d ORDER BY category, date",
-            {"d": cutoff}
+            "SELECT category, date, amount FROM transactions WHERE date >= :d AND date <= :_today ORDER BY category, date",
+            {"d": cutoff, "_today": _dates()}
         )
         cat_data: dict = defaultdict(lambda: {"amounts": [], "dates": []})
         for cat, date_str, amount in rows:
@@ -878,7 +857,7 @@ def _fn_frequency_analysis(db_path: str, params: dict) -> dict:
         table_rows = []
         for cat, data in cat_data.items():
             n, avg_gap, mean_amt, median_amt, _ = _gaps_and_stats(data["dates"], data["amounts"])
-            table_rows.append([cat, str(n), str(avg_gap), f"€{mean_amt}", f"€{median_amt}"])
+            table_rows.append([cat, str(n), str(avg_gap), f"{_eur(mean_amt)}", f"{_eur(median_amt)}"])
         table_rows.sort(key=lambda r: int(r[1]), reverse=True)
         return {
             "chart_data": None,
@@ -892,20 +871,20 @@ def _fn_frequency_analysis(db_path: str, params: dict) -> dict:
 def _fn_concentration_risk(db_path: str, params: dict) -> dict:
     period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
     cutoff = _dates(period_days)
-    total = _scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d", {"d": cutoff}) or 0
+    total = _scalar("SELECT SUM(amount) FROM transactions WHERE date >= :d AND date <= :_today", {"d": cutoff, "_today": _dates()}) or 0
 
     cat_rows = _q(
-        "SELECT category, SUM(amount) AS s FROM transactions WHERE date >= :d "
-        "GROUP BY category ORDER BY s DESC LIMIT 3", {"d": cutoff}
+        "SELECT category, SUM(amount) AS s FROM transactions WHERE date >= :d AND date <= :_today "
+        "GROUP BY category ORDER BY s DESC LIMIT 3", {"d": cutoff, "_today": _dates()}
     )
     desc_rows = _q(
         "SELECT COALESCE(description,'?'), SUM(amount) AS s FROM transactions "
-        "WHERE date >= :d AND description IS NOT NULL "
-        "GROUP BY description ORDER BY s DESC LIMIT 5", {"d": cutoff}
+        "WHERE date >= :d AND date <= :_today AND description IS NOT NULL "
+        "GROUP BY description ORDER BY s DESC LIMIT 5", {"d": cutoff, "_today": _dates()}
     )
     day_rows = _q(
-        "SELECT date, SUM(amount) AS s FROM transactions WHERE date >= :d "
-        "GROUP BY date ORDER BY s DESC LIMIT 5", {"d": cutoff}
+        "SELECT date, SUM(amount) AS s FROM transactions WHERE date >= :d AND date <= :_today "
+        "GROUP BY date ORDER BY s DESC LIMIT 5", {"d": cutoff, "_today": _dates()}
     )
 
     def pct(v):
@@ -913,11 +892,11 @@ def _fn_concentration_risk(db_path: str, params: dict) -> dict:
 
     rows: list = (
         [["─── Top 3 categorie ───", "", ""]]
-        + [[r[0], f"€{round(r[1],2)}", pct(r[1])] for r in cat_rows]
+        + [[r[0], f"{_eur(round(r[1],2))}", pct(r[1])] for r in cat_rows]
         + [["─── Top 5 descrizioni ───", "", ""]]
-        + [[r[0], f"€{round(r[1],2)}", pct(r[1])] for r in desc_rows]
+        + [[r[0], f"{_eur(round(r[1],2))}", pct(r[1])] for r in desc_rows]
         + [["─── Top 5 giorni ───", "", ""]]
-        + [[r[0], f"€{round(r[1],2)}", pct(r[1])] for r in day_rows]
+        + [[r[0], f"{_eur(round(r[1],2))}", pct(r[1])] for r in day_rows]
     )
 
     top3_total = sum(r[1] for r in cat_rows)
@@ -963,7 +942,7 @@ def _fn_period_compare(db_path: str, params: dict) -> dict:
         results.append((cat, a, b, delta_eur, delta_pct))
     results.sort(key=lambda x: abs(x[3]), reverse=True)
 
-    def _fmt_eur(v): return f"+€{v}" if v >= 0 else f"-€{abs(v)}"
+    def _fmt_eur(v): return f"+{_eur(v)}" if v >= 0 else f"-{_eur(abs(v))}"
     def _fmt_pct(v): return f"+{v}%" if v >= 0 else f"{v}%"
 
     return {
@@ -980,7 +959,7 @@ def _fn_period_compare(db_path: str, params: dict) -> dict:
                 "Δ€", "Δ%",
             ],
             "rows": [
-                [r[0], f"€{r[1]}", f"€{r[2]}", _fmt_eur(r[3]), _fmt_pct(r[4])]
+                [r[0], f"{_eur(r[1])}", f"{_eur(r[2])}", _fmt_eur(r[3]), _fmt_pct(r[4])]
                 for r in results[:MAX_TABLE_ROWS]
             ],
         },
@@ -1028,9 +1007,9 @@ def _fn_momentum(db_path: str, params: dict) -> dict:
 
     if category:
         rows = _q(
-            "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d "
+            "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today "
             "GROUP BY date ORDER BY date",
-            {"cat": category, "d": cutoff}
+            {"cat": category, "d": cutoff, "_today": _dates()}
         )
         weekly = _bucket(rows, base)
         slope = _linear_slope(weekly)
@@ -1050,9 +1029,9 @@ def _fn_momentum(db_path: str, params: dict) -> dict:
         }
     else:
         rows = _q(
-            "SELECT category, date, SUM(amount) FROM transactions WHERE date >= :d "
+            "SELECT category, date, SUM(amount) FROM transactions WHERE date >= :d AND date <= :_today "
             "GROUP BY category, date ORDER BY category, date",
-            {"d": cutoff}
+            {"d": cutoff, "_today": _dates()}
         )
         cat_raw: dict = defaultdict(list)
         for cat, date_str, amt in rows:
@@ -1104,10 +1083,10 @@ def _fn_search_transactions(db_path: str, params: dict) -> dict:
 
     rows = _q(
         "SELECT date, category, description, tags, amount FROM transactions "
-        "WHERE date >= :d "
+        "WHERE date >= :d AND date <= :_today "
         "  AND (LOWER(COALESCE(description,'')) LIKE :q OR LOWER(COALESCE(tags,'')) LIKE :q) "
         "ORDER BY amount DESC LIMIT :n",
-        {"d": cutoff, "q": like_q, "n": n}
+        {"d": cutoff, "q": like_q, "n": n, "_today": _dates()}
     )
     if not rows:
         return {
@@ -1117,16 +1096,16 @@ def _fn_search_transactions(db_path: str, params: dict) -> dict:
 
     total_found = sum(r[4] or 0 for r in rows)
     table_rows = [
-        [r[0], r[1] or "-", r[2] or "-", r[3] or "-", f"€{round(r[4] or 0, 2)}"]
+        [r[0], r[1] or "-", r[2] or "-", r[3] or "-", f"{_eur(round(r[4] or 0, 2))}"]
         for r in rows
-    ] + [["── TOTALE ──", "", "", "", f"€{round(total_found, 2)}"]]
+    ] + [["── TOTALE ──", "", "", "", f"{_eur(round(total_found, 2))}"]]
 
     daily = _q(
         "SELECT date, SUM(amount) FROM transactions "
-        "WHERE date >= :d "
+        "WHERE date >= :d AND date <= :_today "
         "  AND (LOWER(COALESCE(description,'')) LIKE :q OR LOWER(COALESCE(tags,'')) LIKE :q) "
         "GROUP BY date ORDER BY date",
-        {"d": cutoff, "q": like_q}
+        {"d": cutoff, "q": like_q, "_today": _dates()}
     )
     chart_items = [{"name": r[0][5:], "value": round(r[1] or 0, 2)} for r in daily][:MAX_CHART_POINTS]
 
@@ -1152,8 +1131,8 @@ def _fn_category_drill(db_path: str, params: dict) -> dict:
     cutoff = _dates(period_days)
 
     rows = _q(
-        "SELECT date, description, amount FROM transactions WHERE category = :cat AND date >= :d ORDER BY date",
-        {"cat": category, "d": cutoff}
+        "SELECT date, description, amount FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today ORDER BY date",
+        {"cat": category, "d": cutoff, "_today": _dates()}
     )
     if not rows:
         return {
@@ -1170,34 +1149,34 @@ def _fn_category_drill(db_path: str, params: dict) -> dict:
 
     top_desc = _q(
         "SELECT COALESCE(description,'-'), COUNT(*), SUM(amount) FROM transactions "
-        "WHERE category = :cat AND date >= :d AND description IS NOT NULL "
+        "WHERE category = :cat AND date >= :d AND date <= :_today AND description IS NOT NULL "
         "GROUP BY description ORDER BY SUM(amount) DESC LIMIT 5",
-        {"cat": category, "d": cutoff}
+        {"cat": category, "d": cutoff, "_today": _dates()}
     )
     top_days = _q(
-        "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d "
+        "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today "
         "GROUP BY date ORDER BY SUM(amount) DESC LIMIT 5",
-        {"cat": category, "d": cutoff}
+        {"cat": category, "d": cutoff, "_today": _dates()}
     )
 
     combined: list = (
         [["─── Statistiche ───", "", ""],
-         ["Totale",          f"€{total}", ""],
+         ["Totale",          f"{_eur(total)}", ""],
          ["N. transazioni",  str(n),      ""],
-         ["Media",           f"€{mean}",  ""],
-         ["Mediana",         f"€{median}",""],
-         ["Minima",          f"€{mn}",    ""],
-         ["Massima",         f"€{mx}",    ""],
+         ["Media",           f"{_eur(mean)}",  ""],
+         ["Mediana",         f"{_eur(median)}",""],
+         ["Minima",          f"{_eur(mn)}",    ""],
+         ["Massima",         f"{_eur(mx)}",    ""],
          ["─── Top 5 descrizioni ───", "", ""]]
-        + [[d, f"€{round(s,2)}", f"{c} tx"] for d, c, s in top_desc]
+        + [[d, f"{_eur(round(s,2))}", f"{c} tx"] for d, c, s in top_desc]
         + [["─── Top 5 giorni ───", "", ""]]
-        + [[day, f"€{round(s,2)}", ""] for day, s in top_days]
+        + [[day, f"{_eur(round(s,2))}", ""] for day, s in top_days]
     )
 
     daily = _q(
-        "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d "
+        "SELECT date, SUM(amount) FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today "
         "GROUP BY date ORDER BY date",
-        {"cat": category, "d": cutoff}
+        {"cat": category, "d": cutoff, "_today": _dates()}
     )
     chart_items = [{"name": r[0][5:], "value": round(r[1] or 0, 2)} for r in daily][-MAX_CHART_POINTS:]
 
@@ -1229,8 +1208,8 @@ def _fn_tag_analysis(db_path: str, params: dict) -> dict:
         like_q = f"%{tag}%"
         rows = _q(
             "SELECT date, category, description, amount FROM transactions "
-            "WHERE date >= :d AND LOWER(COALESCE(tags,'')) LIKE :q ORDER BY date",
-            {"d": cutoff, "q": like_q}
+            "WHERE date >= :d AND date <= :_today AND LOWER(COALESCE(tags,'')) LIKE :q ORDER BY date",
+            {"d": cutoff, "q": like_q, "_today": _dates()}
         )
         if not rows:
             return {
@@ -1239,15 +1218,15 @@ def _fn_tag_analysis(db_path: str, params: dict) -> dict:
             }
         total = sum(r[3] or 0 for r in rows)
         table_rows = [
-            [r[0], r[1] or "-", r[2] or "-", f"€{round(r[3] or 0, 2)}"]
+            [r[0], r[1] or "-", r[2] or "-", f"{_eur(round(r[3] or 0, 2))}"]
             for r in rows[: MAX_TABLE_ROWS - 1]
-        ] + [["── TOTALE ──", "", "", f"€{round(total, 2)}"]]
+        ] + [["── TOTALE ──", "", "", f"{_eur(round(total, 2))}"]]
 
         daily = _q(
             "SELECT date, SUM(amount) FROM transactions "
-            "WHERE date >= :d AND LOWER(COALESCE(tags,'')) LIKE :q "
+            "WHERE date >= :d AND date <= :_today AND LOWER(COALESCE(tags,'')) LIKE :q "
             "GROUP BY date ORDER BY date",
-            {"d": cutoff, "q": like_q}
+            {"d": cutoff, "q": like_q, "_today": _dates()}
         )
         chart_items = [{"name": r[0][5:], "value": round(r[1] or 0, 2)} for r in daily][:MAX_CHART_POINTS]
 
@@ -1263,8 +1242,8 @@ def _fn_tag_analysis(db_path: str, params: dict) -> dict:
         }
     else:
         rows = _q(
-            "SELECT tags, amount FROM transactions WHERE date >= :d AND tags IS NOT NULL AND tags != ''",
-            {"d": cutoff}
+            "SELECT tags, amount FROM transactions WHERE date >= :d AND date <= :_today AND tags IS NOT NULL AND tags != ''",
+            {"d": cutoff, "_today": _dates()}
         )
         tag_totals: dict = defaultdict(float)
         for tags_str, amount in rows:
@@ -1288,7 +1267,7 @@ def _fn_tag_analysis(db_path: str, params: dict) -> dict:
             },
             "table_data": {
                 "headers": ["Tag", "Totale speso"],
-                "rows": [[t, f"€{round(v,2)}"] for t, v in sorted_tags],
+                "rows": [[t, f"{_eur(round(v,2))}"] for t, v in sorted_tags],
             },
         }
 
@@ -1307,13 +1286,13 @@ def _fn_what_if(db_path: str, params: dict) -> dict:
     with engine.connect() as conn:
         if category:
             row = conn.execute(
-                text("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE date>=:c AND category=:cat"),
-                {"c": cutoff, "cat": category},
+                text("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE date>=:c AND date <= :_today AND category=:cat"),
+                {"c": cutoff, "cat": category, "_today": _dates()},
             ).fetchone()
         else:
             row = conn.execute(
-                text("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE date>=:c"),
-                {"c": cutoff},
+                text("SELECT COALESCE(SUM(amount),0) FROM transactions WHERE date>=:c AND date <= :_today"),
+                {"c": cutoff, "_today": _dates()},
             ).fetchone()
 
     total_90 = float(row[0]) if row else 0.0
@@ -1351,8 +1330,8 @@ def _fn_what_if(db_path: str, params: dict) -> dict:
         "table_data": {
             "headers": ["Metrica", "Baseline", "Scenario"],
             "rows": [
-                ["Mensile",                      f"€{baseline}",              f"€{new_monthly}"],
-                ["Annuale",                       f"€{round(baseline*12,2)}",  f"€{round(new_monthly*12,2)}"],
+                ["Mensile",                      f"{_eur(baseline)}",              f"{_eur(new_monthly)}"],
+                ["Annuale",                       f"{_eur(round(baseline*12,2))}",  f"{_eur(round(new_monthly*12,2))}"],
                 [f"Δ orizzonte ({horizon_months}m)", "—",                     f"€{saved_total:+.2f}"],
             ],
         },
@@ -1360,13 +1339,8 @@ def _fn_what_if(db_path: str, params: dict) -> dict:
 
 
 _PREBUILT_FUNCTIONS = {
-    "spending_by_category": _fn_spending_by_category,
-    "daily_trend": _fn_daily_trend,
-    "top_transactions": _fn_top_transactions,
+    "query_spending": _fn_query_spending,
     "month_vs_month": _fn_month_vs_month,
-    "spending_by_weekday": _fn_spending_by_weekday,
-    "category_trend": _fn_category_trend,
-    "summary_stats": _fn_summary_stats,
     "year_end_forecast": _fn_year_end_forecast,
     "budget_status": _fn_budget_status,
     "recurring_vs_variable": _fn_recurring_vs_variable,
@@ -1444,36 +1418,38 @@ REGOLA PRINCIPALE: puoi scegliere 1, 2 o 3 funzioni (max 3).
 - 0 funzioni + in_perimeter=true → domanda finanziaria valida ma nessuna funzione la copre
 
 ESEMPI MULTI-FUNZIONE (2-3 funzioni):
-- "come sto andando?" → [spending_by_category(30), month_vs_month()]
-- "fammi un'analisi completa" → [spending_by_category(30), month_vs_month(), recurring_vs_variable()]
+- "come sto andando?" → [query_spending(period_days=30, group_by="category"), month_vs_month()]
+- "fammi un'analisi completa" → [query_spending(period_days=30, group_by="category"), month_vs_month(), recurring_vs_variable()]
 - "dove posso risparmiare?" → [subscriptions_audit(), concentration_risk()]
-- "analisi del trend generale" → [daily_trend(60), momentum(), month_vs_month()]
-- "panoramica finanziaria" → [spending_by_category(30), month_vs_month(), budget_status()]
+- "analisi del trend generale" → [query_spending(period_days=60, group_by="day"), momentum(), month_vs_month()]
+- "panoramica finanziaria" → [query_spending(period_days=30, group_by="category"), month_vs_month(), budget_status()]
 
 ESEMPI MONO-FUNZIONE (1 funzione):
-- "top 10 spese" → [top_transactions()]
-- "quanto ho speso da Ikea?" → [search_transactions(query="ikea")]
-- "trend del cibo" → [category_trend(category="cibo")]
+- "top 10 spese" → [query_spending(top_n=10)]
+- "quanto ho speso da Ikea?" → [query_spending(search="ikea")]
+- "trend del cibo" → [query_spending(category="cibo", months=6, group_by="month")]
 - "stato budget" → [budget_status()]
-- "quanto ho speso questo mese?" → [summary_stats(period_days=30)]
-- "quanto ho speso negli ultimi 3 giorni?" → [summary_stats(period_days=3)]
-- "quanto ho speso questo mese escludendo la categoria casa?" → [summary_stats(period_days=30, exclude_category="casa")]
-- "spese per categoria di questo mese senza abbonamenti" → [spending_by_category(period_days=30, exclude_category="abbonamenti")]
+- "quanto ho speso questo mese?" → [query_spending(period_days=30, group_by="none")]
+- "quanto ho speso negli ultimi 3 giorni?" → [query_spending(period_days=3, group_by="none")]
+- "quanto ho speso questo mese escludendo la categoria casa?" → [query_spending(period_days=30, group_by="none", exclude_category="casa")]
+- "spese per categoria di questo mese senza abbonamenti" → [query_spending(period_days=30, group_by="category", exclude_category="abbonamenti")]
+- "togliendo le spese per la casa questo mese quanto ho speso?" → [query_spending(period_days=30, group_by="none", exclude_category="casa")]
+- "media spese per giorno della settimana" → [query_spending(period_days=90, group_by="weekday")]
 
 SINONIMI CATEGORIA (normalizza sempre):
 ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
 libri/corso/udemy → formazione | netflix/spotify/prime → abbonamenti | bici/moto/aereo → trasporti
 
 REGOLA MERCHANT: se la domanda cita un brand/negozio SPECIFICO (nome proprio NON uguale a una
-categoria), usa search_transactions con params.query = il nome in minuscolo.
-Esempi: "IKEA"→query="ikea", "Amazon"→query="amazon", "Starbucks"→query="starbucks",
-"Esselunga"→query="esselunga", "Q8"→query="q8", "FitActive"→query="fitactive",
-"McDonald's"→query="mcdonald", "Trenitalia"→query="trenitalia", "Netflix pagamenti"→query="netflix"
+categoria), usa query_spending con params.search = il nome in minuscolo.
+Esempi: "IKEA"→search="ikea", "Amazon"→search="amazon", "Starbucks"→search="starbucks",
+"Esselunga"→search="esselunga", "Q8"→search="q8", "FitActive"→search="fitactive",
+"McDonald's"→search="mcdonald", "Trenitalia"→search="trenitalia", "Netflix pagamenti"→search="netflix"
 
-ECCEZIONI — NON usare search_transactions per domande GENERICHE (senza merchant specifico):
-- "quanto ho speso questo mese?" → summary_stats(period_days=30)
-- "totale spese" → summary_stats o spending_by_category
-- "spese di questa settimana" → summary_stats(period_days=7)
+ECCEZIONI — NON usare search per domande GENERICHE (senza merchant specifico):
+- "quanto ho speso questo mese?" → query_spending(period_days=30, group_by="none")
+- "totale spese" → query_spending(group_by="none") o query_spending(group_by="category")
+- "spese di questa settimana" → query_spending(period_days=7, group_by="none")
 
 PERIODO IMPLICITO:
 - "questa settimana" → period_days=7 | "questo mese" → period_days=30
@@ -1481,20 +1457,22 @@ PERIODO IMPLICITO:
 - "ultimi 6 mesi" → period_days=180 | "ieri" → period_days=1
 - "sempre" / "storico" → period_days=365 | nessun periodo → usa il default
 - "ultimi N giorni" (qualsiasi N, es. "ultimi 3 giorni", "ultimi 10 giorni") → period_days=N esatto,
-  scegli SEMPRE una funzione (es. summary_stats o daily_trend), MAI 0 funzioni per questo tipo di domanda
+  scegli SEMPRE query_spending, MAI 0 funzioni per questo tipo di domanda
 
-ESCLUSIONE CATEGORIA:
-- Se la domanda contiene "escludendo/senza/tranne/eccetto la categoria X" → passa params.exclude_category = X
-  (stessa normalizzazione sinonimi di category). Vale per spending_by_category e summary_stats.
+ESCLUSIONE/INCLUSIONE CATEGORIA — ragiona sul SIGNIFICATO, non su parole chiave:
+- Se l'utente vuole il totale/statistiche CON una categoria esclusa dal computo (qualunque sia la
+  formulazione — "escludendo X", "togliendo X", "senza X", "tolta X", "al netto di X", "a parte X",
+  o varianti equivalenti), passa params.exclude_category = X (stessa normalizzazione sinonimi).
+- Il calcolo dell'esclusione è sempre fatto lato funzione (SQL) con UNA SOLA chiamata a
+  query_spending — non stimarlo o ricalcolarlo mai nel testo della risposta finale sottraendo
+  numeri di due chiamate diverse.
 
 FUNZIONI DISPONIBILI (rispetta i range indicati):
-- spending_by_category(period_days=30, range 1..365): distribuzione spese per categoria (bar chart)
-- daily_trend(days=30, range 1..365): trend giornaliero delle spese (line chart)
-- top_transactions(n=10 range 1..50, category=null, period_days=30): N spese più alte
+- query_spending(period_days=30 range 1..365, months=null range 1..24, group_by="category"|"day"|"weekday"|"month"|"none",
+  category=null, exclude_category=null, top_n=null range 1..50, search=null): funzione universale
+  per spese — usala per QUALSIASI domanda su totali, distribuzione per categoria, trend, top spese,
+  andamento mensile di una categoria, media per giorno settimana o ricerca merchant
 - month_vs_month(): confronto mese corrente vs precedente per categoria
-- spending_by_weekday(period_days=90, range 1..365): media per giorno della settimana
-- category_trend(category str, months=6 range 1..24): andamento mensile di una categoria
-- summary_stats(period_days=30, range 1..365): totale, media, conteggio, categoria top
 - year_end_forecast(): proiezione spese fine anno da media giornaliera
 - budget_status(): stato budget attivi con semaforo ok/warning/exceeded
 - recurring_vs_variable(period_days=90, range 1..365): fissi vs variabili per mese
@@ -1510,10 +1488,14 @@ FUNZIONI DISPONIBILI (rispetta i range indicati):
 - what_if(category=null, monthly_delta=0, monthly_target=null, percent_change=null, horizon_months=12): simulazione risparmio
 
 CASO OOS — domanda NON finanziaria (cucina, sport, meteo, codice, salute generica, meta-AI):
-{"use_functions": [], "in_perimeter": false}
+{"reasoning": "...", "use_functions": [], "in_perimeter": false}
+
+Prima di scegliere le funzioni, compila SEMPRE il campo "reasoning" con 1 frase breve che spiega
+cosa hai capito della domanda: periodo richiesto, eventuale categoria da includere/escludere, e
+perché hai scelto quelle funzioni. Ragiona sul senso della domanda, non su parole chiave isolate.
 
 Rispondi SOLO con JSON valido, niente testo extra:
-{"use_functions": [{"name": "...", "params": {...}}, ...], "in_perimeter": true}"""
+{"reasoning": "...", "use_functions": [{"name": "...", "params": {...}}, ...], "in_perimeter": true}"""
 
 INTERPRET_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispondi in italiano.
 
@@ -1522,12 +1504,22 @@ DOMANDA: {question}
 DATI:
 {data_summary}
 
-Scrivi 2-3 frasi da consulente. REGOLE:
+Scrivi una risposta breve e SCANSIONABILE, non un paragrafo lungo — deve leggersi in 5 secondi su
+schermo piccolo. Struttura ESATTA del campo "answer" (markdown):
+1. Una riga di apertura (max 1 frase) con il numero/pattern più importante.
+2. Un elenco puntato (righe che iniziano con "- ") di massimo 4 punti, uno per dato/categoria
+   rilevante — ogni punto breve, non una frase completa.
+3. Una riga finale in **grassetto** con 1 raccomandazione concreta.
+
+REGOLE:
 - Usa numeri ESATTI dai dati (importi, nomi, date)
+- NON fare calcoli aritmetici (somme, sottrazioni, percentuali) di tua iniziativa: riporta SOLO
+  i valori già presenti nei dati, così come sono. Se i dati non contengono già il numero che serve
+  per rispondere, dillo invece di stimarlo o ricalcolarlo tu.
 - Identifica il pattern principale o l'anomalia piu' interessante
 - NON dire "la tabella mostra", "ecco i dati" — analizza direttamente
-- Usa **grassetto** per cifre o categorie chiave
-- Chiudi con 1 raccomandazione concreta
+- Usa **grassetto** per cifre o categorie chiave nei punti elenco
+- NON scrivere un unico paragrafo di prosa continua
 
 Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
 Esempi corretti: "Mostrami il trend dell'abbigliamento negli ultimi 6 mesi", "Quali sono le 5 spese piu' alte di trasporti?"
@@ -1542,7 +1534,16 @@ DOMANDA: {question}
 HAI I RISULTATI DI {n_blocks} ANALISI:
 {data_summary}
 
-Produci 4-6 frasi che colleghino TRA LORO i blocchi (es. 'la categoria X e' anche quella piu' volatile e contribuisce per il 35% del totale'). NON elencare i blocchi separatamente. Usa numeri ESATTI dai dati. Termina con UNA raccomandazione concreta basata sull'incrocio dei risultati.
+Scrivi una risposta breve e SCANSIONABILE, non un paragrafo lungo — deve leggersi in pochi secondi
+su schermo piccolo. Struttura ESATTA del campo "answer" (markdown):
+1. Una riga di apertura (max 1 frase) che collega i blocchi tra loro (es. "la categoria X è anche
+   quella più volatile e contribuisce per il 35% del totale").
+2. Un elenco puntato (righe che iniziano con "- ") di massimo 4-5 punti con gli incroci/pattern più
+   rilevanti tra i blocchi — NON elencare i blocchi separatamente, ogni punto deve collegare dati.
+3. Una riga finale in **grassetto** con UNA raccomandazione concreta basata sull'incrocio dei risultati.
+
+Usa numeri ESATTI dai dati, senza fare calcoli aritmetici (somme, sottrazioni, percentuali) di tua
+iniziativa: riporta solo i valori già presenti nei blocchi. NON scrivere un unico paragrafo di prosa continua.
 
 Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
 NON includere suggerimenti dentro il campo answer.
@@ -1554,11 +1555,18 @@ TEXT_ANSWER_PROMPT = """Sei FinCopilot, consulente finanziario personale. Rispon
 DATI UTENTE (ultimi 30gg):
 {compact_context}
 
-Rispondi alla domanda in 2-4 frasi. REGOLE:
+Rispondi in modo breve e SCANSIONABILE, non un paragrafo lungo — deve leggersi in pochi secondi su
+schermo piccolo. Struttura del campo "answer" (markdown):
+1. Una riga di apertura (max 1 frase) che risponde direttamente alla domanda.
+2. Se citi più di 1-2 numeri/dati, usa un elenco puntato (righe che iniziano con "- "), un punto per
+   dato — MAI un paragrafo unico che li elenca in prosa. Se citi al massimo 1-2 numeri, salta l'elenco.
+3. Se dai un consiglio, chiudi con una riga in **grassetto** con la raccomandazione concreta.
+REGOLE:
 - Usa i numeri dal contesto quando utile
 - Sii diretto e pratico, dai consigli concreti
-- Usa **grassetto** per cifre o concetti chiave
+- Usa **grassetto** per cifre o concetti chiave (mai lasciare ** non chiuso)
 - Se non hai dati sufficienti per rispondere con certezza, dillo chiaramente
+- NON scrivere un unico paragrafo di prosa continua
 
 Poi 1-2 domande di approfondimento nel campo followup_questions — domande che l'UTENTE farebbe all'AI.
 Esempi corretti: "Mostrami il trend del cibo negli ultimi 3 mesi", "Qual e' la mia spesa media settimanale?"
@@ -1593,6 +1601,7 @@ def _sanitize_params(name: str, params: dict) -> dict:
         ("period_days",          1,   365,   30),
         ("days",                 1,   365,   30),
         ("n",                    1,    50,   10),
+        ("top_n",                1,    50,   10),
         ("months",               1,    24,    6),
         ("period_a_days",        1,   365,   30),
         ("period_b_offset_days", 1,   365,   30),
@@ -1627,6 +1636,12 @@ def _sanitize_params(name: str, params: dict) -> dict:
     if "query" in params and params["query"] is not None:
         q = re.sub(r"[^a-z0-9\s]", "", str(params["query"]).lower()).strip()
         params["query"] = q[:50] if q else None
+    if "search" in params and params["search"] is not None:
+        s = re.sub(r"[^a-z0-9\s]", "", str(params["search"]).lower()).strip()
+        params["search"] = s[:50] if s else None
+    if "group_by" in params:
+        if params["group_by"] not in ("category", "day", "weekday", "month", "none"):
+            params["group_by"] = "category"
     if "tag" in params and params["tag"] is not None:
         t = re.sub(r"[^a-z0-9_]", "", str(params["tag"]).lower()).strip()
         params["tag"] = t[:30] if t else None
@@ -1642,6 +1657,9 @@ def _validate_router_output(parsed: dict) -> dict:
 
     use_functions = parsed.get("use_functions", [])
     in_perimeter  = bool(parsed.get("in_perimeter", True))
+    reasoning     = parsed.get("reasoning", "")
+    if not isinstance(reasoning, str):
+        reasoning = ""
 
     if not isinstance(use_functions, list):
         use_functions = []
@@ -1663,6 +1681,7 @@ def _validate_router_output(parsed: dict) -> dict:
     return {
         "use_functions": validated[:3],
         "in_perimeter":  in_perimeter,
+        "reasoning":     reasoning,
     }
 
 
@@ -1673,7 +1692,7 @@ def _format_data_for_interpretation(chart_data, table_data) -> str:
     if chart_data:
         parts.append(f"Grafico '{chart_data.get('title', '')}' ({chart_data.get('type', 'bar')}):")
         for item in chart_data.get("data", [])[:MAX_DATA_SUMMARY_ROWS]:
-            parts.append(f"  {item.get('name')}: €{item.get('value')}")
+            parts.append(f"  {item.get('name')}: {_eur(item.get('value'))}")
     if table_data:
         headers = table_data.get("headers", [])
         rows = table_data.get("rows", [])
@@ -1687,7 +1706,7 @@ def build_compact_context() -> str:
     """Contesto minimo per risposte testuali: solo totali e top categorie."""
     d30 = _dates(30)
     d60 = _dates(60)
-    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d", {"d": d30})
+    row = _q("SELECT SUM(amount), COUNT(*) FROM transactions WHERE date >= :d AND date <= :_today", {"d": d30, "_today": _dates()})
     total = round(row[0][0] or 0, 2) if row else 0
     count = row[0][1] or 0 if row else 0
     prev = round(_scalar(
@@ -1695,13 +1714,13 @@ def build_compact_context() -> str:
         {"d60": d60, "d30": d30}
     ) or 0, 2)
     cats = _q(
-        "SELECT category, SUM(amount) FROM transactions WHERE date >= :d "
+        "SELECT category, SUM(amount) FROM transactions WHERE date >= :d AND date <= :_today "
         "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 5",
-        {"d": d30}
+        {"d": d30, "_today": _dates()}
     )
     trend = f"+{round((total-prev)/prev*100,1)}%" if prev > 0 else "N/D"
-    cats_str = ", ".join(f"{c[0]} €{round(c[1],2)}" for c in cats)
-    return f"Totale 30gg: €{total} ({count} tx, {trend} vs mese prec.) | Top categorie: {cats_str}"
+    cats_str = ", ".join(f"{c[0]} {_eur(round(c[1],2))}" for c in cats)
+    return f"Totale 30gg: {_eur(total)} ({count} tx, {trend} vs mese prec.) | Top categorie: {cats_str}"
 
 
 def _parse_ai_response(raw: str) -> dict:
@@ -1896,7 +1915,8 @@ def chat_with_ai(question: str, history=None) -> dict:
     in_perimeter  = selector.get("in_perimeter", True)
 
     if not in_perimeter:
-        _step(steps, "llm_router", "⛔ LLM: fuori perimetro", "in_perimeter=false", t, "skipped")
+        _step(steps, "llm_router", "⛔ LLM: fuori perimetro",
+              selector.get("reasoning") or "in_perimeter=false", t, "skipped")
         return {
             "answer": _OUT_OF_SCOPE["answer"],
             "chart_data": None,
@@ -1908,7 +1928,7 @@ def chat_with_ai(question: str, history=None) -> dict:
     if not use_functions:
         # Nessuna funzione adatta → risposta testuale con contesto compatto
         _step(steps, "llm_router", "💬 Router → risposta testuale",
-              "nessuna funzione selezionata", t)
+              selector.get("reasoning") or "nessuna funzione selezionata", t)
         t = _time.time()
         compact_ctx = build_compact_context()
         interp = _answer_in_perimeter(question, compact_ctx)
@@ -1925,9 +1945,10 @@ def chat_with_ai(question: str, history=None) -> dict:
     # 1..3 funzioni selezionate dal router
     fn_names = [f["name"] for f in use_functions]
     n = len(use_functions)
+    router_reasoning = selector.get("reasoning", "")
     _step(steps, "llm_router",
           f"🔀 Router → {', '.join(fn_names)}",
-          f"{n} funzion{'e' if n == 1 else 'i'}",
+          router_reasoning or f"{n} funzion{'e' if n == 1 else 'i'}",
           t)
 
     # PASSO 4 — Esecuzione di tutte le funzioni selezionate
@@ -2065,8 +2086,8 @@ def get_anomalies() -> list:
     # ── TIPO 1: amount_spike ───────────────────────────────────────────────
     rows60 = _q(
         "SELECT id, amount, category, description, date, time FROM transactions "
-        "WHERE date >= :d ORDER BY date DESC",
-        {"d": d60},
+        "WHERE date >= :d AND date <= :_today ORDER BY date DESC",
+        {"d": d60, "_today": _dates()},
     )
     by_cat: dict = defaultdict(list)
     for row in rows60:
@@ -2118,9 +2139,9 @@ def get_anomalies() -> list:
     # ── TIPO 2: new_merchant ───────────────────────────────────────────────
     recent_tx = _q(
         "SELECT id, amount, category, description, date, time FROM transactions "
-        "WHERE date >= :d AND amount > 10 AND description IS NOT NULL "
+        "WHERE date >= :d AND date <= :_today AND amount > 10 AND description IS NOT NULL "
         "AND description != '' ORDER BY date DESC",
-        {"d": d60},
+        {"d": d60, "_today": _dates()},
     )
     for row in recent_tx:
         desc = (row[3] or "").strip()
@@ -2149,12 +2170,12 @@ def get_anomalies() -> list:
 
     # ── TIPO 3: frequency_spike ────────────────────────────────────────────
     cat_60 = _q(
-        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d GROUP BY category",
-        {"d": d60},
+        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d AND date <= :_today GROUP BY category",
+        {"d": d60, "_today": _dates()},
     )
     cat_7 = _q(
-        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d GROUP BY category",
-        {"d": d7},
+        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d AND date <= :_today GROUP BY category",
+        {"d": d7, "_today": _dates()},
     )
     cat_60_map = {r[0]: r[1] for r in cat_60}
     cat_7_map  = {r[0]: r[1] for r in cat_7}
@@ -2167,8 +2188,8 @@ def get_anomalies() -> list:
         if count_week > max(2, avg_weekly * 2):
             rep = _q(
                 "SELECT id, amount, category, description, date, time FROM transactions "
-                "WHERE category = :cat AND date >= :d ORDER BY date DESC LIMIT 1",
-                {"cat": cat, "d": d7},
+                "WHERE category = :cat AND date >= :d AND date <= :_today ORDER BY date DESC LIMIT 1",
+                {"cat": cat, "d": d7, "_today": _dates()},
             )
             if not rep:
                 continue
@@ -2199,9 +2220,9 @@ def get_anomalies() -> list:
     # ── TIPO 4: duplicate_suspect ──────────────────────────────────────────
     dup_rows = _q(
         "SELECT id, amount, category, description, date, time FROM transactions "
-        "WHERE date >= :d AND description IS NOT NULL AND description != '' "
+        "WHERE date >= :d AND date <= :_today AND description IS NOT NULL AND description != '' "
         "ORDER BY description, amount, date",
-        {"d": d90},
+        {"d": d90, "_today": _dates()},
     )
     dup_groups: dict = defaultdict(list)
     for row in dup_rows:
@@ -2248,8 +2269,8 @@ def get_anomalies() -> list:
     # ── TIPO 5: unusual_time ───────────────────────────────────────────────
     time_rows = _q(
         "SELECT id, amount, category, description, date, time FROM transactions "
-        "WHERE date >= :d AND time IS NOT NULL ORDER BY date DESC",
-        {"d": d60},
+        "WHERE date >= :d AND date <= :_today AND time IS NOT NULL ORDER BY date DESC",
+        {"d": d60, "_today": _dates()},
     )
     by_cat_time: dict = defaultdict(list)
     for row in time_rows:
@@ -2332,8 +2353,8 @@ def get_anomaly_detail(tx_id: int, detection_type: str, user_id: str):
 
     if detection_type == "amount_spike":
         cat_rows = _q(
-            "SELECT amount FROM transactions WHERE category = :cat AND date >= :d AND user_id = :user_id",
-            {"cat": tx[2], "d": d60, "user_id": user_id},
+            "SELECT amount FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today AND user_id = :user_id",
+            {"cat": tx[2], "d": d60, "user_id": user_id, "_today": _dates()},
         )
         amounts = [r[0] for r in cat_rows]
         if len(amounts) < 2:
@@ -2368,12 +2389,12 @@ def get_anomaly_detail(tx_id: int, detection_type: str, user_id: str):
 
     elif detection_type == "frequency_spike":
         count_7 = _scalar(
-            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d AND user_id = :user_id",
-            {"cat": tx[2], "d": d7, "user_id": user_id},
+            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today AND user_id = :user_id",
+            {"cat": tx[2], "d": d7, "user_id": user_id, "_today": _dates()},
         ) or 0
         count_60 = _scalar(
-            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d AND user_id = :user_id",
-            {"cat": tx[2], "d": d60, "user_id": user_id},
+            "SELECT COUNT(*) FROM transactions WHERE category = :cat AND date >= :d AND date <= :_today AND user_id = :user_id",
+            {"cat": tx[2], "d": d60, "user_id": user_id, "_today": _dates()},
         ) or 0
         avg_weekly = round(count_60 / 8.0, 1)
         ratio = round(count_7 / avg_weekly, 1) if avg_weekly > 0 else 0.0
@@ -2383,8 +2404,8 @@ def get_anomaly_detail(tx_id: int, detection_type: str, user_id: str):
         }
         ctx = _q(
             "SELECT date, amount, description FROM transactions "
-            "WHERE category = :cat AND date >= :d AND user_id = :user_id ORDER BY date DESC",
-            {"cat": tx[2], "d": d7, "user_id": user_id},
+            "WHERE category = :cat AND date >= :d AND date <= :_today AND user_id = :user_id ORDER BY date DESC",
+            {"cat": tx[2], "d": d7, "user_id": user_id, "_today": _dates()},
         )
         context = [{"date": r[0], "amount": round(r[1], 2), "description": r[2] or ""} for r in ctx]
 
@@ -2565,8 +2586,8 @@ def _detect_anomalies_for_transactions(txs: list) -> list:
     # Get 60-day baseline for each category
     d60 = _dates(60)
     cat_60_rows = _q(
-        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d GROUP BY category",
-        {"d": d60},
+        "SELECT category, COUNT(*) FROM transactions WHERE date >= :d AND date <= :_today GROUP BY category",
+        {"d": d60, "_today": _dates()},
     )
     cat_60_map = {r[0]: r[1] for r in cat_60_rows}
 

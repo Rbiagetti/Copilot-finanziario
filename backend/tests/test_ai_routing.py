@@ -43,13 +43,13 @@ requires_api = pytest.mark.skipif(not HAS_API_KEY, reason="GROQ_API_KEY non impo
 
 # (question, expected_function_name, expected_key_params)
 IN_SCOPE_FUNCTION = [
-    ("dove vanno i miei soldi?",                "spending_by_category",  {}),
-    ("top 10 spese più costose",                "top_transactions",      {"n": 10}),
-    ("trend giornaliero ultimi 30 giorni",      "daily_trend",           {}),
-    ("confronto mese corrente vs precedente",   "month_vs_month",        {}),
-    ("andamento del cibo negli ultimi 6 mesi",  "category_trend",        {"category": "cibo", "months": 6}),
-    ("media spese per giorno della settimana",  "spending_by_weekday",   {}),
-    ("statistiche generali ultimi 30 giorni",   "summary_stats",         {}),
+    ("dove vanno i miei soldi?",                "query_spending",  {}),
+    ("top 10 spese più costose",                "query_spending",  {"top_n": 10}),
+    ("trend giornaliero ultimi 30 giorni",      "query_spending",  {"group_by": "day"}),
+    ("confronto mese corrente vs precedente",   "month_vs_month",  {}),
+    ("andamento del cibo negli ultimi 6 mesi",  "query_spending",  {"category": "cibo", "months": 6}),
+    ("media spese per giorno della settimana",  "query_spending",  {"group_by": "weekday"}),
+    ("statistiche generali ultimi 30 giorni",   "query_spending",  {}),
     ("previsione fine anno",                    "year_end_forecast",     {}),
 ]
 
@@ -99,7 +99,7 @@ def test_determinism(question, expected_fn, expected_params):
         params = results[0]["use_function"].get("params", {}) or {}
         for key, val in expected_params.items():
             assert key in params, f"Param {key!r} mancante per {question!r}"
-            if key == "n":
+            if key in ("n", "top_n"):
                 assert 1 <= int(params[key]) <= MAX_TOP_N
             elif key in ("period_days", "days"):
                 assert 1 <= int(params[key]) <= MAX_PERIOD_DAYS
@@ -109,6 +109,8 @@ def test_determinism(question, expected_fn, expected_params):
                 assert params[key] in CATEGORIES, (
                     f"category={params[key]!r} non in CATEGORIES"
                 )
+            elif key == "group_by":
+                assert params[key] == val
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -244,13 +246,13 @@ class TestFunctionOutputShape:
                     )
 
     def test_top_transactions_extreme_n(self):
-        """n=9999 deve essere clippato a MAX_TOP_N=50 senza eccezioni."""
-        out = execute_prebuilt_function("top_transactions", {"n": 9999, "period_days": 30})
+        """top_n=9999 deve essere clippato a MAX_TOP_N=50 senza eccezioni."""
+        out = execute_prebuilt_function("query_spending", {"top_n": 9999, "period_days": 30})
         assert "table_data" in out
 
     def test_period_days_extreme(self):
         """period_days=10000 deve essere clippato a MAX_PERIOD_DAYS=365."""
-        out = execute_prebuilt_function("spending_by_category", {"period_days": 10000})
+        out = execute_prebuilt_function("query_spending", {"period_days": 10000})
         assert "chart_data" in out  # no eccezione
 
     def test_invalid_function_name(self):
@@ -353,27 +355,27 @@ class TestValidateRouterOutput:
         assert r["use_functions"] == []
 
     def test_period_days_clipped_high(self):
-        r = _validate_router_output({"use_function": {"name": "spending_by_category", "params": {"period_days": 10000}}, "in_perimeter": True})
+        r = _validate_router_output({"use_function": {"name": "query_spending", "params": {"period_days": 10000}}, "in_perimeter": True})
         assert r["use_functions"][0]["params"]["period_days"] == MAX_PERIOD_DAYS
 
     def test_period_days_clipped_low(self):
-        r = _validate_router_output({"use_function": {"name": "spending_by_category", "params": {"period_days": 0}}, "in_perimeter": True})
+        r = _validate_router_output({"use_function": {"name": "query_spending", "params": {"period_days": 0}}, "in_perimeter": True})
         assert r["use_functions"][0]["params"]["period_days"] == 1
 
     def test_n_clipped_high(self):
-        r = _validate_router_output({"use_function": {"name": "top_transactions", "params": {"n": 9999}}, "in_perimeter": True})
-        assert r["use_functions"][0]["params"]["n"] == MAX_TOP_N
+        r = _validate_router_output({"use_function": {"name": "query_spending", "params": {"top_n": 9999}}, "in_perimeter": True})
+        assert r["use_functions"][0]["params"]["top_n"] == MAX_TOP_N
 
     def test_chart_type_normalized(self):
-        r = _validate_router_output({"use_function": {"name": "spending_by_category", "params": {"chart_type": "radar"}}, "in_perimeter": True})
+        r = _validate_router_output({"use_function": {"name": "query_spending", "params": {"chart_type": "radar"}}, "in_perimeter": True})
         assert r["use_functions"][0]["params"]["chart_type"] == "bar"
 
     def test_invalid_category_nulled(self):
-        r = _validate_router_output({"use_function": {"name": "top_transactions", "params": {"category": "robotica"}}, "in_perimeter": True})
+        r = _validate_router_output({"use_function": {"name": "query_spending", "params": {"category": "robotica"}}, "in_perimeter": True})
         assert r["use_functions"][0]["params"]["category"] is None
 
     def test_valid_category_kept(self):
-        r = _validate_router_output({"use_function": {"name": "top_transactions", "params": {"category": "cibo"}}, "in_perimeter": True})
+        r = _validate_router_output({"use_function": {"name": "query_spending", "params": {"category": "cibo"}}, "in_perimeter": True})
         assert r["use_functions"][0]["params"]["category"] == "cibo"
 
     def test_in_perimeter_false(self):
