@@ -47,7 +47,7 @@
   box-shadow: 0 0 10px var(--accent-glow);
 }
 .budget-card.warning .budget-fill {
-  background: linear-gradient(90deg, #ffb77d, #f99028);
+  background: linear-gradient(90deg, #ffb77d, #b56a45);
   box-shadow: 0 0 10px rgba(255, 183, 125, 0.28);
 }
 .budget-card.over .budget-fill {

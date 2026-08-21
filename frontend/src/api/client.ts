@@ -170,6 +170,9 @@ export const getTransactions = (params?: Record<string, string>) =>
 export const getTransactionCount = (params?: Record<string, string>) =>
   api.get<{ count: number; total: number }>("/transactions/count", { params });
 
+export const getTransactionDateBounds = () =>
+  api.get<{ min_date: string; max_date: string }>("/transactions/date-bounds");
+
 export const createTransaction = (data: {
   amount: number;
   category: string;

@@ -4,18 +4,19 @@ import { PlusCircle, Mic, MicOff, MessageSquare, Keyboard } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAppStore } from "../../store/appStore";
 import { voiceService } from "../../utils/voiceService";
+import { CategoryIcon } from "../../lib/categoryIcons";
 
 const CATEGORIES = [
-  { value: "cibo", emoji: "🍕", label: "Cibo" },
-  { value: "trasporti", emoji: "🚗", label: "Trasporti" },
-  { value: "casa", emoji: "🏠", label: "Casa" },
-  { value: "salute", emoji: "💊", label: "Salute" },
-  { value: "svago", emoji: "🎭", label: "Svago" },
-  { value: "abbigliamento", emoji: "👕", label: "Abbigliamento" },
-  { value: "lavoro", emoji: "💼", label: "Lavoro" },
-  { value: "abbonamenti", emoji: "📱", label: "Abbonamenti" },
-  { value: "formazione", emoji: "🎓", label: "Formazione" },
-  { value: "altro", emoji: "❓", label: "Altro" },
+  { value: "cibo", label: "Cibo" },
+  { value: "trasporti", label: "Trasporti" },
+  { value: "casa", label: "Casa" },
+  { value: "salute", label: "Salute" },
+  { value: "svago", label: "Svago" },
+  { value: "abbigliamento", label: "Abbigliamento" },
+  { value: "lavoro", label: "Lavoro" },
+  { value: "abbonamenti", label: "Abbonamenti" },
+  { value: "formazione", label: "Formazione" },
+  { value: "altro", label: "Altro" },
 ];
 
 interface Props {
@@ -235,7 +236,7 @@ export default function TransactionForm({ onAdded }: Props) {
                   className={`cat-btn ${category === c.value ? "active" : ""}`}
                   onClick={() => setCategory(c.value)}
                 >
-                  <span>{c.emoji}</span>
+                  <CategoryIcon category={c.value} size={19} />
                   <span>{c.label}</span>
                 </button>
               ))}

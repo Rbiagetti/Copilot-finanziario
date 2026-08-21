@@ -1,20 +1,32 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { getTransactions, deleteTransaction, getTransactionCount, updateTransaction, exportTransactionsCsv } from "../../api/client";
+import { getTransactions, deleteTransaction, getTransactionCount, getTransactionDateBounds, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, ListFilter, ChevronDown, CalendarDays } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
-
-const EMOJI_MAP: Record<string, string> = {
-  cibo: "🍕", trasporti: "🚗", casa: "🏠", salute: "💊",
-  svago: "🎭", abbigliamento: "👕", lavoro: "💼",
-  abbonamenti: "📱", formazione: "🎓", altro: "❓",
-  intrattenimento: "🎭", shopping: "🛍️",
-};
+import { CategoryIcon } from "../../lib/categoryIcons";
 
 const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
+
+const MESI_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+
+/** Costruisce l'elenco mesi (ascendente) da startY/startM al mese corrente incluso.
+ *  Senza bounds reali (bootstrap prima della risposta API) ricade sul solo mese corrente. */
+function buildMonthsRange(start: { y: number; m: number } | null): { y: number; m: number }[] {
+  const now = new Date();
+  const endY = now.getFullYear(), endM = now.getMonth() + 1;
+  let y = start?.y ?? endY;
+  let m = start?.m ?? endM;
+  const out: { y: number; m: number }[] = [];
+  while (y < endY || (y === endY && m <= endM)) {
+    out.push({ y, m });
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return out.length ? out : [{ y: endY, m: endM }];
+}
 
 interface EditState {
   tx: Transaction;
@@ -36,7 +48,7 @@ const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle }: {
 }) => {
   return (
     <div className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""}`}>
-      <span className="tx-emoji">{EMOJI_MAP[tx.category] || "❓"}</span>
+      <span className="tx-emoji"><CategoryIcon category={tx.category} size={17} /></span>
       <div className="tx-info">
         <div className="tx-info-top">
           <span className="tx-category">{tx.category}</span>
@@ -77,7 +89,33 @@ export default function TransactionList() {
   const [filter, setFilter] = useState("");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [daysRange, setDaysRange] = useState<number>(30); // da 1 a 365
+  const [dateBoundsStart, setDateBoundsStart] = useState<{ y: number; m: number } | null>(null);
+  const MONTHS = useMemo(() => buildMonthsRange(dateBoundsStart), [dateBoundsStart]);
+  const [monthRange, setMonthRange] = useState<[number, number]>([0, MONTHS.length - 1]); // indici in MONTHS, default = tutta la finestra
+  // true solo dopo un'interazione REALE dell'utente con lo slider (drag/tap/tastiera).
+  // Prima capivamo "l'utente ha ristretto la selezione" confrontando gli indici con un
+  // ref mutato dentro l'updater di setState — ambiguo (indistinguibile da "range pieno
+  // per coincidenza") e fragile con StrictMode. Con un flag esplicito la ricalibrazione
+  // sotto sa sempre con certezza se deve forzare "tutto il periodo" oppure no.
+  const userNarrowedRef = useRef(false);
+
+  // Al mount, recupera la data della prima transazione reale: lo slider deve coprire
+  // "dal primo mese con dati a oggi", non una finestra fissa arbitraria (es. 24 mesi
+  // anche se i dati partono da pochi mesi fa non ha senso farlo partire da più indietro).
+  useEffect(() => {
+    getTransactionDateBounds()
+      .then((res) => {
+        const d = new Date(res.data.min_date);
+        if (!isNaN(d.getTime())) setDateBoundsStart({ y: d.getFullYear(), m: d.getMonth() + 1 });
+      })
+      .catch(() => { /* fallback: resta il solo mese corrente */ });
+  }, []);
+
+  // Quando MONTHS cambia (arrivo dei bounds reali), il default resta "tutto il periodo"
+  // finché l'utente non ha toccato lo slider di persona.
+  useEffect(() => {
+    if (!userNarrowedRef.current) setMonthRange([0, MONTHS.length - 1]);
+  }, [MONTHS]);
   const [sortBy, setSortBy] = useState<string>("date_desc");
   const [summary, setSummary] = useState<{ count: number; total: number } | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -89,6 +127,60 @@ export default function TransactionList() {
   const modalRef = useFocusTrap(!!editState);
   const txFiltersBtnRef = useRef<HTMLButtonElement>(null);
   const txFiltersPanelRef = useRef<HTMLDivElement>(null);
+  const rangeTrackRef = useRef<HTMLDivElement>(null);
+  const draggingThumbRef = useRef<"min" | "max" | null>(null);
+
+  // Slider periodo custom (pointer events, non nativo): due <input type=range> sovrapposti
+  // sono inaffidabili su mobile/Safari (il trucco CSS pointer-events non è consistente),
+  // quindi il drag è gestito a mano mappando la posizione X sul track a un indice mese.
+  // monthSpan non è mai 0: con un solo mese disponibile (dati appena iniziati, o bounds
+  // non ancora caricati) MONTHS.length-1 varrebbe 0 e ogni divisione per calcolare le
+  // percentuali del thumb produrrebbe NaN → thumb "morti" e slider non trascinabile.
+  const monthSpan = Math.max(1, MONTHS.length - 1);
+
+  const monthIndexFromClientX = useCallback((clientX: number) => {
+    const el = rangeTrackRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const frac = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+    const clamped = Math.min(1, Math.max(0, frac));
+    return Math.round(clamped * monthSpan);
+  }, [monthSpan]);
+
+  const startDrag = (which: "min" | "max") => (e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    draggingThumbRef.current = which;
+  };
+  const onDragMove = (e: React.PointerEvent) => {
+    if (!draggingThumbRef.current) return;
+    userNarrowedRef.current = true;
+    const idx = monthIndexFromClientX(e.clientX);
+    setMonthRange(([lo, hi]) =>
+      draggingThumbRef.current === "min" ? [Math.min(idx, hi), hi] : [lo, Math.max(idx, lo)]
+    );
+  };
+  const endDrag = () => { draggingThumbRef.current = null; };
+
+  // Tap/click diretto sul track: sposta il cursore più vicino nel punto toccato
+  const onTrackPointerDown = (e: React.PointerEvent) => {
+    if (e.target !== e.currentTarget) return; // ignora se il tap è partito da un thumb
+    userNarrowedRef.current = true;
+    const idx = monthIndexFromClientX(e.clientX);
+    setMonthRange(([lo, hi]) => {
+      const which = Math.abs(idx - lo) <= Math.abs(idx - hi) ? "min" : "max";
+      draggingThumbRef.current = which;
+      return which === "min" ? [Math.min(idx, hi), hi] : [lo, Math.max(idx, lo)];
+    });
+  };
+
+  const nudgeThumb = (which: "min" | "max", dir: 1 | -1) => {
+    userNarrowedRef.current = true;
+    setMonthRange(([lo, hi]) => {
+      if (which === "min") return [Math.min(Math.max(lo + dir, 0), hi), hi];
+      return [lo, Math.max(Math.min(hi + dir, MONTHS.length - 1), lo)];
+    });
+  };
 
   // Chiudi panel filtri al tap fuori — no backdrop, zero conflitti iOS/z-index
   useEffect(() => {
@@ -107,33 +199,56 @@ export default function TransactionList() {
     const params: Record<string, string> = {};
     if (filter) params.category = filter;
     if (search) params.search = search;
-    if (daysRange < 365) {
-      const d = new Date();
-      d.setDate(d.getDate() - daysRange);
-      params.date_from = d.toISOString().slice(0, 10);
+    const isFullRange = monthRange[0] === 0 && monthRange[1] === MONTHS.length - 1;
+    if (!isFullRange) {
+      const from = MONTHS[Math.min(monthRange[0], MONTHS.length - 1)] ?? MONTHS[0];
+      const to = MONTHS[Math.min(monthRange[1], MONTHS.length - 1)] ?? MONTHS[0];
+      params.date_from = `${from.y}-${String(from.m).padStart(2, "0")}-01`;
+      const lastDay = new Date(to.y, to.m, 0).getDate(); // giorno 0 del mese dopo = ultimo giorno del mese corrente
+      params.date_to = `${to.y}-${String(to.m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     }
     return params;
-  }, [filter, search, daysRange]);
+  }, [filter, search, monthRange, MONTHS]);
+
+  // Contatore di sequenza: ogni drag dello slider aggiorna monthRange ad ogni pixel,
+  // quindi buildParams/load cambiano identità e partono fetch multipli in rapida
+  // successione. Senza guardia, una risposta VECCHIA che arriva DOPO una più recente
+  // (rete/ordine non garantiti) può sovrascrivere lo stato buono con un falso errore —
+  // è la causa dell'errore "Impossibile caricare le transazioni" intermittente mentre
+  // si trascina il filtro periodo. Solo la risposta della request più recente conta.
+  const loadSeqRef = useRef(0);
 
   const load = useCallback(() => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setLoadError(false);
     const params = buildParams();
     // Timeout di sicurezza: se dopo 10s è ancora in loading, mostra errore + ricarica
     const safetyTimer = setTimeout(() => {
+      if (seq !== loadSeqRef.current) return; // superata da una request più recente
       setLoading(curr => { if (curr) { setLoadError(true); return false; } return curr; });
     }, 10000);
     Promise.allSettled([getTransactions(params), getTransactionCount(params)])
       .then(([txRes, countRes]) => {
         clearTimeout(safetyTimer);
+        if (seq !== loadSeqRef.current) return; // risposta di una request ormai obsoleta: ignora
         if (txRes.status === "fulfilled") setTxs(txRes.value.data);
         else setLoadError(true);
         if (countRes.status === "fulfilled") setSummary(countRes.value.data);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (seq !== loadSeqRef.current) return;
+        setLoading(false);
+      });
   }, [buildParams]);
 
-  useEffect(() => { load(); }, [load]);
+  // Debounce del trigger: durante il drag dello slider monthRange cambia ad ogni
+  // pixel — senza debounce partirebbero decine di fetch concorrenti per un singolo
+  // trascinamento, inutili e più soggetti a intoppi di rete/backend sotto carico.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 250);
+    return () => clearTimeout(t);
+  }, [load]);
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 300);
@@ -153,9 +268,11 @@ export default function TransactionList() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearFilters = () => {
-    setFilter(""); setSearch(""); setSearchInput(""); setDaysRange(365); setSortBy("date_desc");
+    userNarrowedRef.current = false;
+    setFilter(""); setSearch(""); setSearchInput(""); setMonthRange([0, MONTHS.length - 1]); setSortBy("date_desc");
   };
-  const hasFilters = filter || search || daysRange < 365 || sortBy !== "date_desc";
+  const isFullMonthRange = monthRange[0] === 0 && monthRange[1] === MONTHS.length - 1;
+  const hasFilters = filter || search || !isFullMonthRange || sortBy !== "date_desc";
 
   const sortedTxs = useMemo(() => {
     const arr = [...txs];
@@ -298,6 +415,100 @@ export default function TransactionList() {
         </div>
 
         <div className="tx-filters">
+          {/* Slider periodo: sempre visibile, sopra la barra di ricerca */}
+          <div className="tx-range-bar">
+            {(() => {
+              // Indici clampati difensivamente: MONTHS[monthRange[i]] non deve MAI risultare
+              // undefined (altrimenti .m crasha tutto il componente) e monthSpan non è mai 0
+              // (altrimenti le percentuali del thumb sarebbero NaN e lo slider risulterebbe
+              // "morto" — non trascinabile — con dati concentrati in un solo mese).
+              const safeLo = Math.min(monthRange[0], MONTHS.length - 1);
+              const safeHi = Math.min(monthRange[1], MONTHS.length - 1);
+              const monthLo = MONTHS[safeLo] ?? MONTHS[0];
+              const monthHi = MONTHS[safeHi] ?? MONTHS[0];
+              const pctLo = (safeLo / monthSpan) * 100;
+              const pctHi = (safeHi / monthSpan) * 100;
+              return (
+                <>
+                  <div className="tx-range-bar-head">
+                    <CalendarDays size={13} />
+                    <span className="tx-range-bar-value">
+                      {isFullMonthRange
+                        ? "Tutto il periodo"
+                        : safeLo === safeHi
+                          ? `${MESI_SHORT[monthLo.m - 1]} ${monthLo.y}`
+                          : `${MESI_SHORT[monthLo.m - 1]} ${monthLo.y} → ${MESI_SHORT[monthHi.m - 1]} ${monthHi.y}`}
+                    </span>
+                    {!isFullMonthRange && (
+                      <button className="tx-range-bar-reset" onClick={() => { userNarrowedRef.current = false; setMonthRange([0, MONTHS.length - 1]); }} aria-label="Reset periodo">
+                        <X size={11} /> reset
+                      </button>
+                    )}
+                  </div>
+
+                  <div
+                    className="range-slider"
+                    ref={rangeTrackRef}
+                    onPointerDown={onTrackPointerDown}
+                    onPointerMove={onDragMove}
+                    onPointerUp={endDrag}
+                    onPointerCancel={endDrag}
+                  >
+                    <div className="range-slider-track" />
+                    <div
+                      className="range-slider-fill"
+                      style={{
+                        left: `${pctLo}%`,
+                        right: `${100 - pctHi}%`,
+                      }}
+                    />
+                    <div
+                      className="range-thumb"
+                      style={{ left: `${pctLo}%` }}
+                      onPointerDown={startDrag("min")}
+                      onPointerMove={onDragMove}
+                      onPointerUp={endDrag}
+                      onPointerCancel={endDrag}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowLeft") { e.preventDefault(); nudgeThumb("min", -1); }
+                        if (e.key === "ArrowRight") { e.preventDefault(); nudgeThumb("min", 1); }
+                      }}
+                      role="slider"
+                      aria-label="Da mese"
+                      aria-valuemin={0}
+                      aria-valuemax={MONTHS.length - 1}
+                      aria-valuenow={safeLo}
+                      tabIndex={0}
+                    />
+                    <div
+                      className="range-thumb"
+                      style={{ left: `${pctHi}%` }}
+                      onPointerDown={startDrag("max")}
+                      onPointerMove={onDragMove}
+                      onPointerUp={endDrag}
+                      onPointerCancel={endDrag}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowLeft") { e.preventDefault(); nudgeThumb("max", -1); }
+                        if (e.key === "ArrowRight") { e.preventDefault(); nudgeThumb("max", 1); }
+                      }}
+                      role="slider"
+                      aria-label="A mese"
+                      aria-valuemin={0}
+                      aria-valuemax={MONTHS.length - 1}
+                      aria-valuenow={safeHi}
+                      tabIndex={0}
+                    />
+                  </div>
+
+                  <div className="tx-range-bar-edges">
+                    <span>{MESI_SHORT[MONTHS[0].m - 1]} {MONTHS[0].y}</span>
+                    <span>Oggi</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
           {/* Search sempre visibile */}
           <div className="tx-filters-top">
             <div className="search-box">
@@ -328,7 +539,7 @@ export default function TransactionList() {
                 <span>Filtri</span>
                 {hasFilters && (
                   <span className="filters-badge">
-                    {(filter ? 1 : 0) + (daysRange < 365 ? 1 : 0) + (sortBy !== "date_desc" ? 1 : 0)}
+                    {(filter ? 1 : 0) + (!isFullMonthRange ? 1 : 0) + (sortBy !== "date_desc" ? 1 : 0)}
                   </span>
                 )}
                 <ChevronDown size={14} className="filters-chevron" />
@@ -339,18 +550,9 @@ export default function TransactionList() {
                 <div className="filter-row">
                   <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select" aria-label="Categoria">
                     <option value="">Tutte le categorie</option>
-                    {Object.entries(EMOJI_MAP).map(([k, v]) => (
-                      <option key={k} value={k}>{v} {k}</option>
+                    {CATEGORIES.map((k) => (
+                      <option key={k} value={k}>{k}</option>
                     ))}
-                  </select>
-                </div>
-                <div className="filter-row">
-                  <select value={daysRange} onChange={(e) => setDaysRange(Number(e.target.value))} className="filter-select" aria-label="Periodo">
-                    <option value="365">Tutto il periodo</option>
-                    <option value="1">Oggi</option>
-                    <option value="7">Ultimi 7 giorni</option>
-                    <option value="30">Ultimi 30 giorni</option>
-                    <option value="90">Ultimi 90 giorni</option>
                   </select>
                 </div>
                 <div className="filter-row">
@@ -458,7 +660,7 @@ export default function TransactionList() {
                 <label>Categoria</label>
                 <select value={editState.category}
                   onChange={(e) => setEditState({ ...editState, category: e.target.value })}>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{EMOJI_MAP[c]} {c}</option>)}
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="form-group">

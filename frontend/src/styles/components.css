@@ -38,7 +38,7 @@
 }
 .glass-panel-hi {
   background: var(--surface-container-hi);
-  border: 1px solid rgba(255, 182, 141, 0.14);
+  border: 1px solid rgba(231,146,115, 0.14);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   border-radius: var(--radius-lg);
 }
@@ -49,14 +49,14 @@
   width: 100%;
   padding: 0.72rem;
   background: var(--accent);
-  color: #311000;
+  color: #1a0d08;
   border: none;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.20) inset;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.14) inset;
   transition:
     transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
     background 160ms ease;
@@ -122,9 +122,9 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .btn-voice:hover {
-    border-color: rgba(255,140,66,0.4);
+    border-color: rgba(217,102,63,0.4);
     color: var(--accent);
-    background: rgba(255,140,66,0.1);
+    background: rgba(217,102,63,0.1);
     transform: scale(1.05);
   }
 }
@@ -140,7 +140,7 @@
   background: var(--accent);
   border: none;
   border-radius: 50%;
-  color: #311000;
+  color: #1a0d08;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: none;
@@ -176,7 +176,7 @@
 .btn-retry-text {
   display: flex; align-items: center; gap: 0.3rem;
   padding: 0.3rem 0.65rem;
-  background: linear-gradient(135deg, var(--accent), #f99028);
+  background: linear-gradient(135deg, var(--accent), #b56a45);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -209,7 +209,7 @@
 .badge-recurring {
   display: inline-flex; align-items: center; gap: 0.2rem;
   font-size: 0.68rem; color: var(--accent);
-  background: rgba(255,140,66,0.12); border-radius: var(--radius-pill);
+  background: rgba(217,102,63,0.12); border-radius: var(--radius-pill);
   padding: 0.1rem 0.45rem;
 }
 .badge-tag {
@@ -218,9 +218,9 @@
   border-radius: var(--radius-pill); padding: 0.1rem 0.45rem;
 }
 .badge.info {
-  background: rgba(255, 140, 66, 0.14) !important;
+  background: rgba(217,102,63, 0.14) !important;
   color: var(--accent) !important;
-  border: 1px solid rgba(255, 182, 141, 0.28) !important;
+  border: 1px solid rgba(231,146,115, 0.28) !important;
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   font-size: 0.75rem;
@@ -230,7 +230,7 @@
 /* === MODAL === */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(22, 12, 7, 0.72);
+  background: rgba(8, 8, 10, 0.72);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   display: flex; align-items: center; justify-content: center;
@@ -238,12 +238,12 @@
   animation: fadeIn var(--duration-base) var(--ease-out);
 }
 .modal-box {
-  background: rgba(41, 29, 23, 0.80);
+  background: rgba(24, 24, 27, 0.94);
   color: var(--text);
-  backdrop-filter: var(--blur-lg) saturate(200%);
-  -webkit-backdrop-filter: var(--blur-lg) saturate(200%);
-  border: 1px solid rgba(255, 182, 141, 0.18);
-  border-radius: var(--radius-xl);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--glass-border-hi);
+  border-radius: var(--radius-lg);
   padding: 1.5rem;
   max-width: 560px; width: 100%;
   max-height: calc(100dvh - 4rem); overflow-y: auto;
@@ -281,7 +281,7 @@
 }
 .anomaly-type-badge.amount_spike    { background: rgba(255,77,109,0.15); color: var(--danger); }
 .anomaly-type-badge.new_merchant    { background: rgba(99,179,237,0.15); color: #63B3ED; }
-.anomaly-type-badge.frequency_spike { background: rgba(255,140,66,0.15); color: var(--accent); }
+.anomaly-type-badge.frequency_spike { background: rgba(217,102,63,0.15); color: var(--accent); }
 .anomaly-type-badge.duplicate_suspect{ background: rgba(255,179,0,0.15); color: var(--warning); }
 .anomaly-type-badge.unusual_time    { background: rgba(167,139,250,0.15); color: #A78BFA; }
 
@@ -325,8 +325,8 @@
 }
 .anomaly-context-row + .anomaly-context-row { margin-top: 2px; }
 .anomaly-context-row.highlighted {
-  background: rgba(255,140,66,0.1);
-  border: 1px solid rgba(255,140,66,0.3);
+  background: rgba(217,102,63,0.1);
+  border: 1px solid rgba(217,102,63,0.3);
 }
 
 .anomaly-back-btn {
@@ -454,7 +454,9 @@
   .anomaly-stat-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* === PILL-SHAPED FORM CONTROLS === */
+/* === CHIP-SHAPED FORM CONTROLS ===
+   Radius moderato (shape "small" Material 3), non più pillola piena:
+   era uno dei principali motivi della vibe "giocattolosa". */
 .cat-btn,
 .form-tab,
 .suggestion-btn,
@@ -463,7 +465,7 @@
 .badge-tag,
 .badge.info,
 .confidence-badge {
-  border-radius: var(--radius-pill) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* === FORM INPUTS === */
@@ -480,10 +482,10 @@
 }
 .form-group input:focus, select:focus {
   outline: none;
-  border-color: rgba(255,140,66,0.5);
-  box-shadow: 0 0 0 3px rgba(255,140,66,0.1);
+  border-color: rgba(217,102,63,0.5);
+  box-shadow: 0 0 0 3px rgba(217,102,63,0.1);
 }
-select option { background: #291d17; color: var(--text); }
+select option { background: #1e1e22; color: var(--text); }
 
 .form-group-check {
   display: flex; align-items: center; gap: 0.5rem;
@@ -491,24 +493,24 @@ select option { background: #291d17; color: var(--text); }
 }
 .form-group-check input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
 
-/* Fluid glass inputs */
+/* Input pieni: radius moderato, superficie neutra (non più "glass" ambrato) */
 .search-input,
 .smart-row input,
 .chat-input input {
-  border-radius: var(--radius-pill);
-  background: rgba(64, 50, 44, 0.35);
-  border-color: rgba(255, 182, 141, 0.15);
+  border-radius: var(--radius-md);
+  background: var(--glass-1);
+  border-color: var(--glass-border);
 }
 .search-input:focus,
 .smart-row input:focus,
 .chat-input input:focus {
-  border-color: rgba(255, 182, 141, 0.55) !important;
-  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.14), 0 0 24px rgba(255, 140, 66, 0.12) !important;
+  border-color: rgba(217,102,63, 0.45) !important;
+  box-shadow: 0 0 0 3px rgba(217,102,63, 0.12) !important;
 }
 
-/* === KPI ICON (liquid amber flat) === */
+/* === KPI ICON === */
 .kpi-icon {
-  background: rgba(255, 140, 66, 0.14);
+  background: rgba(217,102,63, 0.12);
   color: var(--accent);
   box-shadow: none;
 }
@@ -645,17 +647,17 @@ button, a, [role="button"], input[type="submit"], input[type="button"] {
   width: 100%;
   min-height: 100vh;
   padding: 1.5rem;
-  background: radial-gradient(circle at top right, #4a2712 0%, #2b1a11 55%, #1e130d 100%);
+  background: var(--navy-0);
   position: relative;
   z-index: 10;
 }
 
 .login-card {
-  background: rgba(41, 29, 23, 0.85) !important;
-  backdrop-filter: blur(40px) saturate(200%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(200%) !important;
-  border: 1px solid rgba(255, 182, 141, 0.18) !important;
-  border-radius: var(--radius-xl);
+  background: var(--surface-container) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--radius-lg);
   padding: 2.5rem 2.25rem;
   width: 100%;
   max-width: 420px;

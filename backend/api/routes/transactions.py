@@ -116,6 +116,25 @@ async def count_transactions(
     return {"count": count, "total": round(float(total), 2)}
 
 
+@router.get("/date-bounds")
+async def get_date_bounds(
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Data minima e massima delle transazioni dell'utente — usata dal frontend per
+    dimensionare lo slider del periodo sui dati reali invece di una finestra fissa."""
+    from sqlalchemy import func as sqlfunc
+    min_date, max_date = db.query(
+        sqlfunc.min(Transaction.date),
+        sqlfunc.max(Transaction.date),
+    ).filter(Transaction.user_id == current_user_id).one()
+    today = date.today().isoformat()
+    return {
+        "min_date": min_date or today,
+        "max_date": max_date or today,
+    }
+
+
 @router.get("/export")
 async def export_transactions_csv(
     category: Optional[str] = None,

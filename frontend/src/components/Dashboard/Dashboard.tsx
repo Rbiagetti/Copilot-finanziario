@@ -11,12 +11,7 @@ import {
   TrendingUp, Euro, Calendar, ListFilter, BarChart2, PlusCircle, RefreshCw, Wallet
 } from "lucide-react";
 import { getRecurringData, getCategoryData } from "../../utils/analyticsUtils";
-
-const EMOJI_MAP: Record<string, string> = {
-  cibo: "🍕", trasporti: "🚗", casa: "🏠", salute: "💊",
-  svago: "🎭", abbigliamento: "👕", lavoro: "💼",
-  abbonamenti: "📱", formazione: "🎓", altro: "❓",
-};
+import { CategoryIcon } from "../../lib/categoryIcons";
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -38,6 +33,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
           {item.name}: <span style={{ color: "var(--accent)", fontWeight: 700 }}>€{Number(item.value).toLocaleString("it-IT", { minimumFractionDigits: 2 })}</span>
         </p>
       ))}
+      {payload.length > 1 && (
+        <p style={{
+          color: "var(--text)", fontSize: "0.82rem", fontWeight: 700,
+          margin: "6px 0 0", paddingTop: 6, borderTop: "1px solid var(--glass-border)",
+        }}>
+          Totale: <span style={{ color: "var(--text)", fontWeight: 700 }}>
+            €{payload.reduce((sum: number, item: any) => sum + Number(item.value), 0).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+          </span>
+        </p>
+      )}
     </div>
   );
 };
@@ -290,7 +295,7 @@ export default function Dashboard() {
                   onKeyDown={e => e.key === "Enter" && handleDrilldown(c.name)}
                 >
                   <span className="top-tx-rank">{i + 1}</span>
-                  <span className="top-tx-emoji">{EMOJI_MAP[c.name] || "❓"}</span>
+                  <span className="top-tx-emoji"><CategoryIcon category={c.name} size={15} /></span>
                   <div className="top-tx-info">
                     <span className="top-tx-cat capitalize">{c.name}</span>
                     <span className="top-tx-meta">{c.percentage}% · {c.count} tx</span>
