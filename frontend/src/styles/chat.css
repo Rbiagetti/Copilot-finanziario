@@ -24,7 +24,7 @@
 .chat-header p { font-size: 0.78rem; color: var(--text-muted); margin: 0; -webkit-text-fill-color: var(--text-muted); }
 
 .chat-messages {
-  flex: 1; overflow-y: auto;
+  flex: 1; overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column; gap: 1rem;
   padding-bottom: 1rem;
   scrollbar-width: thin;
@@ -105,7 +105,7 @@
 }
 
 /* === MESSAGES === */
-.chat-msg { display: flex; gap: 0.75rem; align-items: flex-start; }
+.chat-msg { display: flex; gap: 0.75rem; align-items: flex-start; min-width: 0; }
 .msg-avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
@@ -122,7 +122,7 @@
   border: 1px solid var(--glass-border);
   color: var(--accent);
 }
-.msg-content { flex: 1; max-width: 82%; }
+.msg-content { flex: 1; min-width: 0; max-width: 82%; }
 .msg-text {
   background: var(--glass-1);
   border: 1px solid var(--glass-border);
@@ -130,6 +130,8 @@
   padding: 0.75rem 1rem;
   line-height: 1.6;
   font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .msg-text p { margin: 0 0 0.6rem; }
 .msg-text p:last-child { margin-bottom: 0; }
