@@ -73,11 +73,12 @@ def _build_narrative(data: dict) -> dict:
     try:
         prompt = REPORT_NARRATIVE_PROMPT.format(**data)
         resp = _groq.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3.6-27b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=600,
             seed=42,
+            reasoning_effort="none",
         )
         raw = resp.choices[0].message.content.strip()
         # strip markdown fences if present

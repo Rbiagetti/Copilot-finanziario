@@ -14,7 +14,7 @@ from backend.core.database import engine
 logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "qwen/qwen3.6-27b"
 
 client = OpenAI(
     api_key=GROQ_API_KEY,
@@ -168,6 +168,7 @@ def _llm_call(
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "reasoning_effort": "none",
     }
     if seed is not None:
         kwargs["seed"] = seed

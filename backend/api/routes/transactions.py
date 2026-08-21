@@ -292,13 +292,14 @@ async def parse_natural_language(
     )
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="qwen/qwen3.6-27b",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": data.text},
         ],
         temperature=0,
-        max_tokens=150,
+        max_tokens=500,
+        reasoning_effort="none",
     )
 
     raw = response.choices[0].message.content.strip()
