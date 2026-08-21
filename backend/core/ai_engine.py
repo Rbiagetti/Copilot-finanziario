@@ -317,7 +317,7 @@ def build_context(user_id: str) -> str:
 FUNCTION_CATALOG = {
     "spending_by_category": {
         "desc": "Spese per categoria in un periodo. Grafico a barre.",
-        "params": "period_days: int=30",
+        "params": "period_days: int=30, exclude_category: str=null",
     },
     "daily_trend": {
         "desc": "Trend giornaliero delle spese. Grafico a linee.",
@@ -340,15 +340,11 @@ FUNCTION_CATALOG = {
         "params": "category: str, months: int=6",
     },
     "summary_stats": {
-        "desc": "Statistiche riassuntive: totale, media transazione, n. transazioni, categoria top.",
-        "params": "period_days: int=30",
+        "desc": "Statistiche riassuntive: totale, media transazione, n. transazioni, categoria top. Supporta esclusione di una categoria.",
+        "params": "period_days: int=30, exclude_category: str=null",
     },
     "year_end_forecast": {
         "desc": "Proiezione spese fino a fine anno basata sulla media giornaliera recente.",
-        "params": "(nessuno)",
-    },
-    "anomalies": {
-        "desc": "Transazioni statisticamente anomale (z-score > 1.5) negli ultimi 60 giorni.",
         "params": "(nessuno)",
     },
     "budget_status": {
@@ -415,16 +411,28 @@ def _fn_spending_by_category(db_path: str, params: dict) -> dict:
     chart_type = params.get("chart_type", "bar")
     if chart_type not in ("bar", "line", "pie"):
         chart_type = "bar"
+    exclude_category = params.get("exclude_category")
+    if exclude_category is not None and (not isinstance(exclude_category, str) or exclude_category not in CATEGORIES):
+        exclude_category = None
     cutoff = _dates(period_days)
-    rows = _q(
-        "SELECT category, SUM(amount) FROM transactions "
-        "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC "
-        "LIMIT :lim",
-        {"d": cutoff, "lim": MAX_CHART_POINTS}
-    )
+    if exclude_category:
+        rows = _q(
+            "SELECT category, SUM(amount) FROM transactions "
+            "WHERE date >= :d AND category != :excl GROUP BY category ORDER BY SUM(amount) DESC "
+            "LIMIT :lim",
+            {"d": cutoff, "excl": exclude_category, "lim": MAX_CHART_POINTS}
+        )
+    else:
+        rows = _q(
+            "SELECT category, SUM(amount) FROM transactions "
+            "WHERE date >= :d GROUP BY category ORDER BY SUM(amount) DESC "
+            "LIMIT :lim",
+            {"d": cutoff, "lim": MAX_CHART_POINTS}
+        )
     data = [{"name": r[0], "value": round(r[1], 2)} for r in rows if r[1] and r[1] > 0]
+    title_suffix = f", escl. {exclude_category}" if exclude_category else ""
     return {
-        "chart_data": {"type": chart_type, "data": data, "title": f"Spese per categoria (ultimi {period_days}gg)"},
+        "chart_data": {"type": chart_type, "data": data, "title": f"Spese per categoria (ultimi {period_days}gg{title_suffix})"},
         "table_data": None,
     }
 
@@ -590,17 +598,32 @@ def _fn_year_end_forecast(db_path: str, params: dict) -> dict:
 
 def _fn_summary_stats(db_path: str, params: dict) -> dict:
     period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 30))))
+    exclude_category = params.get("exclude_category")
+    if exclude_category is not None and (not isinstance(exclude_category, str) or exclude_category not in CATEGORIES):
+        exclude_category = None
     cutoff = _dates(period_days)
-    row = _q(
-        "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d",
-        {"d": cutoff}
-    )
+    if exclude_category:
+        row = _q(
+            "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d AND category != :excl",
+            {"d": cutoff, "excl": exclude_category}
+        )
+        top_cat = _q(
+            "SELECT category FROM transactions WHERE date >= :d AND category != :excl "
+            "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+            {"d": cutoff, "excl": exclude_category}
+        )
+    else:
+        row = _q(
+            "SELECT SUM(amount), COUNT(*), AVG(amount) FROM transactions WHERE date >= :d",
+            {"d": cutoff}
+        )
+        top_cat = _q(
+            "SELECT category FROM transactions WHERE date >= :d "
+            "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+            {"d": cutoff}
+        )
     total, count, avg = (round(row[0][0] or 0, 2), row[0][1] or 0, round(row[0][2] or 0, 2)) if row else (0, 0, 0)
-    top_cat = _q(
-        "SELECT category FROM transactions WHERE date >= :d "
-        "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
-        {"d": cutoff}
-    )
+    periodo_label = f"ultimi {period_days}gg" + (f", esclusa categoria {exclude_category}" if exclude_category else "")
     return {
         "chart_data": None,
         "table_data": {
@@ -610,44 +633,10 @@ def _fn_summary_stats(db_path: str, params: dict) -> dict:
                 ["Transazioni", str(count)],
                 ["Media per transazione", f"€{avg}"],
                 ["Categoria top", top_cat[0][0] if top_cat else "-"],
-                ["Periodo analizzato", f"ultimi {period_days}gg"],
+                ["Periodo analizzato", periodo_label],
             ],
         },
     }
-
-
-def _fn_anomalies(db_path: str, params: dict) -> dict:
-    """Riusa get_anomalies() senza duplicare la logica statistica."""
-    anomalies = get_anomalies()
-    if not anomalies:
-        return {
-            "chart_data": None,
-            "table_data": {
-                "headers": ["Info"],
-                "rows": [["Nessuna anomalia rilevata negli ultimi 60 giorni."]],
-            },
-        }
-    top10 = anomalies[:min(10, MAX_CHART_POINTS)]
-    chart_data = {
-        "type": "bar",
-        "data": [{"name": f"{a['description'][:18] or a['category']}", "value": a["amount"]} for a in top10],
-        "title": "Top anomalie per z-score (ultimi 60gg)",
-    }
-    table_data = {
-        "headers": ["Data", "Categoria", "Descrizione", "Importo", "Z-score", "% sopra media"],
-        "rows": [
-            [
-                a["date"],
-                a["category"],
-                a["description"][:40] or "-",
-                f"€{a['amount']}",
-                str(a["z_score"]),
-                f"+{a['pct_above_avg']}%",
-            ]
-            for a in anomalies[:MAX_TABLE_ROWS]
-        ],
-    }
-    return {"chart_data": chart_data, "table_data": table_data}
 
 
 def _fn_budget_status(db_path: str, params: dict) -> dict:
@@ -1379,7 +1368,6 @@ _PREBUILT_FUNCTIONS = {
     "category_trend": _fn_category_trend,
     "summary_stats": _fn_summary_stats,
     "year_end_forecast": _fn_year_end_forecast,
-    "anomalies": _fn_anomalies,
     "budget_status": _fn_budget_status,
     "recurring_vs_variable": _fn_recurring_vs_variable,
     "subscriptions_audit": _fn_subscriptions_audit,
@@ -1457,7 +1445,7 @@ REGOLA PRINCIPALE: puoi scegliere 1, 2 o 3 funzioni (max 3).
 
 ESEMPI MULTI-FUNZIONE (2-3 funzioni):
 - "come sto andando?" → [spending_by_category(30), month_vs_month()]
-- "fammi un'analisi completa" → [spending_by_category(30), month_vs_month(), anomalies()]
+- "fammi un'analisi completa" → [spending_by_category(30), month_vs_month(), recurring_vs_variable()]
 - "dove posso risparmiare?" → [subscriptions_audit(), concentration_risk()]
 - "analisi del trend generale" → [daily_trend(60), momentum(), month_vs_month()]
 - "panoramica finanziaria" → [spending_by_category(30), month_vs_month(), budget_status()]
@@ -1468,6 +1456,9 @@ ESEMPI MONO-FUNZIONE (1 funzione):
 - "trend del cibo" → [category_trend(category="cibo")]
 - "stato budget" → [budget_status()]
 - "quanto ho speso questo mese?" → [summary_stats(period_days=30)]
+- "quanto ho speso negli ultimi 3 giorni?" → [summary_stats(period_days=3)]
+- "quanto ho speso questo mese escludendo la categoria casa?" → [summary_stats(period_days=30, exclude_category="casa")]
+- "spese per categoria di questo mese senza abbonamenti" → [spending_by_category(period_days=30, exclude_category="abbonamenti")]
 
 SINONIMI CATEGORIA (normalizza sempre):
 ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
@@ -1489,6 +1480,12 @@ PERIODO IMPLICITO:
 - "ultimi 2 mesi" → period_days=60 | "ultimi 3 mesi" → period_days=90
 - "ultimi 6 mesi" → period_days=180 | "ieri" → period_days=1
 - "sempre" / "storico" → period_days=365 | nessun periodo → usa il default
+- "ultimi N giorni" (qualsiasi N, es. "ultimi 3 giorni", "ultimi 10 giorni") → period_days=N esatto,
+  scegli SEMPRE una funzione (es. summary_stats o daily_trend), MAI 0 funzioni per questo tipo di domanda
+
+ESCLUSIONE CATEGORIA:
+- Se la domanda contiene "escludendo/senza/tranne/eccetto la categoria X" → passa params.exclude_category = X
+  (stessa normalizzazione sinonimi di category). Vale per spending_by_category e summary_stats.
 
 FUNZIONI DISPONIBILI (rispetta i range indicati):
 - spending_by_category(period_days=30, range 1..365): distribuzione spese per categoria (bar chart)
@@ -1499,7 +1496,6 @@ FUNZIONI DISPONIBILI (rispetta i range indicati):
 - category_trend(category str, months=6 range 1..24): andamento mensile di una categoria
 - summary_stats(period_days=30, range 1..365): totale, media, conteggio, categoria top
 - year_end_forecast(): proiezione spese fine anno da media giornaliera
-- anomalies(): transazioni anomale z-score > 1.5 (ultimi 60gg)
 - budget_status(): stato budget attivi con semaforo ok/warning/exceeded
 - recurring_vs_variable(period_days=90, range 1..365): fissi vs variabili per mese
 - subscriptions_audit(): abbonamenti ricorrenti con costo annualizzato
@@ -1624,6 +1620,10 @@ def _sanitize_params(name: str, params: dict) -> dict:
         cat = params["category"]
         if not isinstance(cat, str) or cat not in CATEGORIES:
             params["category"] = None
+    if "exclude_category" in params and params["exclude_category"] is not None:
+        excl = params["exclude_category"]
+        if not isinstance(excl, str) or excl not in CATEGORIES:
+            params["exclude_category"] = None
     if "query" in params and params["query"] is not None:
         q = re.sub(r"[^a-z0-9\s]", "", str(params["query"]).lower()).strip()
         params["query"] = q[:50] if q else None
