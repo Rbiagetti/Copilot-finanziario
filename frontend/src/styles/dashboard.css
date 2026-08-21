@@ -51,7 +51,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 1rem;
-  margin-bottom: 2rem;
+  /* niente margin-bottom qui: .dashboard è un flex column con "gap" proprio,
+     un margine extra si sommerebbe a quello creando uno spazio doppio rispetto
+     alle altre sezioni (es. header -> kpi-grid) */
 }
 
 .kpi-card {
@@ -1094,7 +1096,7 @@
 }
 
 @media (max-width: 767px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; margin-bottom: 1.25rem; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
   .kpi-card { padding: 0.75rem; gap: 0.55rem; }
   .kpi-value { font-size: 1.05rem; }
   .kpi-label { font-size: 0.68rem; }

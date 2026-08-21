@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import io
 import json
@@ -35,11 +34,10 @@ DATI:
 - Transazioni: {count_month} (media €{avg_tx} per transazione)
 - Categoria principale: {top_category} (€{top_cat_amount}, {top_cat_pct:.0f}% del totale)
 - Categorie con budget sforato: {over_budget_cats}
-- Anomalie rilevate: {anomaly_count}
 
 Scrivi 3 paragrafi in italiano:
 1. PANORAMICA (2-3 frasi): andamento generale del mese, confronto col precedente, tono oggettivo
-2. PUNTI DI ATTENZIONE (2-3 frasi): categorie che pesano di più, eventuali anomalie o sforamenti budget, cosa è cambiato
+2. PUNTI DI ATTENZIONE (2-3 frasi): categorie che pesano di più, eventuali sforamenti budget, cosa è cambiato
 3. RACCOMANDAZIONE (1-2 frasi): un'azione concreta e specifica per il mese successivo basata sui dati
 
 Stile: professionale ma diretto. Usa cifre esatte. No elenchi puntati.
@@ -105,7 +103,6 @@ def _build_pdf(
     categories: list,
     top10: list,
     budget_rows: list,
-    anomalies: list,
     narrative: dict,
 ) -> bytes:
     from reportlab.lib import colors
@@ -256,45 +253,6 @@ def _build_pdf(
         ])
     story.append(tbl(top_data, [2 * cm, 3 * cm, 7.5 * cm, 2.5 * cm]))
 
-    # ── ANOMALIE ─────────────────────────────────────────────────────────────
-    if anomalies:
-        story += section("Anomalie Rilevate")
-        # Cambiamo 'Z-score' in 'Alert' per essere più descrittivi su tutti i tipi di anomalie
-        an_header = ["Data", "Categoria", "Descrizione", "Importo (€)", "Alert / Analisi"]
-        an_data = [an_header]
-        
-        # Mapping tipi per il report
-        type_labels = {
-            "amount_spike": "Importo Elevato",
-            "new_merchant": "Nuovo Esercente",
-            "frequency_spike": "Picco Frequenza",
-            "duplicate_suspect": "Sospetto Duplicato",
-            "unusual_time": "Orario Insolito"
-        }
-        
-        for a in anomalies:
-            dtype = a.get("detection_type", "amount_spike")
-            label = type_labels.get(dtype, dtype)
-            
-            # Se è uno spike di importo, aggiungiamo lo z-score per dettaglio
-            if dtype == "amount_spike" and a.get("z_score", 0) > 0:
-                label += f" (Z={a['z_score']:.1f})"
-            
-            # Aggiungiamo severity in maiuscolo
-            sev = a.get("severity", "low").upper()
-            alert_text = f"{label} [{sev}]"
-            
-            an_data.append([
-                a["date"],
-                a["category"],
-                (a["description"] or "—")[:35],
-                f"{a['amount']:.2f}",
-                Paragraph(alert_text, small), # Usiamo Paragraph per eventuale wrapping
-            ])
-            
-        # Larghezza colonne aggiornata per dare più spazio all'Alert
-        story.append(tbl(an_data, [2 * cm, 2.5 * cm, 5.5 * cm, 2 * cm, 3 * cm]))
-
     # ── RACCOMANDAZIONE ──────────────────────────────────────────────────────
     story += section("Raccomandazione")
     story.append(Paragraph(narrative["raccomandazione"], body))
@@ -412,20 +370,6 @@ async def monthly_report(
         budget_rows.append({"category": b.category, "budget": b.amount, "spent": spent, "pct": pct})
     budget_rows.sort(key=lambda x: x["pct"], reverse=True)
 
-    # ── BLOCCO E — anomalie (filtrate al mese) ───────────────────────────────
-    try:
-        from backend.core.ai_engine import get_anomalies_for_month
-        # Recupera anomalie per il mese specifico usando la cache
-        anomalies_data = get_anomalies_for_month(
-            user_id=current_user_id,
-            year=year,
-            month=month,
-            force_refresh=False,
-        )
-        anomalies = anomalies_data.get("anomalies", [])[:20]
-    except Exception:
-        anomalies = []
-
     # ── NARRATIVA AI ─────────────────────────────────────────────────────────
     top_cat   = categories[0] if categories else {"category": "n/d", "total": 0.0, "pct": 0.0}
     over_cats = [b["category"] for b in budget_rows if b["pct"] > 100]
@@ -442,7 +386,6 @@ async def monthly_report(
         "top_cat_amount": _fmt_eur(top_cat["total"]),
         "top_cat_pct":    top_cat["pct"],
         "over_budget_cats": ", ".join(over_cats) if over_cats else "nessuna",
-        "anomaly_count":  len(anomalies),
     })
 
     # ── GENERA PDF ───────────────────────────────────────────────────────────
@@ -451,7 +394,7 @@ async def monthly_report(
         total_month=total_month, total_prev=total_prev,
         count_month=count_month, avg_tx=avg_tx, delta_pct=delta_pct,
         categories=categories, top10=top10,
-        budget_rows=budget_rows, anomalies=anomalies,
+        budget_rows=budget_rows,
         narrative=narrative,
     )
 
@@ -474,26 +417,14 @@ async def generate_monthly_report(
     db: Session = Depends(get_db),
 ):
     """
-    Genera report mensile con anomalie on-demand.
+    Genera report mensile on-demand.
     """
     try:
-        from backend.core.ai_engine import get_anomalies_for_month
-
         # Valida year/month
         if month < 1 or month > 12 or year < 2000:
             raise HTTPException(400, "Invalid year/month")
 
-        # STEP 1: Assicura anomalie per il mese (Unique Source of Truth)
-        anomalies_result = await asyncio.to_thread(
-            get_anomalies_for_month,
-            current_user_id,
-            year,
-            month,
-            False,
-        )
-        anomalies = anomalies_result.get("anomalies", [])[:20]
-
-        # STEP 2: Raccogli dati transazioni
+        # STEP 1: Raccogli dati transazioni
         first_day = date(year, month, 1)
         last_day = date(year, month, monthrange(year, month)[1])
 
@@ -597,16 +528,15 @@ async def generate_monthly_report(
             "top_cat_amount": _fmt_eur(top_cat["total"]),
             "top_cat_pct": top_cat["pct"],
             "over_budget_cats": ", ".join(over_cats) if over_cats else "nessuna",
-            "anomaly_count": len(anomalies),
         })
 
-        # STEP 3: Genera PDF
+        # STEP 2: Genera PDF
         pdf_bytes = _build_pdf(
             year=year, month=month, month_label=month_label,
             total_month=total_month, total_prev=total_prev,
             count_month=count_month, avg_tx=avg_tx, delta_pct=delta_pct,
             categories=categories, top10=top10,
-            budget_rows=budget_rows, anomalies=anomalies,
+            budget_rows=budget_rows,
             narrative=narrative,
         )
 

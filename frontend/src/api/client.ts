@@ -267,7 +267,7 @@ export const downloadMonthlyReport = async (year: number, month: number): Promis
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 };
 
-export const generateMonthlyReportWithAnomalies = (year: number, month: number) =>
+export const generateMonthlyReport = (year: number, month: number) =>
   api.post<{ status: string; filename: string; size_kb: number; pdf_base64: string }>(
     `/report/monthly/generate?year=${year}&month=${month}`
   );

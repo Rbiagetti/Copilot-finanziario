@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileDown, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-import { downloadMonthlyReport, generateMonthlyReportWithAnomalies } from "../../api/client";
+import { generateMonthlyReport } from "../../api/client";
 
 const MESI = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -24,15 +24,11 @@ export default function MonthlyReport() {
     setStatus(null);
 
     try {
-      // STEP 1: Comunica che stiamo preparando le anomalie
-      setStatus("Preparazione anomalie...");
-
-      // STEP 2: Genera report con anomalie (endpoint POST)
-      const res = await generateMonthlyReportWithAnomalies(year, month);
-
       setStatus("Generazione PDF in corso...");
 
-      // STEP 3: Scarica il PDF da base64
+      const res = await generateMonthlyReport(year, month);
+
+      // Scarica il PDF da base64
       const pdfBytes = Uint8Array.from(atob(res.data.pdf_base64), (c) => c.charCodeAt(0));
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const blobUrl = URL.createObjectURL(blob);

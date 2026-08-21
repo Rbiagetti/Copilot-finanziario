@@ -149,7 +149,7 @@ export default function Dashboard() {
         <div className="skeleton-line short" style={{ height: 28, width: 200 }} />
         <div className="skeleton-line" style={{ height: 14, width: 280, marginTop: 6 }} />
       </header>
-      <div className="kpi-grid" style={{ marginBottom: "2rem" }}>
+      <div className="kpi-grid">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="kpi-card" style={{ pointerEvents: "none" }}>
             <div className="skeleton-icon" />
@@ -219,7 +219,7 @@ export default function Dashboard() {
       </header>
 
       {/* KPI */}
-      <div className="kpi-grid" style={{ marginBottom: "2rem" }}>
+      <div className="kpi-grid">
         <div className="kpi-card">
           <div className="kpi-icon"><Euro size={20} /></div>
           <div className="kpi-content">
