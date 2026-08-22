@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { getTransactions, deleteTransaction, getTransactionCount, getTransactionDateBounds, updateTransaction, exportTransactionsCsv } from "../../api/client";
+import { getTransactions, deleteTransaction, bulkDeleteTransactions, getTransactionCount, getTransactionDateBounds, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
-import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, ListFilter, ChevronDown, CalendarDays } from "lucide-react";
+import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, ListFilter, ChevronDown, CalendarDays, CheckSquare, Square, ListChecks } from "lucide-react";
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
@@ -39,15 +39,31 @@ interface EditState {
   is_recurring: boolean;
 }
 
-const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle }: {
+const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle, selectMode, selected, onToggleSelect }: {
   tx: Transaction;
   toggling: number | null;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: number) => void;
   onToggle: (tx: Transaction) => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: number) => void;
 }) => {
   return (
-    <div className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""}`}>
+    <div
+      className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""} ${selectMode ? "tx-row--selectable" : ""} ${selected ? "tx-row--selected" : ""}`}
+      onClick={selectMode ? () => onToggleSelect(tx.id) : undefined}
+    >
+      {selectMode && (
+        <button
+          type="button"
+          className="tx-select-check"
+          aria-label={selected ? "Deseleziona" : "Seleziona"}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(tx.id); }}
+        >
+          {selected ? <CheckSquare size={18} /> : <Square size={18} />}
+        </button>
+      )}
       <span className="tx-emoji"><CategoryIcon category={tx.category} size={17} /></span>
       <div className="tx-info">
         <div className="tx-info-top">
@@ -61,23 +77,25 @@ const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle }: {
       </div>
       <span className="tx-date">{tx.date}</span>
       <span className="tx-amount">€{tx.amount.toFixed(2)}</span>
-      <div className="tx-actions">
-        <button
-          className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`}
-          aria-label={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
-          title={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
-          onPointerDown={() => onToggle(tx)}
-          disabled={toggling === tx.id}
-        >
-          <Repeat size={14} />
-        </button>
-        <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onPointerDown={() => onEdit(tx)}>
-          <Pencil size={14} />
-        </button>
-        <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onPointerDown={() => onDelete(tx.id)}>
-          <Trash2 size={14} />
-        </button>
-      </div>
+      {!selectMode && (
+        <div className="tx-actions">
+          <button
+            className={`btn-icon ${tx.is_recurring ? "active-recurring" : ""}`}
+            aria-label={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
+            title={tx.is_recurring ? "Rimuovi ricorrente" : "Segna come ricorrente"}
+            onPointerDown={() => onToggle(tx)}
+            disabled={toggling === tx.id}
+          >
+            <Repeat size={14} />
+          </button>
+          <button className="btn-icon" aria-label="Modifica transazione" title="Modifica" onPointerDown={() => onEdit(tx)}>
+            <Pencil size={14} />
+          </button>
+          <button className="btn-icon danger" aria-label="Elimina transazione" title="Elimina" onPointerDown={() => onDelete(tx.id)}>
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 });
@@ -124,6 +142,9 @@ export default function TransactionList() {
   const [exporting, setExporting] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [groupByDate, setGroupByDate] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const modalRef = useFocusTrap(!!editState);
   const txFiltersBtnRef = useRef<HTMLButtonElement>(null);
   const txFiltersPanelRef = useRef<HTMLDivElement>(null);
@@ -372,6 +393,48 @@ export default function TransactionList() {
     finally { setToggling(null); }
   };
 
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
+
+  const toggleSelectId = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allVisibleSelected = sortedTxs.length > 0 && sortedTxs.every((t) => selectedIds.has(t.id));
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        sortedTxs.forEach((t) => next.delete(t.id));
+        return next;
+      }
+      const next = new Set(prev);
+      sortedTxs.forEach((t) => next.add(t.id));
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (!confirm(`Eliminare ${count} transazion${count === 1 ? "e" : "i"}? L'azione non è reversibile.`)) return;
+    setBulkDeleting(true);
+    try {
+      markTransactionsAsNew();
+      const { data } = await bulkDeleteTransactions(Array.from(selectedIds));
+      toast.success(`${data.deleted} transazioni eliminate`);
+      exitSelectMode();
+      load();
+    } catch {
+      toast.error("Errore durante l'eliminazione multipla");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <div className="transactions-page animate-in">
       <TransactionForm onAdded={load} />
@@ -380,6 +443,14 @@ export default function TransactionList() {
         <div className="list-header">
           <h3>Transazioni</h3>
           <div className="list-controls">
+            <button
+              className={`btn-icon ${selectMode ? "active-recurring" : ""}`}
+              aria-label={selectMode ? "Esci da selezione multipla" : "Seleziona più transazioni"}
+              title={selectMode ? "Esci da selezione multipla" : "Seleziona più transazioni"}
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            >
+              <ListChecks size={16} />
+            </button>
             <button
               className={`btn-icon ${groupByDate ? "active-recurring" : ""}`}
               aria-label={groupByDate ? "Vista piatta" : "Raggruppa per data"}
@@ -580,6 +651,30 @@ export default function TransactionList() {
           )}
         </div>
 
+        {selectMode && (
+          <div className="tx-bulk-bar">
+            <button type="button" className="tx-bulk-selectall" onClick={toggleSelectAllVisible}>
+              {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+              <span>{allVisibleSelected ? "Deseleziona tutto" : "Seleziona tutto"} ({sortedTxs.length})</span>
+            </button>
+            <span className="tx-bulk-count">{selectedIds.size} selezionate</span>
+            <div className="tx-bulk-actions">
+              <button type="button" className="btn-logout" onClick={exitSelectMode} disabled={bulkDeleting}>
+                Annulla
+              </button>
+              <button
+                type="button"
+                className="btn-icon danger tx-bulk-delete"
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0 || bulkDeleting}
+              >
+                <Trash2 size={14} />
+                <span>{bulkDeleting ? "Eliminazione..." : `Elimina (${selectedIds.size})`}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {loadError ? (
           <div style={{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:"1rem", padding:"3rem"}}>
             <p style={{color:"var(--text-muted)", fontSize:"0.9rem"}}>Impossibile caricare le transazioni.</p>
@@ -629,14 +724,22 @@ export default function TransactionList() {
                   <span className="tx-date-label">{group.label}</span>
                   <span className="tx-date-total">€{group.total.toFixed(2)}</span>
                 </div>
-                {group.txs.map(tx => <TxRow key={tx.id} tx={tx} toggling={toggling} onEdit={openEdit} onDelete={handleDelete} onToggle={toggleRecurring} />)}
+                {group.txs.map(tx => (
+                  <TxRow
+                    key={tx.id} tx={tx} toggling={toggling} onEdit={openEdit} onDelete={handleDelete} onToggle={toggleRecurring}
+                    selectMode={selectMode} selected={selectedIds.has(tx.id)} onToggleSelect={toggleSelectId}
+                  />
+                ))}
               </div>
             ))}
           </div>
         ) : (
           <div className="tx-table">
             {sortedTxs.map((tx) => (
-              <TxRow key={tx.id} tx={tx} toggling={toggling} onEdit={openEdit} onDelete={handleDelete} onToggle={toggleRecurring} />
+              <TxRow
+                key={tx.id} tx={tx} toggling={toggling} onEdit={openEdit} onDelete={handleDelete} onToggle={toggleRecurring}
+                selectMode={selectMode} selected={selectedIds.has(tx.id)} onToggleSelect={toggleSelectId}
+              />
             ))}
           </div>
         )}

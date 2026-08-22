@@ -183,6 +183,9 @@ export const createTransaction = (data: {
 export const deleteTransaction = (id: number) =>
   api.delete(`/transactions/${id}`);
 
+export const bulkDeleteTransactions = (ids: number[]) =>
+  api.post<{ deleted: number }>("/transactions/bulk-delete", { ids });
+
 export const getDashboard = () =>
   api.get<DashboardData>("/analytics/dashboard");
 

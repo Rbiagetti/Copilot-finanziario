@@ -7,7 +7,7 @@ from sqlalchemy import desc
 from datetime import date, datetime
 import csv, io
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import (
@@ -200,6 +200,42 @@ async def export_transactions_csv(
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[int] = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_transactions(
+    data: BulkDeleteRequest,
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Elimina più transazioni in un colpo solo (selezione multipla da UI). Filtrata per
+    user_id come ogni altra query — non può mai toccare transazioni di altri utenti,
+    anche se qualcuno passasse id arbitrari."""
+    txs = db.query(Transaction).filter(
+        Transaction.id.in_(data.ids), Transaction.user_id == current_user_id
+    ).all()
+
+    touched_months: set[tuple[int, int]] = set()
+    for tx in txs:
+        try:
+            d = date.fromisoformat(tx.date)
+            touched_months.add((d.year, d.month))
+        except ValueError:
+            pass
+        db.delete(tx)
+    db.commit()
+
+    for year, month in touched_months:
+        try:
+            invalidate_anomaly_cache(current_user_id, year, month)
+        except Exception:
+            pass
+
+    return {"deleted": len(txs)}
 
 
 @router.get("/{tx_id}", response_model=TransactionResponse)
