@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Wallet } from "lucide-react";
-import { signIn, signUp, signInWithGoogle } from "../../lib/supabase";
+import { signIn, signUp, signInWithGoogle, resetPasswordForEmail } from "../../lib/supabase";
 
 export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState("");
@@ -9,7 +9,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
 
   const handleGoogleLogin = async () => {
     setError("");
@@ -28,6 +28,19 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
     setError("");
     setInfo("");
     setLoading(true);
+
+    if (mode === "forgot") {
+      const { error: err } = await resetPasswordForEmail(email);
+      setLoading(false);
+      if (err) {
+        setError(err.status === 429
+          ? "Troppe richieste. Attendi qualche minuto prima di riprovare."
+          : "Errore durante l'invio dell'email.");
+      } else {
+        setInfo("Se l'indirizzo è registrato, ti abbiamo inviato un'email con il link per reimpostare la password.");
+      }
+      return;
+    }
 
     if (mode === "login") {
       const { error: err } = await signIn(email, password);
@@ -92,34 +105,53 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
               autoComplete="email"
             />
           </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-            />
-          </div>
+          {mode !== "forgot" && (
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
+            </div>
+          )}
+          {mode === "login" && (
+            <button
+              type="button"
+              className="login-forgot-link"
+              onClick={() => { setMode("forgot"); setError(""); setInfo(""); }}
+            >
+              Password dimenticata?
+            </button>
+          )}
           {error && <p className="login-error">{error}</p>}
           {info && <p className="login-info">{info}</p>}
           <button className="btn-primary" type="submit" disabled={loading}>
             {loading
-              ? mode === "login" ? "Accesso in corso..." : "Registrazione in corso..."
-              : mode === "login" ? "Accedi" : "Registrati"}
+              ? mode === "login" ? "Accesso in corso..." : mode === "register" ? "Registrazione in corso..." : "Invio in corso..."
+              : mode === "login" ? "Accedi" : mode === "register" ? "Registrati" : "Invia email di reset"}
           </button>
         </form>
         <p className="login-switch">
-          {mode === "login" ? (
+          {mode === "login" && (
             <>Non hai un account?{" "}
               <button type="button" onClick={() => { setMode("register"); setError(""); setInfo(""); }}>
                 Registrati
               </button>
             </>
-          ) : (
+          )}
+          {mode === "register" && (
             <>Hai già un account?{" "}
+              <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}>
+                Accedi
+              </button>
+            </>
+          )}
+          {mode === "forgot" && (
+            <>Ti sei ricordato la password?{" "}
               <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}>
                 Accedi
               </button>

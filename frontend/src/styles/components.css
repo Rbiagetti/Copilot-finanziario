@@ -691,6 +691,21 @@ button, a, [role="button"], input[type="submit"], input[type="button"] {
   gap: 1.25rem;
 }
 
+.login-forgot-link {
+  align-self: flex-end;
+  margin-top: -0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+}
+.login-forgot-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .btn-google {
   display: flex;
   align-items: center;

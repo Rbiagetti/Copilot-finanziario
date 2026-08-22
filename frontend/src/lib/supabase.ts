@@ -47,3 +47,17 @@ export async function getLinkedProviders(): Promise<string[]> {
   if (error || !data) return [];
   return data.identities.map((i) => i.provider);
 }
+
+/** Invia l'email di reset password. Il link porta a /reset-password con una sessione
+ * di recupero temporanea, da cui l'utente può impostare una nuova password. */
+export async function resetPasswordForEmail(email: string) {
+  return supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+}
+
+/** Imposta la nuova password. Va chiamata mentre è attiva la sessione di recupero
+ * creata cliccando il link ricevuto via email (resetPasswordForEmail). */
+export async function updatePassword(newPassword: string) {
+  return supabase.auth.updateUser({ password: newPassword });
+}

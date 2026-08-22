@@ -6,6 +6,7 @@ import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
 import TopBar from "./components/Layout/TopBar";
 import LoginPage from "./components/Auth/LoginPage";
+import ResetPasswordPage from "./components/Auth/ResetPasswordPage";
 import { useAuthStore } from "./store/authStore";
 
 // Code splitting for performance
@@ -142,11 +143,15 @@ function App() {
       />
       
       <Routes>
-        <Route 
-          path="/login" 
-          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={() => {}} />} 
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={() => {}} />}
         />
-        
+        {/* Sempre accessibile, indipendentemente da isAuthenticated: il link di reset crea
+            una sessione di recupero temporanea che renderebbe isAuthenticated true, ma non
+            deve portare dritti in dashboard prima di aver impostato la nuova password. */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><Dashboard /></Suspense></ErrorBoundary>} />
