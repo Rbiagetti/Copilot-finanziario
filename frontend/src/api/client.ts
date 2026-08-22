@@ -275,6 +275,39 @@ export const generateMonthlyReport = (year: number, month: number) =>
     `/report/monthly/generate?year=${year}&month=${month}`
   );
 
+export interface ImportPreviewResponse {
+  columns: string[];
+  preview_rows: Record<string, string>[];
+  suggested_mapping: Record<string, string | null>;
+  target_fields: string[];
+  required_fields: string[];
+  total_rows: number;
+}
+
+export interface ImportCommitResponse {
+  imported: number;
+  skipped_duplicates: number;
+  skipped_income: number;
+  invalid_rows: number;
+}
+
+export const previewImport = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api.post<ImportPreviewResponse>("/transactions/import/preview", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const commitImport = (file: File, mapping: Record<string, string | null>) => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("mapping", JSON.stringify(mapping));
+  return api.post<ImportCommitResponse>("/transactions/import/commit", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
 export const getBudgets = () => api.get("/budgets/");
 export const createBudget = (data: { category: string; amount: number }) =>
   api.post("/budgets/", data);
