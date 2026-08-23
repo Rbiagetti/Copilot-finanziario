@@ -246,11 +246,24 @@
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   max-width: 560px; width: 100%;
-  max-height: calc(100dvh - 4rem); overflow-y: auto;
+  /* 100svh (small viewport height) invece di 100dvh: su iOS resta stabile anche quando la
+     tastiera si apre, dvh in alcune versioni non si aggiorna e lascia il pulsante Salva,
+     in fondo al form, nascosto sotto la tastiera senza modo di raggiungerlo scrollando. */
+  max-height: calc(100svh - 4rem);
+  overflow: hidden; /* il contenuto scrolla dentro .edit-form, non l'intero box */
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 40px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   animation: scaleUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; flex-shrink: 0; }
+.modal-footer {
+  flex-shrink: 0;
+  padding-top: 0.85rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--glass-border);
+}
+.modal-footer .btn-primary { margin: 0; }
 .modal-sub { font-size: 0.80rem; color: var(--text-muted); margin-bottom: 1.25rem; }
 
 .anomaly-list { display: flex; flex-direction: column; gap: 0.65rem; }
@@ -624,13 +637,18 @@ button, a, [role="button"], input[type="submit"], input[type="button"] {
   .modal-box {
     position: relative !important;
     border-radius: var(--radius-xl) !important;
-    /* Altezza massima che non supera la zona sicura */
-    max-height: calc(100dvh
+    /* Altezza massima che non supera la zona sicura. 100svh (small viewport height, non
+       100dvh) perché su iOS resta stabile anche quando si apre la tastiera — con dvh il
+       calcolo non si riaggiorna in modo affidabile e il pulsante Salva in fondo al form
+       finisce nascosto sotto la tastiera senza modo di raggiungerlo. */
+    max-height: calc(100svh
       - env(safe-area-inset-top, 0px)
       - var(--bottomnav-h, 64px)
       - env(safe-area-inset-bottom, 0px)
       - 2rem) !important;
-    overflow-y: auto !important;
+    /* Non l'intero box: solo .edit-form scrolla, header e footer (pulsante Salva)
+       restano sempre visibili — vedi .modal-box base per il display:flex column. */
+    overflow: hidden !important;
     padding: 1.5rem 1.25rem !important;
     width: 100% !important;
     max-width: 500px !important;

@@ -796,6 +796,10 @@ export default function TransactionList() {
                   onChange={(e) => setEditState({ ...editState, is_recurring: e.target.checked })} />
                 <label htmlFor="recurring-check">Ricorrente mensile</label>
               </div>
+            </div>
+            {/* Fuori dall'area scrollabile: resta sempre visibile e raggiungibile anche
+                quando la tastiera mobile copre parte del modale. */}
+            <div className="modal-footer">
               <button className="btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? "Salvataggio..." : "Salva modifiche"}
               </button>
