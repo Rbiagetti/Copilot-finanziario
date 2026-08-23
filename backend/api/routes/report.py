@@ -54,17 +54,35 @@ def _fmt_eur(v: float) -> str:
     return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _progress_bar(pct: float, fill_hex: str, bar_width: float = 110, bar_height: float = 9):
-    from reportlab.graphics.shapes import Drawing, Rect
-    from reportlab.lib import colors as _c
-    d = Drawing(bar_width, bar_height)
-    d.add(Rect(0, 0, bar_width, bar_height,
-               fillColor=_c.HexColor("#E0E0E0"), strokeColor=None))
-    fill_w = bar_width * min(pct, 100.0) / 100.0
+def _esc(s) -> str:
+    """Escape minimo per inserire testo utente/AI dentro l'HTML del report."""
+    return (
+        str(s)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _bar_html(pct: float, fill_hex: str, track_hex: str, width_px: int = 130, height_px: int = 8) -> str:
+    """Barra di progresso come tabella a due celle (niente div annidate: xhtml2pdf le tratta
+    come blocchi impilati verticalmente invece che sovrapposti/affiancati — le tabelle invece
+    rispettano le larghezze di colonna in modo affidabile, verificato empiricamente)."""
+    width_px = max(width_px, 1)
+    fill_w = round(width_px * min(max(pct, 0.0), 100.0) / 100.0)
+    rest_w = width_px - fill_w
+    cells = ""
     if fill_w > 0:
-        d.add(Rect(0, 0, fill_w, bar_height,
-                   fillColor=_c.HexColor(fill_hex), strokeColor=None))
-    return d
+        cells += (
+            f'<td style="width:{fill_w}px; height:{height_px}px; background-color:{fill_hex}; '
+            f'padding:0; font-size:1px; line-height:1px;">&nbsp;</td>'
+        )
+    if rest_w > 0:
+        cells += (
+            f'<td style="width:{rest_w}px; height:{height_px}px; background-color:{track_hex}; '
+            f'padding:0; font-size:1px; line-height:1px;">&nbsp;</td>'
+        )
+    return f'<table style="width:{width_px}px; border-collapse:collapse;"><tr>{cells}</tr></table>'
 
 
 def _build_narrative(data: dict) -> dict:
@@ -91,6 +109,71 @@ def _build_narrative(data: dict) -> dict:
         }
 
 
+# ── Palette report — stessi token del design system frontend (base.css), adattati per
+# la stampa su sfondo chiaro: gli sfondi scuri "a pagina intera" non sono affidabili nel
+# motore di rendering HTML→PDF usato (xhtml2pdf renderizza correttamente gli sfondi sui
+# singoli blocchi/card, ma non su tutta l'altezza pagina) — vedi test in sviluppo. I toni
+# status (success/warning/danger) sono scuriti rispetto alle versioni pastello dell'app,
+# pensate per un tema scuro, per restare leggibili su bianco.
+ACCENT       = "#d9663f"   # --accent
+ACCENT_TINT  = "#fbeee7"   # tint leggero dell'accent, per il box Raccomandazione
+INK          = "#1a1a1c"   # testo principale (spirito di --navy-0 su sfondo chiaro)
+INK_MUTED    = "#6b6b72"   # --text-muted, adattato
+INK_DIM      = "#97979e"   # --text-dim, adattato
+BORDER       = "#e6e6ea"   # --glass-border, versione chiara
+CARD_BG      = "#f7f7f9"   # --surface-container, versione chiara
+HEADER_BG    = "#17171a"   # --navy-1 — unico blocco scuro, delimitato (safe da renderizzare)
+SUCCESS      = "#2f8f5b"   # --success, scurito per contrasto su bianco
+WARNING      = "#b9822c"   # --warning, scurito
+DANGER       = "#c14a42"   # --danger, scurito
+RADIUS_MD    = "10px"
+RADIUS_LG    = "14px"
+
+
+def _section_html(title: str) -> str:
+    return (
+        f'<table style="width:100%; margin-top:16px; margin-bottom:8px;"><tr>'
+        f'<td style="width:4px; background-color:{ACCENT}; border-radius:2px;">&nbsp;</td>'
+        f'<td style="padding-left:8px; font-size:12.5pt; font-weight:bold; color:{INK};">{_esc(title)}</td>'
+        f'</tr></table>'
+    )
+
+
+def _kpi_card_html(label: str, value: str, value_color: str = INK) -> str:
+    return (
+        f'<td style="width:25%; padding:4px;">'
+        f'<div style="background-color:{CARD_BG}; border:1px solid {BORDER}; border-radius:{RADIUS_MD}; padding:10px 12px;">'
+        f'<div style="font-size:8pt; color:{INK_MUTED}; text-transform:uppercase;">{_esc(label)}</div>'
+        f'<div style="font-size:15pt; font-weight:bold; color:{value_color}; margin-top:2px;">{_esc(value)}</div>'
+        f'</div></td>'
+    )
+
+
+def _table_html(headers: list, rows: list, col_widths: list, align: Optional[list] = None) -> str:
+    """Tabella con lo stesso linguaggio visivo delle tabelle dell'app: header scuro,
+    righe alternate chiaro/off-white, bordo sottile. `rows` è già una lista di celle HTML
+    pronte (stringhe), non testo grezzo — chi chiama gestisce l'escaping dov'è testo utente."""
+    align = align or ["left"] * len(headers)
+    head_cells = "".join(
+        f'<th style="width:{w}; text-align:{a}; padding:7px 8px; background-color:{HEADER_BG}; '
+        f'color:#fff; font-size:8.5pt; font-weight:bold; border:1px solid {HEADER_BG};">{_esc(h)}</th>'
+        for h, w, a in zip(headers, col_widths, align)
+    )
+    body_rows = []
+    for i, row in enumerate(rows):
+        bg = "#ffffff" if i % 2 == 0 else CARD_BG
+        cells = "".join(
+            f'<td style="text-align:{a}; padding:6px 8px; font-size:8.5pt; color:{INK}; '
+            f'border:1px solid {BORDER}; background-color:{bg};">{cell}</td>'
+            for cell, a in zip(row, align)
+        )
+        body_rows.append(f"<tr>{cells}</tr>")
+    return (
+        f'<table style="width:100%; border-collapse:collapse; margin-top:2px;">'
+        f'<tr>{head_cells}</tr>{"".join(body_rows)}</table>'
+    )
+
+
 def _build_pdf(
     year: int,
     month: int,
@@ -105,163 +188,147 @@ def _build_pdf(
     budget_rows: list,
     narrative: dict,
 ) -> bytes:
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
+    from xhtml2pdf import pisa
+
+    generated_on = date.today().strftime("%d/%m/%Y")
+
+    base_css = f"""
+        @page {{ size: A4; margin: 1.8cm; }}
+        body {{ font-family: Helvetica, Arial, sans-serif; color: {INK}; font-size: 9.5pt; }}
+        p {{ line-height: 1.5; margin: 0; }}
+    """
+
+    header_html = (
+        f'<table style="width:100%; background-color:{HEADER_BG}; border-radius:{RADIUS_LG};">'
+        f'<tr><td style="padding:16px 18px;">'
+        f'<span style="font-size:16pt; font-weight:bold; color:{ACCENT};">FinCopilot</span>'
+        f'<span style="font-size:11pt; color:#ffffff;"> &nbsp;Report Mensile</span><br/>'
+        f'<span style="font-size:12.5pt; color:#ffffff; font-weight:bold;">{_esc(month_label)}</span><br/>'
+        f'<span style="font-size:8pt; color:{INK_DIM};">Generato il {generated_on}</span>'
+        f'</td></tr></table>'
     )
-
-    PRIMARY = colors.HexColor("#FF8C42")
-    DARK    = colors.HexColor("#1A1A1A")
-    MUTED   = colors.HexColor("#888888")
-    SUCCESS = colors.HexColor("#00C878")
-    WARNING = colors.HexColor("#FFB347")
-    DANGER  = colors.HexColor("#FF4D6D")
-    BG_ROW  = colors.HexColor("#F5F5F5")
-    WHITE   = colors.white
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
-    )
-
-    styles = getSampleStyleSheet()
-    h1 = ParagraphStyle("h1", parent=styles["Heading1"], textColor=PRIMARY, fontSize=20, spaceAfter=4)
-    h2 = ParagraphStyle("h2", parent=styles["Heading2"], textColor=DARK, fontSize=13, spaceBefore=14, spaceAfter=6)
-    body = ParagraphStyle("body", parent=styles["Normal"], fontSize=10, leading=15, textColor=DARK)
-    meta = ParagraphStyle("meta", parent=styles["Normal"], fontSize=9, textColor=MUTED)
-    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=MUTED, alignment=1)
-
-    def section(title: str) -> list:
-        return [
-            Spacer(1, 0.3 * cm),
-            HRFlowable(width="100%", thickness=1, color=PRIMARY, spaceAfter=4),
-            Paragraph(title, h2),
-        ]
-
-    def tbl(data: list, col_widths: list, header_bg=PRIMARY) -> Table:
-        t = Table(data, colWidths=col_widths)
-        n = len(data)
-        style_cmds = [
-            ("BACKGROUND",  (0, 0), (-1, 0), header_bg),
-            ("TEXTCOLOR",   (0, 0), (-1, 0), WHITE),
-            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE",    (0, 0), (-1, -1), 9),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, BG_ROW]),
-            ("GRID",        (0, 0), (-1, -1), 0.3, colors.HexColor("#DDDDDD")),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING",   (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
-        ]
-        t.setStyle(TableStyle(style_cmds))
-        return t
-
-    story = []
-
-    # ── HEADER ──────────────────────────────────────────────────────────────
-    story.append(Paragraph("FinCopilot — Report Mensile", h1))
-    story.append(Paragraph(month_label, ParagraphStyle("sub", fontSize=14, textColor=DARK, spaceAfter=2)))
-    story.append(Paragraph(f"Generato il: {date.today().strftime('%d/%m/%Y')}", meta))
-    story.append(Spacer(1, 0.4 * cm))
 
     if count_month == 0:
-        story.append(Paragraph("Nessuna transazione registrata per questo mese.", body))
-        doc.build(story)
+        html = f"""<html><head><style>{base_css}</style></head><body>
+            {header_html}
+            <p style="margin-top:24px; color:{INK_MUTED};">Nessuna transazione registrata per questo mese.</p>
+        </body></html>"""
+        buf = io.BytesIO()
+        pisa.CreatePDF(html, dest=buf)
         return buf.getvalue()
 
-    # ── PANORAMICA ───────────────────────────────────────────────────────────
-    story += section("Panoramica del Mese")
-    story.append(Paragraph(narrative["panoramica"], body))
-
     # ── KPI ─────────────────────────────────────────────────────────────────
-    story += section("KPI Principali")
-    delta_str = f"{delta_pct:+.1f}%" if total_prev > 0 else "n/d"
-    kpi_data = [
-        ["Totale Spese", "Transazioni", "Media/Transazione", "Vs Mese Prec."],
-        [
-            f"€{_fmt_eur(total_month)}",
-            str(count_month),
-            f"€{_fmt_eur(avg_tx)}",
-            delta_str,
-        ],
-    ]
-    page_w = A4[0] - 4 * cm
-    story.append(tbl(kpi_data, [page_w / 4] * 4))
+    if total_prev > 0:
+        delta_str = f"{delta_pct:+.1f}%"
+        delta_color = SUCCESS if delta_pct <= 0 else DANGER  # meno speso = verde, di più = rosso
+    else:
+        delta_str, delta_color = "n/d", INK
+    kpi_html = (
+        '<table style="width:100%; margin-top:10px;"><tr>'
+        + _kpi_card_html("Totale spese", f"€{_fmt_eur(total_month)}")
+        + _kpi_card_html("Transazioni", str(count_month))
+        + _kpi_card_html("Media/transazione", f"€{_fmt_eur(avg_tx)}")
+        + _kpi_card_html("Vs mese precedente", delta_str, delta_color)
+        + "</tr></table>"
+    )
 
     # ── SPESE PER CATEGORIA ──────────────────────────────────────────────────
-    story += section("Spese per Categoria")
-    cat_header = ["Categoria", "Importo (€)", "%", "Distribuzione", "N°"]
-    cat_rows = [cat_header]
-    for c in categories:
-        cat_rows.append([
-            c["category"],
-            f"{c['total']:.2f}",
+    cat_rows = [
+        [
+            _esc(c["category"]),
+            f"€{_fmt_eur(c['total'])}",
             f"{c['pct']:.1f}%",
-            _progress_bar(c["pct"], "#FF8C42"),
+            _bar_html(c["pct"], ACCENT, BORDER),
             str(c["count"]),
-        ])
-    story.append(tbl(cat_rows, [3.5 * cm, 2.5 * cm, 1.5 * cm, 5.8 * cm, 1.2 * cm]))
-
-    # ── PUNTI DI ATTENZIONE ──────────────────────────────────────────────────
-    story += section("Punti di Attenzione")
-    story.append(Paragraph(narrative["attenzione"], body))
+        ]
+        for c in categories
+    ]
+    cat_table_html = _table_html(
+        ["Categoria", "Importo", "%", "Distribuzione", "N°"],
+        cat_rows,
+        ["18%", "16%", "10%", "42%", "10%"],
+        ["left", "right", "right", "left", "center"],
+    )
 
     # ── BUDGET STATUS ────────────────────────────────────────────────────────
+    budget_html = ""
     if budget_rows:
-        story += section("Budget Status")
-        bud_header = ["Categoria", "Budget (€)", "Speso (€)", "%", "Stato"]
-        bud_data = [bud_header]
+        bud_rows = []
         for b in budget_rows:
             pct = b["pct"]
-            stato = "OK" if pct < 80 else ("ATTENZIONE" if pct <= 100 else "SFORATO")
-            bud_data.append([
-                b["category"],
-                f"{b['budget']:.2f}",
-                f"{b['spent']:.2f}",
-                f"{pct:.0f}%",
-                stato,
+            if pct < 80:
+                stato, stato_color = "OK", SUCCESS
+            elif pct <= 100:
+                stato, stato_color = "ATTENZIONE", WARNING
+            else:
+                stato, stato_color = "SFORATO", DANGER
+            bud_rows.append([
+                _esc(b["category"]),
+                f"€{_fmt_eur(b['budget'])}",
+                f"€{_fmt_eur(b['spent'])}",
+                f'<span style="color:{stato_color}; font-weight:bold;">{pct:.0f}%</span>',
+                f'<span style="color:{stato_color}; font-weight:bold;">{stato}</span>',
             ])
-        bt = tbl(bud_data, [3.5 * cm, 2.5 * cm, 2.5 * cm, 1.5 * cm, 2.5 * cm])
-        # Color the % column per status
-        for row_idx, b in enumerate(budget_rows, start=1):
-            pct = b["pct"]
-            col_color = SUCCESS if pct < 80 else (WARNING if pct <= 100 else DANGER)
-            bt.setStyle(TableStyle([
-                ("TEXTCOLOR", (3, row_idx), (4, row_idx), col_color),
-                ("FONTNAME",  (3, row_idx), (4, row_idx), "Helvetica-Bold"),
-            ]))
-        story.append(bt)
+        budget_html = _section_html("Budget Status") + _table_html(
+            ["Categoria", "Budget", "Speso", "%", "Stato"],
+            bud_rows,
+            ["22%", "18%", "18%", "16%", "26%"],
+            ["left", "right", "right", "center", "center"],
+        )
 
     # ── TOP 10 ───────────────────────────────────────────────────────────────
-    story += section("Top 10 Transazioni")
-    top_header = ["Data", "Categoria", "Descrizione", "Importo (€)"]
-    top_data = [top_header]
-    for t in top10:
-        top_data.append([
+    top_rows = [
+        [
             t["date"],
-            t["category"],
-            (t["description"] or "—")[:40],
-            f"{t['amount']:.2f}",
-        ])
-    story.append(tbl(top_data, [2 * cm, 3 * cm, 7.5 * cm, 2.5 * cm]))
+            _esc(t["category"]),
+            _esc((t["description"] or "—")[:45]),
+            f"€{_fmt_eur(t['amount'])}",
+        ]
+        for t in top10
+    ]
+    top_table_html = _table_html(
+        ["Data", "Categoria", "Descrizione", "Importo"],
+        top_rows,
+        ["14%", "18%", "48%", "20%"],
+        ["left", "left", "left", "right"],
+    )
 
-    # ── RACCOMANDAZIONE ──────────────────────────────────────────────────────
-    story += section("Raccomandazione")
-    story.append(Paragraph(narrative["raccomandazione"], body))
+    html = f"""<html><head><style>{base_css}</style></head><body>
+        {header_html}
 
-    # ── FOOTER NOTE ─────────────────────────────────────────────────────────
-    story.append(Spacer(1, 0.6 * cm))
-    story.append(Paragraph("Generato automaticamente da FinCopilot · Dati aggiornati al momento della generazione", small))
+        {_section_html("Panoramica del mese")}
+        <p>{_esc(narrative["panoramica"])}</p>
 
-    doc.build(story)
+        {_section_html("KPI principali")}
+        {kpi_html}
+
+        {_section_html("Spese per categoria")}
+        {cat_table_html}
+
+        {_section_html("Punti di attenzione")}
+        <p>{_esc(narrative["attenzione"])}</p>
+
+        {budget_html}
+
+        {_section_html("Top 10 transazioni")}
+        {top_table_html}
+
+        {_section_html("Raccomandazione")}
+        <table style="width:100%;"><tr>
+          <td style="background-color:{ACCENT_TINT}; border-left:3px solid {ACCENT}; border-radius:{RADIUS_MD}; padding:10px 14px;">
+            <p>{_esc(narrative["raccomandazione"])}</p>
+          </td>
+        </tr></table>
+
+        <p style="margin-top:20px; font-size:7.5pt; color:{INK_DIM}; text-align:center;">
+          Generato automaticamente da FinCopilot · Dati aggiornati al momento della generazione
+        </p>
+    </body></html>"""
+
+    buf = io.BytesIO()
+    result = pisa.CreatePDF(html, dest=buf)
+    if result.err:
+        raise RuntimeError(f"Errore generazione PDF ({result.err} errori di rendering)")
     return buf.getvalue()
 
 
