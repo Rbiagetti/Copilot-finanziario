@@ -183,7 +183,15 @@ h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
 
 @keyframes scaleUpFade {
   0% { opacity: 0; transform: scale(0.96) translateY(20px); filter: blur(10px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+  /* transform:none e filter:none (non scale(1)/blur(0), visivamente identici ma NON
+     equivalenti per il browser): qualsiasi valore diverso da "none" — anche un blur(0) o
+     uno scale(1) — trasforma l'elemento in un "containing block" per i discendenti
+     position:fixed. Con .animate-in usato su .transactions-page (che con fill-mode "both"
+     mantiene lo stato finale dell'animazione dopo che è finita), questo rompeva il
+     posizionamento del modale di modifica transazione: invece di essere fisso rispetto
+     al viewport, si posizionava rispetto a .transactions-page — cioè all'altezza dello
+     scroll della lista, non al centro schermo. */
+  100% { opacity: 1; transform: none; filter: none; }
 }
 
 @keyframes bounce {

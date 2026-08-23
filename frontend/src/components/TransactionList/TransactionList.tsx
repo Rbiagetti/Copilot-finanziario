@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { getTransactions, deleteTransaction, bulkDeleteTransactions, getTransactionCount, getTransactionDateBounds, updateTransaction, exportTransactionsCsv } from "../../api/client";
@@ -747,8 +748,12 @@ export default function TransactionList() {
         )}
       </div>
 
-      {/* EDIT MODAL */}
-      {editState && (
+      {/* EDIT MODAL — via portal in document.body: un modale position:fixed dentro un
+          contenitore normale del DOM è fragile, basta che un antenato prenda un transform/
+          filter/will-change (anche per un'animazione già finita, vedi scaleUpFade) per
+          rompere il posizionamento rispetto al viewport. Il portal lo rende immune a
+          qualunque CSS di un antenato, presente o futuro. */}
+      {editState && createPortal(
         <div className="modal-overlay" onClick={() => setEditState(null)}>
           <div className="modal-box" ref={modalRef} role="dialog" aria-modal="true" aria-label="Modifica transazione" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -805,7 +810,8 @@ export default function TransactionList() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
