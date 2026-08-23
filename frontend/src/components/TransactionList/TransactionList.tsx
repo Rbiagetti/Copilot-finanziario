@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, memo, useRef } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import { getTransactions, deleteTransaction, bulkDeleteTransactions, getTransactionCount, getTransactionDateBounds, updateTransaction, exportTransactionsCsv } from "../../api/client";
 import type { Transaction } from "../../api/client";
 import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, ListFilter, ChevronDown, CalendarDays, CheckSquare, Square, ListChecks } from "lucide-react";
@@ -146,6 +147,7 @@ export default function TransactionList() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const modalRef = useFocusTrap(!!editState);
+  useBodyScrollLock(!!editState);
   const txFiltersBtnRef = useRef<HTMLButtonElement>(null);
   const txFiltersPanelRef = useRef<HTMLDivElement>(null);
   const rangeTrackRef = useRef<HTMLDivElement>(null);

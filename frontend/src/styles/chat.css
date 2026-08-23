@@ -102,6 +102,12 @@
   font-size: 0.76rem;
   border-radius: 999px;
   color: var(--text-muted);
+  /* Il .suggestion-btn condiviso imposta white-space:nowrap (corretto per le sue label
+     brevi e fisse) — le domande consigliate dall'AI possono invece essere lunghe, e senza
+     wrap qui il pillolo sfora la larghezza dello schermo su mobile invece di andare a capo. */
+  white-space: normal;
+  text-align: left;
+  max-width: 100%;
 }
 
 /* === MESSAGES === */
