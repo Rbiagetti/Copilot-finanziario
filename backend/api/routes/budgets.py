@@ -16,6 +16,18 @@ async def create_budget(
     current_user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    existing = db.query(Budget).filter(
+        (Budget.category == data.category) &
+        (Budget.active == True) &
+        (Budget.user_id == current_user_id)
+    ).first()
+    if existing:
+        raise HTTPException(
+            409,
+            f"Esiste già un budget attivo per '{data.category}' (€{existing.amount:.2f}). "
+            "Modifica quello esistente invece di crearne uno nuovo.",
+        )
+
     budget = Budget(
         user_id=current_user_id,
         category=data.category,
@@ -50,6 +62,17 @@ async def update_budget(
     ).first()
     if not b:
         raise HTTPException(404, "Budget non trovato")
+
+    if data.category != b.category:
+        existing = db.query(Budget).filter(
+            (Budget.category == data.category) &
+            (Budget.active == True) &
+            (Budget.user_id == current_user_id) &
+            (Budget.id != budget_id)
+        ).first()
+        if existing:
+            raise HTTPException(409, f"Esiste già un budget attivo per '{data.category}'.")
+
     b.amount = data.amount
     b.category = data.category
     db.commit()

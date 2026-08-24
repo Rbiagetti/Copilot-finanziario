@@ -54,8 +54,14 @@ export default function BudgetPanel() {
       toast.success(`Budget ${newCat}: \u20AC${amount}`);
       setNewAmount("");
       load();
-    } catch {
-      toast.error("Errore nel salvataggio");
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response?.status;
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (status === 409) {
+        toast.error(detail || `Esiste gi\u00E0 un budget per ${newCat}`);
+      } else {
+        toast.error("Errore nel salvataggio");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +111,6 @@ export default function BudgetPanel() {
               isNaN(num) || num < 10 ? "Il budget minimo è €10" : ""
             );
           }}
-          onBlur={(e) => e.target.reportValidity()}
           required
         />
         <button type="submit" className="btn-primary" disabled={submitting}>
@@ -130,7 +135,7 @@ export default function BudgetPanel() {
       ) : (
         <div className="budget-list">
           {budgets.map((b) => (
-            <div key={b.category} className={`budget-card ${b.status}`}>
+            <div key={b.id ?? b.category} className={`budget-card ${b.status}`}>
               <div className="budget-header">
                 {statusIcon(b.status)}
                 <span className="budget-emoji"><CategoryIcon category={b.category} size={17} /></span>
