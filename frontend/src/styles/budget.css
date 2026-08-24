@@ -56,7 +56,14 @@
 }
 
 .budget-details { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); }
-.budget-emoji { font-size: 1.15rem; }
+.budget-emoji {
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  width: 30px; height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-1);
+  color: var(--accent);
+}
 .budget-header .btn-icon { margin-left: auto; opacity: 0.4; transition: opacity var(--duration-fast); }
 .budget-card:hover .budget-header .btn-icon { opacity: 1; }
 

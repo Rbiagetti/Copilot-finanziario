@@ -3,21 +3,20 @@ import { getBudgetStatus, createBudget, deleteBudget } from "../../api/client";
 import type { BudgetStatus } from "../../api/client";
 import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { CategoryIcon } from "../../lib/categoryIcons";
 
 const CATEGORIES = [
-  { value: "cibo", emoji: "\u{1F355}", label: "Cibo" },
-  { value: "trasporti", emoji: "\u{1F697}", label: "Trasporti" },
-  { value: "casa", emoji: "\u{1F3E0}", label: "Casa" },
-  { value: "salute", emoji: "\u{1F48A}", label: "Salute" },
-  { value: "svago", emoji: "\u{1F3AD}", label: "Svago" },
-  { value: "abbigliamento", emoji: "\u{1F455}", label: "Abbigliamento" },
-  { value: "lavoro", emoji: "\u{1F4BC}", label: "Lavoro" },
-  { value: "abbonamenti", emoji: "\u{1F4F1}", label: "Abbonamenti" },
-  { value: "formazione", emoji: "\u{1F393}", label: "Formazione" },
-  { value: "altro", emoji: "\u2753", label: "Altro" },
+  { value: "cibo", label: "Cibo" },
+  { value: "trasporti", label: "Trasporti" },
+  { value: "casa", label: "Casa" },
+  { value: "salute", label: "Salute" },
+  { value: "svago", label: "Svago" },
+  { value: "abbigliamento", label: "Abbigliamento" },
+  { value: "lavoro", label: "Lavoro" },
+  { value: "abbonamenti", label: "Abbonamenti" },
+  { value: "formazione", label: "Formazione" },
+  { value: "altro", label: "Altro" },
 ];
-
-const getEmoji = (cat: string) => CATEGORIES.find((c) => c.value === cat)?.emoji || "\u2753";
 
 interface BudgetStatusWithId extends BudgetStatus {
   id?: number;
@@ -88,7 +87,7 @@ export default function BudgetPanel() {
       <form className="budget-form" onSubmit={handleAdd}>
         <select value={newCat} onChange={(e) => setNewCat(e.target.value)}>
           {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>{c.emoji} {c.label}</option>
+            <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
         <input
@@ -134,7 +133,7 @@ export default function BudgetPanel() {
             <div key={b.category} className={`budget-card ${b.status}`}>
               <div className="budget-header">
                 {statusIcon(b.status)}
-                <span className="budget-emoji">{getEmoji(b.category)}</span>
+                <span className="budget-emoji"><CategoryIcon category={b.category} size={17} /></span>
                 <span className="budget-cat capitalize">{b.category}</span>
                 <span className="budget-pct">{b.percentage}%</span>
                 <button
