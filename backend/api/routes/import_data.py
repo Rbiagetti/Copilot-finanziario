@@ -13,6 +13,7 @@ from backend.core.import_engine import (
 )
 from backend.core.ai_engine import invalidate_anomaly_cache
 from backend.api.auth import get_current_user
+from backend.api.routes.categories import get_active_category_names
 
 router = APIRouter(prefix="/api/v1/transactions/import", tags=["import"])
 
@@ -69,11 +70,13 @@ async def commit_import(
     except ImportError_ as e:
         raise HTTPException(400, str(e))
 
+    allowed_categories = get_active_category_names(db, current_user_id)
+
     raw_rows = df.to_dict(orient="records")
     normalized: list[dict] = []
     invalid_count = 0
     for row in raw_rows:
-        n = normalize_row(row, mapping_dict)
+        n = normalize_row(row, mapping_dict, allowed_categories)
         if n is None:
             invalid_count += 1
         else:
@@ -120,7 +123,7 @@ async def commit_import(
     needs_category_idx = [i for i, n in enumerate(to_import) if not n["category"]]
     if needs_category_idx:
         descriptions = [to_import[i]["description"] for i in needs_category_idx]
-        ai_categories = categorize_batch(descriptions)
+        ai_categories = categorize_batch(descriptions, allowed_categories)
         for idx, cat in zip(needs_category_idx, ai_categories):
             to_import[idx]["category"] = cat
 

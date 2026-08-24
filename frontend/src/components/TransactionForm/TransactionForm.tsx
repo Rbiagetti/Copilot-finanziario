@@ -6,19 +6,6 @@ import { useAppStore } from "../../store/appStore";
 import { voiceService } from "../../utils/voiceService";
 import { CategoryIcon } from "../../lib/categoryIcons";
 
-const CATEGORIES = [
-  { value: "cibo", label: "Cibo" },
-  { value: "trasporti", label: "Trasporti" },
-  { value: "casa", label: "Casa" },
-  { value: "salute", label: "Salute" },
-  { value: "svago", label: "Svago" },
-  { value: "abbigliamento", label: "Abbigliamento" },
-  { value: "lavoro", label: "Lavoro" },
-  { value: "abbonamenti", label: "Abbonamenti" },
-  { value: "formazione", label: "Formazione" },
-  { value: "altro", label: "Altro" },
-];
-
 interface Props {
   onAdded?: () => void;
 }
@@ -38,7 +25,9 @@ export default function TransactionForm({ onAdded }: Props) {
   const confirmedTextRef = useRef("");
   const [submitting, setSubmitting] = useState(false);
   
-  const { autoStartVoice, setAutoStartVoice, markTransactionsAsNew } = useAppStore();
+  const { autoStartVoice, setAutoStartVoice, markTransactionsAsNew, categories, loadCategories } = useAppStore();
+
+  useEffect(() => { loadCategories(); }, [loadCategories]);
 
   useEffect(() => {
     if (autoStartVoice) {
@@ -229,15 +218,15 @@ export default function TransactionForm({ onAdded }: Props) {
           <div className="form-group">
             <label>Categoria</label>
             <div className="category-grid">
-              {CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <button
-                  key={c.value}
+                  key={c}
                   type="button"
-                  className={`cat-btn ${category === c.value ? "active" : ""}`}
-                  onClick={() => setCategory(c.value)}
+                  className={`cat-btn ${category === c ? "active" : ""}`}
+                  onClick={() => setCategory(c)}
                 >
-                  <CategoryIcon category={c.value} size={19} />
-                  <span>{c.label}</span>
+                  <CategoryIcon category={c} size={19} />
+                  <span className="capitalize">{c}</span>
                 </button>
               ))}
             </div>

@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.database import init_db
-from backend.api.routes import transactions, analytics, chat, budgets, ai, import_data
+from backend.api.routes import transactions, analytics, chat, budgets, ai, import_data, categories
 from backend.api.routes.report import router as report_router
 from backend.api.auth import get_current_user
 
@@ -42,6 +42,7 @@ app.include_router(chat.router, dependencies=[Depends(get_current_user)])
 app.include_router(budgets.router, dependencies=[Depends(get_current_user)])
 app.include_router(ai.router, dependencies=[Depends(get_current_user)])
 app.include_router(import_data.router, dependencies=[Depends(get_current_user)])
+app.include_router(categories.router, dependencies=[Depends(get_current_user)])
 app.include_router(report_router, dependencies=[Depends(get_current_user)])
 
 @app.api_route("/api/v1/health", methods=["GET", "HEAD"])

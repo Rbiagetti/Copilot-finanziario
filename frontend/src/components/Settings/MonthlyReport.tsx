@@ -68,7 +68,7 @@ export default function MonthlyReport() {
           <select
             value={month}
             onChange={e => setMonth(Number(e.target.value))}
-            className="filter-select"
+            className="report-select"
             disabled={loading}
           >
             {MESI.map((m, i) => (
@@ -82,7 +82,7 @@ export default function MonthlyReport() {
           <select
             value={year}
             onChange={e => setYear(Number(e.target.value))}
-            className="filter-select"
+            className="report-select"
             disabled={loading}
           >
             {YEARS.map(y => (

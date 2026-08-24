@@ -4,19 +4,7 @@ import type { BudgetStatus } from "../../api/client";
 import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CategoryIcon } from "../../lib/categoryIcons";
-
-const CATEGORIES = [
-  { value: "cibo", label: "Cibo" },
-  { value: "trasporti", label: "Trasporti" },
-  { value: "casa", label: "Casa" },
-  { value: "salute", label: "Salute" },
-  { value: "svago", label: "Svago" },
-  { value: "abbigliamento", label: "Abbigliamento" },
-  { value: "lavoro", label: "Lavoro" },
-  { value: "abbonamenti", label: "Abbonamenti" },
-  { value: "formazione", label: "Formazione" },
-  { value: "altro", label: "Altro" },
-];
+import { useAppStore } from "../../store/appStore";
 
 interface BudgetStatusWithId extends BudgetStatus {
   id?: number;
@@ -29,6 +17,8 @@ export default function BudgetPanel() {
   const [newCat, setNewCat] = useState("cibo");
   const [newAmount, setNewAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { categories: CATEGORY_NAMES, loadCategories } = useAppStore();
+  useEffect(() => { loadCategories(); }, [loadCategories]);
 
   const load = () => {
     setLoading(true);
@@ -92,8 +82,8 @@ export default function BudgetPanel() {
 
       <form className="budget-form" onSubmit={handleAdd}>
         <select value={newCat} onChange={(e) => setNewCat(e.target.value)}>
-          {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
+          {CATEGORY_NAMES.map((c) => (
+            <option key={c} value={c} className="capitalize">{c}</option>
           ))}
         </select>
         <input

@@ -61,6 +61,21 @@ class Budget(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class Category(Base):
+    """Categorie personalizzate aggiunte dall'utente (le 10 standard restano hardcoded in
+    api/models/schemas.py, non toccabili — vive solo qui l'aggiunta, mai la sostituzione).
+    Cancellazione = soft delete (active=False), stesso pattern già usato per Budget: le
+    transazioni storiche mantengono la categoria intatta, la categoria disattivata sparisce
+    solo dai menu per le nuove transazioni."""
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
+    name = Column(String, nullable=False)  # normalizzato lowercase, coerente con Transaction.category
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+
 class ChatHistory(Base):
     __tablename__ = "chat_history"
 

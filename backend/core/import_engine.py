@@ -342,9 +342,14 @@ def _parse_date(raw: str) -> Optional[str]:
         return None
 
 
-def normalize_row(row: dict, mapping: dict[str, Optional[str]]) -> Optional[dict]:
+def normalize_row(
+    row: dict, mapping: dict[str, Optional[str]], allowed_categories: Optional[list[str]] = None
+) -> Optional[dict]:
     """Applica il mapping a una riga raw del file. Ritorna None se date/amount
-    non sono validi (riga scartata, verrà segnalata come errore all'utente)."""
+    non sono validi (riga scartata, verrà segnalata come errore all'utente).
+    allowed_categories: standard + personalizzate attive dell'utente (default: solo standard,
+    per compatibilità con chi chiama senza passarle)."""
+    allowed = allowed_categories if allowed_categories is not None else CATEGORIES
     date_col = mapping.get("date")
     amount_col = mapping.get("amount")
     if not date_col or not amount_col:
@@ -361,7 +366,7 @@ def normalize_row(row: dict, mapping: dict[str, Optional[str]]) -> Optional[dict
 
     description = str(row.get(desc_col, "")).strip() if desc_col else ""
     category = str(row.get(cat_col, "")).strip().lower() if cat_col else ""
-    if category not in CATEGORIES:
+    if category not in allowed:
         category = ""
     account = str(row.get(acc_col, "")).strip() if acc_col else "principale"
 
@@ -398,11 +403,13 @@ def split_expenses_and_income(rows: list[dict]) -> tuple[list[dict], int]:
     return kept, skipped
 
 
-def categorize_batch(descriptions: list[str]) -> list[str]:
+def categorize_batch(descriptions: list[str], categories: Optional[list[str]] = None) -> list[str]:
     """Categorizza in batch le descrizioni senza categoria mappata, via AI (T-003).
-    In caso di errore/assenza API key, ritorna 'altro' per tutte."""
+    In caso di errore/assenza API key, ritorna 'altro' per tutte.
+    categories: standard + personalizzate attive dell'utente (default: solo standard)."""
     if not descriptions:
         return []
+    allowed = categories if categories is not None else CATEGORIES
     try:
         from backend.core.ai_engine import client, MODEL, GROQ_API_KEY
         if not GROQ_API_KEY:
@@ -415,7 +422,7 @@ def categorize_batch(descriptions: list[str]) -> list[str]:
             numbered = "\n".join(f"{j+1}. {d or '(senza descrizione)'}" for j, d in enumerate(chunk))
             prompt = (
                 "Categorizza ciascuna di queste spese personali (una per riga, numerate) "
-                f"in una di queste categorie: {', '.join(CATEGORIES)}.\n"
+                f"in una di queste categorie: {', '.join(allowed)}.\n"
                 "Rispondi SOLO con un array JSON di stringhe nello stesso ordine e stessa lunghezza "
                 f"dell'input (esattamente {len(chunk)} elementi), es: [\"cibo\", \"trasporti\", ...]\n\n"
                 f"{numbered}"
@@ -434,7 +441,7 @@ def categorize_batch(descriptions: list[str]) -> list[str]:
             if not isinstance(cats, list) or len(cats) != len(chunk):
                 results.extend(["altro"] * len(chunk))
                 continue
-            results.extend([c if c in CATEGORIES else "altro" for c in cats])
+            results.extend([c if c in allowed else "altro" for c in cats])
         return results
     except Exception as e:
         logger.warning("AI categorization batch fallita: %s", e)

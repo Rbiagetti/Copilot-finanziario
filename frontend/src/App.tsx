@@ -110,12 +110,6 @@ function App() {
     }
   }, [location.pathname, isAuthenticated, setView]);
 
-  useEffect(() => {
-    document.documentElement.setAttribute(
-      "data-theme",
-      localStorage.getItem("theme") === "light" ? "light" : "dark",
-    );
-  }, []);
 
   if (!supabaseConfigured) {
     return <div>Supabase not configured. Check your .env file.</div>;

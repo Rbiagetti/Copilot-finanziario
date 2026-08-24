@@ -10,8 +10,6 @@ import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
 import { CategoryIcon } from "../../lib/categoryIcons";
 
-const CATEGORIES = ["cibo","trasporti","casa","salute","svago","abbigliamento","lavoro","abbonamenti","formazione","altro"];
-
 const MESI_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 
 /** Costruisce l'elenco mesi (ascendente) da startY/startM al mese corrente incluso.
@@ -280,7 +278,8 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { markTransactionsAsNew, dashboardFilter, setDashboardFilter } = useAppStore();
+  const { markTransactionsAsNew, dashboardFilter, setDashboardFilter, categories: CATEGORIES, loadCategories } = useAppStore();
+  useEffect(() => { loadCategories(); }, [loadCategories]);
 
   // A-4: Al mount, consuma dashboardFilter se impostato dalla Dashboard
   useEffect(() => {

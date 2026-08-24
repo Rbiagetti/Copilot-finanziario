@@ -289,3 +289,79 @@
   color: #ffb4ab !important;
   border-color: rgba(255, 180, 171, 0.30) !important;
 }
+
+/* === CATEGORIE PERSONALIZZATE (Impostazioni) === */
+.category-add-form {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+.category-add-form input {
+  flex: 1;
+  background: var(--surface-container);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.category-add-form button { white-space: nowrap; }
+
+.category-chip-group { margin-top: 1rem; }
+.category-chip-group-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.5rem;
+}
+.category-chip-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-1);
+  color: var(--text-muted);
+}
+.category-chip--standard { opacity: 0.85; }
+.category-chip--custom {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.category-chip-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.1rem;
+}
+.category-chip-delete:hover { color: var(--danger); }
+.category-chip-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* === REPORT MENSILE — select mese/anno (prima riusavano .filter-select, pensato per
+   stare dentro un contenitore che dà lo sfondo — da solo era invisibile, senza bordo
+   né sfondo: non si capiva fosse un controllo cliccabile) === */
+.report-select {
+  background: var(--surface-container);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.report-select:hover { border-color: var(--glass-border-hi); }
+.report-select:focus { outline: none; border-color: var(--accent); }

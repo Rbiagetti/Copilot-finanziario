@@ -1,33 +1,19 @@
-import { useState, useEffect } from "react";
-
-export function useIsDark() {
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("theme") !== "light");
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.getAttribute("data-theme") !== "light");
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => observer.disconnect();
-  }, []);
-
-  return isDark;
-}
-
+// App solo tema scuro (predisposizione al tema chiaro rimossa: mai stata esposta
+// all'utente, nessuna regola CSS la implementava). Colori fissi per i grafici Recharts,
+// che non possono leggere le CSS custom properties (renderizzano SVG con props inline).
 export function useChartColors() {
-  const isDark = useIsDark();
   return {
-    tick: isDark ? "#fff3e6" : "#6b3100",
-    tooltipBg: isDark ? "rgba(22,12,7,0.95)" : "rgba(255,255,255,0.98)",
-    tooltipBorder: isDark ? "rgba(255,182,141,0.25)" : "rgba(255,140,66,0.25)",
-    tooltipText: isDark ? "#f5ded5" : "#331200",
-    tooltipItem: isDark ? "rgba(245,222,213,0.85)" : "#4d2600",
-    legendText: isDark ? "#fff3e6" : "#763300",
-    gridStroke: isDark ? "rgba(255,182,141,0.08)" : "rgba(118,51,0,0.08)",
-    cursorFill: isDark ? "rgba(255,140,66,0.07)" : "rgba(255,140,66,0.08)",
+    tick: "#fff3e6",
+    tooltipBg: "rgba(22,12,7,0.95)",
+    tooltipBorder: "rgba(255,182,141,0.25)",
+    tooltipText: "#f5ded5",
+    tooltipItem: "rgba(245,222,213,0.85)",
+    legendText: "#fff3e6",
+    gridStroke: "rgba(255,182,141,0.08)",
+    cursorFill: "rgba(255,140,66,0.07)",
     success: "#7dd992",
     warning: "#ffb77d",
     danger: "#ffb4ab",
-    neutral: isDark ? "rgba(255,182,141,0.20)" : "rgba(118,51,0,0.14)",
+    neutral: "rgba(255,182,141,0.20)",
   };
 }

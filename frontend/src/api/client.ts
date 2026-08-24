@@ -211,6 +211,27 @@ export const getFullHistory = () => api.get<FullHistoryTransaction[]>("/analytic
 export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>
   api.put<Transaction>(`/transactions/${id}`, data);
 
+/** Standard (10 fisse) + personalizzate attive dell'utente, in un unico elenco piatto —
+ * per popolare i menu a tendina (form nuova transazione, filtri, budget). */
+export const getCategoryNames = () =>
+  api.get<{ categories: string[] }>("/transactions/stats/categories");
+
+export interface CustomCategory {
+  id: number;
+  name: string;
+}
+
+/** Standard e personalizzate separate — per la UI di gestione in Impostazioni
+ * (solo le personalizzate sono eliminabili). */
+export const getCategoriesDetailed = () =>
+  api.get<{ standard: string[]; custom: CustomCategory[] }>("/categories/");
+
+export const createCategory = (name: string) =>
+  api.post<CustomCategory>("/categories/", { name });
+
+export const deleteCategory = (id: number) =>
+  api.delete(`/categories/${id}`);
+
 export const exportTransactionsCsv = async (
   params?: Record<string, string>
 ): Promise<void> => {

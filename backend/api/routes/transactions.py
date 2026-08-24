@@ -15,6 +15,7 @@ from backend.api.models.schemas import (
 )
 from backend.core.ai_engine import invalidate_anomaly_cache
 from backend.api.auth import get_current_user
+from backend.api.routes.categories import get_active_category_names
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 
@@ -26,8 +27,9 @@ async def create_transaction(
     db: Session = Depends(get_db)
 ):
     """Crea una nuova transazione."""
-    if data.category not in CATEGORIES:
-        data.category = "altro"
+    allowed = get_active_category_names(db, current_user_id)
+    normalized = (data.category or "").strip().lower()
+    data.category = normalized if normalized in allowed else "altro"
 
     tx = Transaction(
         user_id=current_user_id,
@@ -264,7 +266,14 @@ async def update_transaction(
     ).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
-    for field, value in data.model_dump(exclude_unset=True).items():
+
+    updates = data.model_dump(exclude_unset=True)
+    if "category" in updates:
+        allowed = get_active_category_names(db, current_user_id)
+        normalized = (updates["category"] or "").strip().lower()
+        updates["category"] = normalized if normalized in allowed else tx.category
+
+    for field, value in updates.items():
         setattr(tx, field, value)
     db.commit()
     db.refresh(tx)
@@ -304,9 +313,12 @@ async def delete_transaction(
 
 
 @router.get("/stats/categories")
-async def categories_list():
-    """Ritorna le categorie disponibili."""
-    return {"categories": CATEGORIES}
+async def categories_list(
+    current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ritorna le categorie disponibili per l'utente: standard + personalizzate attive."""
+    return {"categories": get_active_category_names(db, current_user_id)}
 
 
 class NLParseRequest(BaseModel):
@@ -330,13 +342,14 @@ async def parse_natural_language(
 
     today = date.today()
     now_time = datetime.now().strftime("%H:%M")
+    allowed_categories = get_active_category_names(db, current_user_id)
 
     system_prompt = (
         "Sei un parser di spese personali. "
         "Estrai da testo libero in italiano: importo, categoria, nota, data e ora. "
         "Rispondi SOLO con JSON valido, nessun testo extra. "
         f'Formato: {{"amount": float, "category": str, "note": str, "date": str, "time": str}} '
-        f"Categorie disponibili: {', '.join(CATEGORIES)} "
+        f"Categorie disponibili: {', '.join(allowed_categories)} "
         "Se la categoria non è chiara, usa 'altro'. "
         "Se manca l'importo, usa 0.0. "
         f"Oggi è {today.strftime('%d %B %Y')} ({today.isoformat()}). "
@@ -377,10 +390,13 @@ async def parse_natural_language(
 
     tx_time = parsed.get("time") or now_time
 
+    parsed_category = str(parsed.get("category") or "").strip().lower()
+    tx_category = parsed_category if parsed_category in allowed_categories else "altro"
+
     tx = Transaction(
         user_id=current_user_id,
         amount=parsed["amount"],
-        category=parsed.get("category", "altro"),
+        category=tx_category,
         description=parsed.get("note", ""),
         date=tx_date,
         time=tx_time,

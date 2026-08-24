@@ -3,6 +3,7 @@ import { LogOut, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
 import MonthlyReport from "./MonthlyReport";
 import AiImporter from "./AiImporter";
+import CategoryManager from "./CategoryManager";
 import { useAuthStore } from "../../store/authStore";
 import { linkGoogleIdentity, getLinkedProviders } from "../../lib/supabase";
 
@@ -97,6 +98,7 @@ export default function SettingsPanel() {
         </div>
       </div>
 
+      <CategoryManager />
       <AiImporter />
       <MonthlyReport />
     </div>
