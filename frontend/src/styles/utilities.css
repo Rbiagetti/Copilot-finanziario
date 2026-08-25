@@ -307,6 +307,15 @@
 }
 .category-add-form button { white-space: nowrap; }
 
+@media (max-width: 767px) {
+  /* Su schermi stretti "input flex:1 + bottone nowrap" affiancati non ci stanno:
+     il bottone veniva tagliato dal bordo della card. Stessa fix già usata per
+     .budget-form: impila verticalmente, entrambi a piena larghezza. */
+  .category-add-form { flex-direction: column; align-items: stretch; }
+  .category-add-form input { width: 100%; }
+  .category-add-form button { width: 100%; justify-content: center; }
+}
+
 .category-chip-group { margin-top: 1rem; }
 .category-chip-group-label {
   display: block;
