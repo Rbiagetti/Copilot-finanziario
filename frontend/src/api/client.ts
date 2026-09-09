@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getToken } from "../lib/supabase";
+import { getToken, supabase } from "../lib/supabase";
 import toast from "react-hot-toast";
 
 const api = axios.create({
@@ -15,11 +15,42 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Gestione errori globali (es. 401 Unauthorized)
-let _isHandling401 = false; // evita loop multipli se più request falliscono in parallelo
+// B-2: dedup dei refresh concorrenti — se 4-5 richieste partono insieme (es. dashboard)
+// vicino alla scadenza del token, ognuna che riceve 401 tenterebbe il proprio refresh in
+// parallelo: supabase-js ruota il refresh token ad ogni uso, quindi la seconda richiesta a
+// usarlo troverebbe un token già bruciato dalla prima e fallirebbe con un utente perfettamente
+// loggato. Un'unica promise condivisa fa sì che tutte le richieste in coda aspettino lo stesso
+// refresh invece di spararne uno a testa.
+let _refreshPromise: Promise<boolean> | null = null;
+function refreshSessionOnce(): Promise<boolean> {
+  if (!_refreshPromise) {
+    _refreshPromise = supabase.auth
+      .refreshSession()
+      .then(({ data, error }) => !error && !!data.session)
+      .catch(() => false)
+      .finally(() => {
+        _refreshPromise = null;
+      });
+  }
+  return _refreshPromise;
+}
+
+// Gestione errori globali (es. 401 Unauthorized) — un solo retry-con-refresh prima di
+// arrendersi: solo se anche il refresh fallisce (refresh token davvero scaduto/revocato)
+// consideriamo la sessione scaduta per davvero e forziamo il logout.
+let _isHandling401 = false; // evita loop multipli di logout se più retry falliscono insieme
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const config = error.config;
+    if (error.response?.status === 401 && config && !config._retriedAfterRefresh) {
+      config._retriedAfterRefresh = true;
+      const refreshed = await refreshSessionOnce();
+      if (refreshed) {
+        return api(config); // riprova la stessa richiesta con il token rinnovato
+      }
+    }
+
     if (error.response?.status === 401 && !_isHandling401) {
       _isHandling401 = true;
       toast.error("Sessione scaduta. Effettua di nuovo il login.", { duration: 3000 });

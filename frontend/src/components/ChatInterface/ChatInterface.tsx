@@ -339,6 +339,30 @@ export default function ChatInterface() {
     };
   }, []);
 
+  // MOBILE KEYBOARD: .chat-input è ancorato con bottom:Npx dentro .chat-container fixed
+  // (vedi chat.css) — cioè al viewport di LAYOUT, non a quello VISIVO. Quando si apre la
+  // tastiera su iOS/Android il layout viewport non cambia, quindi il pannello di input resta
+  // dov'era e la tastiera ci si sovrappone sopra, nascondendolo. visualViewport.height invece
+  // si riduce quando la tastiera appare: usiamo la differenza per spingere il pannello sopra
+  // la tastiera via custom property, letta da chat.css solo nella media query mobile.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty("--kb-inset", `${inset}px`);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      root.style.removeProperty("--kb-inset");
+    };
+  }, []);
+
   const handleSend = async (text?: string) => {
     const msg = text || input.trim();
     if (!msg || loading) return;

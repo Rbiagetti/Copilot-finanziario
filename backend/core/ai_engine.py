@@ -1504,6 +1504,10 @@ PERIODO ASSOLUTO — la domanda cita date/un range specifico invece che "ultimi 
   - "spese del 20 luglio" → query_spending(date_from="__TODAY_YEAR__-07-20", date_to="__TODAY_YEAR__-07-20", group_by="none")
   - "dal 1 al 15 giugno per categoria" → query_spending(date_from="__TODAY_YEAR__-06-01", date_to="__TODAY_YEAR__-06-15", group_by="category")
   - "dettaglio di tutte in ordine cronologico tra il 13 e il 17 agosto" → query_spending(date_from="__TODAY_YEAR__-08-13", date_to="__TODAY_YEAR__-08-17", top_n=50, sort_by="chronological")
+  - "quanto ho speso dal 4 al 6 settembre senza considerare le spese casa?" → query_spending(date_from="__TODAY_YEAR__-09-04", date_to="__TODAY_YEAR__-09-06", group_by="none", exclude_category="casa")
+- Un range di date esplicito e un'esclusione/inclusione categoria NON si escludono a vicenda:
+  se la domanda ne cita entrambi, passali INSIEME nella stessa chiamata (date_from/date_to +
+  category o exclude_category) — non ignorare l'uno per applicare l'altro.
 - CONTINUITÀ CONVERSAZIONALE: se la domanda è un follow-up implicito su un range di date appena
   discusso nel turno precedente ("mostrami l'elenco completo", "quali sono i dettagli", "e per
   categoria X in quel periodo?"), riusa LO STESSO date_from/date_to del turno precedente — non
