@@ -15,6 +15,8 @@ const TransactionList = lazy(() => import("./components/TransactionList/Transact
 const ChatInterface = lazy(() => import("./components/ChatInterface/ChatInterface"));
 const BudgetPanel = lazy(() => import("./components/BudgetPanel/BudgetPanel"));
 const SettingsPanel = lazy(() => import("./components/Settings/SettingsPanel"));
+const PrivacyPolicy = lazy(() => import("./components/Legal/PrivacyPolicy"));
+const TermsPage = lazy(() => import("./components/Legal/TermsPage"));
 
 // Suspense fallback con timer — dopo 8s mostra pulsante Ricarica (critico per PWA senza browser reload)
 const LoadingFallback = () => {
@@ -145,6 +147,11 @@ function App() {
             una sessione di recupero temporanea che renderebbe isAuthenticated true, ma non
             deve portare dritti in dashboard prima di aver impostato la nuova password. */}
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        {/* Pagine legali: sempre pubbliche, indipendentemente dal login — richieste anche dalla
+            OAuth consent screen di Google, che deve poter linkare la privacy policy a freddo. */}
+        <Route path="/privacy" element={<Suspense fallback={<LoadingFallback />}><PrivacyPolicy /></Suspense>} />
+        <Route path="/terms" element={<Suspense fallback={<LoadingFallback />}><TermsPage /></Suspense>} />
 
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Wallet } from "lucide-react";
 import { signIn, signUp, signInWithGoogle, resetPasswordForEmail } from "../../lib/supabase";
 
@@ -157,6 +158,11 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
               </button>
             </>
           )}
+        </p>
+        <p className="login-legal-links">
+          <Link to="/privacy">Privacy policy</Link>
+          <span aria-hidden="true"> · </span>
+          <Link to="/terms">Termini di utilizzo</Link>
         </p>
       </div>
     </div>

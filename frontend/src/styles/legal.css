@@ -1,0 +1,107 @@
+/* ═══════════════════════════════════════════════════════════════
+   Legal pages — Privacy Policy / Termini (contenuto testuale, non form)
+   ═══════════════════════════════════════════════════════════════ */
+
+.legal-page {
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  padding: max(2.5rem, env(safe-area-inset-top, 0px)) 1.5rem max(2.5rem, env(safe-area-inset-bottom, 0px));
+  background: var(--navy-0);
+}
+
+.legal-card {
+  background: var(--surface-container);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 680px;
+  height: fit-content;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
+}
+
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.legal-back:hover { color: var(--accent); }
+
+.legal-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-bottom: 1.75rem;
+}
+
+.legal-card h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.legal-updated {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-bottom: 1.75rem;
+}
+
+.legal-card h2 {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 1.75rem 0 0.6rem;
+}
+
+.legal-card p {
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.65;
+  margin: 0 0 0.6rem;
+}
+
+.legal-card ul {
+  margin: 0 0 0.6rem;
+  padding-left: 1.2rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+.legal-card li { margin-bottom: 0.4rem; }
+
+.legal-card a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Link privacy/termini nel footer della login card */
+.login-legal-links {
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+.login-legal-links a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.login-legal-links a:hover { color: var(--accent); }
+
+@media (max-width: 480px) {
+  .legal-page { padding: 1.25rem; }
+  .legal-card { padding: 1.5rem 1.25rem; }
+  .legal-card h1 { font-size: 1.25rem; }
+}
