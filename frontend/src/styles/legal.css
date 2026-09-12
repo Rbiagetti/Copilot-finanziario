@@ -3,6 +3,13 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .legal-page {
+  /* width:100% è necessario perché .legal-page è figlia diretta di .app
+     (display:flex; flex-direction:row, vedi layout.css) — senza, come flex
+     item senza flex-grow si restringe al max-content del figlio (~680px+
+     padding) invece di riempire la riga, e il justify-content:center qui
+     sotto finisce per centrare la card in uno spazio già striminzito
+     attaccato al bordo sinistro anziché nell'intera larghezza pagina. */
+  width: 100%;
   min-height: 100dvh;
   display: flex;
   justify-content: center;
