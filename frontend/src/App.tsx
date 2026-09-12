@@ -26,7 +26,7 @@ const LoadingFallback = () => {
     return () => clearTimeout(t);
   }, []);
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", alignItems: "center", justifyContent: "center", gap: "1.25rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100vh", alignItems: "center", justifyContent: "center", gap: "1.25rem" }}>
       {!stuck ? (
         <div className="spin" style={{ width: 32, height: 32, border: "3px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%" }} />
       ) : (
