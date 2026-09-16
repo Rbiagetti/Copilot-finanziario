@@ -14,7 +14,7 @@ from backend.core.database import engine
 logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL = "qwen/qwen3.6-27b"
+MODEL = "qwen/qwen3.8-27b"
 
 client = OpenAI(
     api_key=GROQ_API_KEY,

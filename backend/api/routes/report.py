@@ -89,7 +89,7 @@ def _build_narrative(data: dict) -> dict:
     try:
         prompt = REPORT_NARRATIVE_PROMPT.format(**data)
         resp = _groq.chat.completions.create(
-            model="qwen/qwen3.6-27b",
+            model="qwen/qwen3.8-27b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=600,
