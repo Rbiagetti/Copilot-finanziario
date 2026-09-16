@@ -79,6 +79,14 @@ class VoiceService {
       // aborted = stop() chiamato dal codice — ignorato
       if (['no-speech', 'aborted'].includes(event.error)) return;
       options.onError(event.error);
+
+      // Errori permanenti (permesso negato, nessun microfono, mic bloccato dal browser):
+      // ritentare non serve, il prossimo _startInner() fallirebbe di nuovo con lo stesso
+      // errore. Senza questo, onend sotto riavvia ogni 150ms all'infinito, spammando
+      // l'utente con lo stesso toast decine di volte al secondo.
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+        this.activeOptions = null;
+      }
     };
 
     rec.onend = () => {

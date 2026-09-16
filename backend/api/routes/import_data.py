@@ -11,7 +11,7 @@ from backend.core.import_engine import (
     parse_upload, suggest_mapping, normalize_row, categorize_batch,
     split_expenses_and_income, ImportError_, TARGET_FIELDS, REQUIRED_FIELDS, PREVIEW_ROWS,
 )
-from backend.core.ai_engine import invalidate_anomaly_cache
+from backend.core.ai_engine import invalidate_anomaly_cache, activate_model_for_request
 from backend.api.auth import get_current_user
 from backend.api.routes.categories import get_active_category_names
 
@@ -22,9 +22,11 @@ router = APIRouter(prefix="/api/v1/transactions/import", tags=["import"])
 async def preview_import(
     file: UploadFile = File(...),
     current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Legge il file caricato (CSV/XLSX), propone un mapping colonne→campi (AI +
     euristica) e ritorna un'anteprima. Non scrive nulla sul DB."""
+    activate_model_for_request(db, current_user_id)
     content = await file.read()
     try:
         df = parse_upload(file.filename or "", content)
@@ -55,6 +57,7 @@ async def commit_import(
     """Riceve di nuovo il file + il mapping confermato dall'utente, normalizza tutte
     le righe, deduplica contro le transazioni esistenti, categorizza con AI le righe
     senza categoria mappata e importa quelle valide."""
+    activate_model_for_request(db, current_user_id)
     try:
         mapping_dict = json.loads(mapping)
     except json.JSONDecodeError:

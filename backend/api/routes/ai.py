@@ -2,13 +2,16 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
+from backend.core.database import get_db
 from backend.core.ai_engine import (
     generate_briefing,
     get_anomalies,
     get_anomaly_detail,
     get_anomalies_for_month,
     invalidate_anomaly_cache,
+    activate_model_for_request,
 )
 from backend.api.auth import get_current_user
 
@@ -20,8 +23,10 @@ _DETECTION_TYPES = ("amount_spike", "new_merchant", "frequency_spike", "duplicat
 @router.get("/briefing")
 async def briefing(
     current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Briefing AI giornaliero con 3 insight e un'azione consigliata. Cache 1h — filtrato per user_id."""
+    activate_model_for_request(db, current_user_id)
     # generate_briefing chiama Groq (I/O) — eseguito in thread pool per non bloccare l'event loop
     return await asyncio.to_thread(generate_briefing, current_user_id)
 
@@ -29,11 +34,13 @@ async def briefing(
 @router.get("/anomalies")
 async def list_anomalies(
     current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Ritorna anomalie del mese corrente.
     Usa cache in memoria se disponibile.
     """
+    activate_model_for_request(db, current_user_id)
     today = date.today()
     result = await asyncio.to_thread(
         get_anomalies_for_month,
@@ -48,11 +55,13 @@ async def list_anomalies(
 @router.post("/anomalies/refresh")
 async def refresh_anomalies(
     current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Utente clicca 'Refresh anomalies'.
     Ricalcola con force_refresh=True per il mese corrente.
     """
+    activate_model_for_request(db, current_user_id)
     today = date.today()
 
     # Invalida cache per il mese corrente
@@ -80,8 +89,10 @@ async def anomaly_detail(
     tx_id: int,
     detection_type: str = "amount_spike",
     current_user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Dettaglio statistico completo per una singola anomalia (calcolato on-demand) — filtrato per user_id."""
+    activate_model_for_request(db, current_user_id)
     detail = await asyncio.to_thread(get_anomaly_detail, tx_id, detection_type, current_user_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Transazione non trovata")

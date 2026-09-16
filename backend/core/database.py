@@ -87,6 +87,17 @@ class ChatHistory(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class UserSettings(Base):
+    """Preferenze per-utente. Se ai_model è null, l'utente usa il default globale
+    (backend.core.ai_engine.DEFAULT_MODEL) — solo chi vuole scegliere un modello
+    diverso ha una riga con ai_model valorizzato."""
+    __tablename__ = "user_settings"
+
+    user_id = Column(String(36), primary_key=True)  # Supabase UUID
+    ai_model = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

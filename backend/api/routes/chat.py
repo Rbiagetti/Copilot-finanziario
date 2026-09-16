@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from openai import NotFoundError
 import json
 
 from backend.core.database import get_db, ChatHistory
-from backend.core.ai_engine import chat_with_ai, get_llm_stats, MAX_QUESTION_CHARS
+from backend.core.ai_engine import chat_with_ai, get_llm_stats, activate_model_for_request, MAX_QUESTION_CHARS
 from backend.api.models.schemas import ChatRequest, ChatResponse
 from backend.api.auth import get_current_user
+
+MODEL_UNAVAILABLE_MSG = "Il modello AI selezionato non è più disponibile su Groq. Vai in Impostazioni per sceglierne un altro."
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -22,8 +25,11 @@ async def chat(
     if not message:
         raise HTTPException(status_code=400, detail="Messaggio vuoto")
 
+    activate_model_for_request(db, current_user_id)
     try:
         result = chat_with_ai(message, request.history)
+    except NotFoundError:
+        raise HTTPException(422, MODEL_UNAVAILABLE_MSG)
     except Exception as e:
         raise HTTPException(500, f"Errore AI: {str(e)}")
 

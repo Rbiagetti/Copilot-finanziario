@@ -226,6 +226,24 @@ export const sendChat = (message: string, history: { role: string; content: stri
 export const parseNatural = (text: string) =>
   api.post<Transaction>("/transactions/parse-natural", { text });
 
+export interface AiModelInfo {
+  id: string;
+  owned_by: string | null;
+  label: string;
+  description: string | null;
+}
+
+export interface AiModelSettings {
+  current: string;
+  default: string;
+  available: AiModelInfo[];
+  current_is_valid: boolean | null;
+}
+
+export const getAiModelSettings = () => api.get<AiModelSettings>("/settings/ai-model");
+export const updateAiModelSettings = (model: string) =>
+  api.put<{ current: string }>("/settings/ai-model", { model });
+
 export const getForecast = () => api.get<ForecastData>("/analytics/forecast");
 export const getMonthlyHistory = (months = 6) => api.get<{ month: string; label: string; total: number }[]>(`/analytics/monthly-history?months=${months}`);
 export const getBriefing = () => api.get<BriefingData>("/ai/briefing");

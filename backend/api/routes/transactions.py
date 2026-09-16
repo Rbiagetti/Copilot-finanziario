@@ -13,7 +13,8 @@ from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import (
     TransactionCreate, TransactionResponse, TransactionUpdate, CATEGORIES
 )
-from backend.core.ai_engine import invalidate_anomaly_cache
+from backend.core.ai_engine import invalidate_anomaly_cache, get_model_for_user, client as _ai_client
+from openai import NotFoundError
 from backend.api.auth import get_current_user
 from backend.api.routes.categories import get_active_category_names
 
@@ -332,13 +333,7 @@ async def parse_natural_language(
     db: Session = Depends(get_db)
 ):
     """Parsa testo in linguaggio naturale e crea una transazione."""
-    import os, json
-    from openai import OpenAI
-
-    client = OpenAI(
-        api_key=os.getenv("GROQ_API_KEY", ""),
-        base_url="https://api.groq.com/openai/v1",
-    )
+    import json
 
     today = date.today()
     now_time = datetime.now().strftime("%H:%M")
@@ -359,16 +354,22 @@ async def parse_natural_language(
         "Riconosci espressioni come 'alle 18', 'alle 18:30', 'stamattina' (→ 09:00), 'a pranzo' (→ 13:00), 'a cena' (→ 20:00)."
     )
 
-    response = client.chat.completions.create(
-        model="qwen/qwen3.8-27b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": data.text},
-        ],
-        temperature=0,
-        max_tokens=500,
-        reasoning_effort="none",
-    )
+    try:
+        response = _ai_client.chat.completions.create(
+            model=get_model_for_user(db, current_user_id),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": data.text},
+            ],
+            temperature=0,
+            max_tokens=500,
+            reasoning_effort="none",
+        )
+    except NotFoundError:
+        raise HTTPException(
+            422,
+            "Il modello AI selezionato non è più disponibile su Groq. Vai in Impostazioni per sceglierne un altro.",
+        )
 
     raw = response.choices[0].message.content.strip()
     try:

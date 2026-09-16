@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import MonthlyReport from "./MonthlyReport";
 import AiImporter from "./AiImporter";
 import CategoryManager from "./CategoryManager";
+import AiModelSettings from "./AiModelSettings";
 import { useAuthStore } from "../../store/authStore";
 import { linkGoogleIdentity, getLinkedProviders } from "../../lib/supabase";
 
@@ -99,6 +100,7 @@ export default function SettingsPanel() {
       </div>
 
       <CategoryManager />
+      <AiModelSettings />
       <AiImporter />
       <MonthlyReport />
     </div>

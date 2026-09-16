@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import io
 import json
-import os
 from calendar import monthrange
 from datetime import date, datetime
 from typing import Optional
@@ -15,16 +14,9 @@ from sqlalchemy.orm import Session
 
 from backend.core.database import get_db, Transaction, Budget
 from backend.api.auth import get_current_user
+from backend.core.ai_engine import client as _groq, get_model_for_user
 
 router = APIRouter(prefix="/api/v1/report", tags=["report"])
-
-# ── Groq client (same as ai_engine) ─────────────────────────────────────────
-from openai import OpenAI as _OpenAI
-
-_groq = _OpenAI(
-    api_key=os.getenv("GROQ_API_KEY", ""),
-    base_url="https://api.groq.com/openai/v1",
-)
 
 REPORT_NARRATIVE_PROMPT = """\
 Sei FinCopilot. Genera una narrativa di analisi finanziaria per il report mensile di {month_label}.
@@ -85,11 +77,11 @@ def _bar_html(pct: float, fill_hex: str, track_hex: str, width_px: int = 130, he
     return f'<table style="width:{width_px}px; border-collapse:collapse;"><tr>{cells}</tr></table>'
 
 
-def _build_narrative(data: dict) -> dict:
+def _build_narrative(data: dict, model: str) -> dict:
     try:
         prompt = REPORT_NARRATIVE_PROMPT.format(**data)
         resp = _groq.chat.completions.create(
-            model="qwen/qwen3.8-27b",
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=600,
@@ -453,7 +445,7 @@ async def monthly_report(
         "top_cat_amount": _fmt_eur(top_cat["total"]),
         "top_cat_pct":    top_cat["pct"],
         "over_budget_cats": ", ".join(over_cats) if over_cats else "nessuna",
-    })
+    }, model=get_model_for_user(db, current_user_id))
 
     # ── GENERA PDF ───────────────────────────────────────────────────────────
     pdf_bytes = _build_pdf(
@@ -595,7 +587,7 @@ async def generate_monthly_report(
             "top_cat_amount": _fmt_eur(top_cat["total"]),
             "top_cat_pct": top_cat["pct"],
             "over_budget_cats": ", ".join(over_cats) if over_cats else "nessuna",
-        })
+        }, model=get_model_for_user(db, current_user_id))
 
         # STEP 2: Genera PDF
         pdf_bytes = _build_pdf(

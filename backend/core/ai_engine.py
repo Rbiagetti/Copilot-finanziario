@@ -3,23 +3,97 @@ import re
 import json
 import logging
 import time as _time
+from contextvars import ContextVar
 from datetime import date, timedelta
 from collections import defaultdict
 
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from openai import OpenAI
 
-from backend.core.database import engine
+from backend.core.database import engine, UserSettings
 
 logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL = "qwen/qwen3.8-27b"
+DEFAULT_MODEL = "qwen/qwen3.8-27b"
+MODEL = DEFAULT_MODEL  # fallback per i pochi punti senza request/utente espliciti
 
 client = OpenAI(
     api_key=GROQ_API_KEY,
     base_url="https://api.groq.com/openai/v1",
 )
+
+# Modello attivo per la request corrente — un ContextVar (non una variabile globale
+# mutabile) perché FastAPI serve richieste concorrenti sullo stesso event loop: due
+# utenti con modelli diversi in volo insieme non devono "rubarsi" il modello a vicenda.
+_model_ctx: ContextVar[str] = ContextVar("model_ctx", default=DEFAULT_MODEL)
+
+
+def activate_model_for_request(db: Session, user_id: str) -> str:
+    """Da chiamare a inizio richiesta (route handler): risolve il modello dell'utente
+    e lo rende disponibile a tutte le chiamate LLM innescate da questa request."""
+    model = get_model_for_user(db, user_id)
+    _model_ctx.set(model)
+    return model
+
+
+def current_model() -> str:
+    return _model_ctx.get()
+
+# Selezione utente ristretta ai soli modelli Qwen: sono gli unici verificati compatibili
+# col resto della pipeline (risposte JSON pulite su parsing/chat/report — GPT-OSS su Groq
+# rompe sia il parsing che la chat, gli altri modelli del catalogo Groq sono audio,
+# classificatori di moderazione, o sistemi agentici con tool-use che ignorano l'istruzione
+# "rispondi solo con JSON"). Un futuro qwen3.9 ecc. compare in automatico via regex, senza
+# bisogno di toccare questo file.
+_MODEL_ALLOW_PATTERN = re.compile(r"qwen", re.IGNORECASE)
+
+# Etichetta e descrizione leggibili per i modelli noti — mostrate nel selettore in
+# Impostazioni. Un modello nuovo non ancora mappato qui resta comunque selezionabile,
+# solo con una descrizione generica (fallback sull'id grezzo).
+_MODEL_METADATA = {
+    "qwen/qwen3.8-27b": {
+        "label": "Qwen 3.8 27B",
+        "description": "Modello di default — bilanciato tra qualità e velocità.",
+    },
+}
+
+
+def get_model_for_user(db: Session, user_id: str) -> str:
+    """Modello attivo per l'utente: la sua preferenza se l'ha impostata, altrimenti il default globale."""
+    row = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    return row.ai_model if row and row.ai_model else DEFAULT_MODEL
+
+
+def set_model_for_user(db: Session, user_id: str, model_id: str) -> str:
+    row = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if row is None:
+        row = UserSettings(user_id=user_id, ai_model=model_id)
+        db.add(row)
+    else:
+        row.ai_model = model_id
+    db.commit()
+    return model_id
+
+
+def list_available_models() -> list[dict]:
+    """Interroga Groq e ritorna solo i modelli Qwen disponibili in questo momento
+    (vedi _MODEL_ALLOW_PATTERN) — auto-detect: se Groq aggiunge/rimuove una versione,
+    il selettore in Impostazioni si aggiorna da solo, senza bisogno di un deploy."""
+    resp = client.models.list()
+    models = [
+        {
+            "id": m.id,
+            "owned_by": getattr(m, "owned_by", None),
+            "label": _MODEL_METADATA.get(m.id, {}).get("label", m.id),
+            "description": _MODEL_METADATA.get(m.id, {}).get("description")
+                or "Modello Qwen disponibile su Groq.",
+        }
+        for m in resp.data
+        if _MODEL_ALLOW_PATTERN.search(m.id)
+    ]
+    return sorted(models, key=lambda x: x["id"])
 
 # ─── BLOCK A — CONSTANTS & PRE-FILTER ────────────────────────────────────────
 
@@ -164,7 +238,7 @@ def _llm_call(
         temperature = 0.0
 
     kwargs: dict = {
-        "model": MODEL,
+        "model": current_model(),
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,

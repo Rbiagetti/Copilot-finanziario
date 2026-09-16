@@ -206,7 +206,7 @@ def suggest_mapping(columns: list[str], sample_rows: list[dict]) -> dict[str, Op
     mapping = _heuristic_mapping(columns)
 
     try:
-        from backend.core.ai_engine import client, MODEL, GROQ_API_KEY
+        from backend.core.ai_engine import client, current_model, GROQ_API_KEY
         if not GROQ_API_KEY:
             return mapping
 
@@ -232,7 +232,7 @@ def suggest_mapping(columns: list[str], sample_rows: list[dict]) -> dict[str, Op
             '"category": null, "account": null}'
         )
         resp = client.chat.completions.create(
-            model=MODEL,
+            model=current_model(),
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=300,
@@ -411,7 +411,7 @@ def categorize_batch(descriptions: list[str], categories: Optional[list[str]] = 
         return []
     allowed = categories if categories is not None else CATEGORIES
     try:
-        from backend.core.ai_engine import client, MODEL, GROQ_API_KEY
+        from backend.core.ai_engine import client, current_model, GROQ_API_KEY
         if not GROQ_API_KEY:
             return ["altro"] * len(descriptions)
 
@@ -428,7 +428,7 @@ def categorize_batch(descriptions: list[str], categories: Optional[list[str]] = 
                 f"{numbered}"
             )
             resp = client.chat.completions.create(
-                model=MODEL,
+                model=current_model(),
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=1000,
