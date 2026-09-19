@@ -1,15 +1,46 @@
+import { useEffect, useRef } from "react";
+
 const BARS = 32;
+const IDLE_LEVEL = 0.35;
 
 interface Props {
-  speaking: boolean;
+  // Timestamp (performance.now) dell'ultimo risultato vocale; 0 = ancora nessuno.
+  activityRef: React.RefObject<number>;
+  // Tempo in cui l'"energia" cala da piena a zero dopo l'ultimo risultato.
+  decayMs: number;
 }
 
-// Barre "equalizer". Il ballo (elemento interno) gira sempre; l'ampiezza (barra esterna)
-// sale in fretta quando si parla e scende piano quando si smette, così non si blocca di
-// colpo. Durata/ritardo/picco per barra sono deterministici (nessun Math.random nel render).
-export default function VoiceWaveform({ speaking }: Props) {
+// Barre "equalizer" con un'ampiezza continua invece di due stati on/off: a ogni risultato
+// vocale l'energia torna piena e poi cala linearmente in decayMs; il livello visibile la
+// insegue con attacco rapido e rilascio lento. Una pausa breve tra due parole non fa
+// crollare le barre, e quando la registrazione si chiude per silenzio sono già a riposo.
+// Il livello va nella custom property --level via rAF (nessun re-render React).
+export default function VoiceWaveform({ activityRef, decayMs }: Props) {
+  const waveRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = waveRef.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.style.setProperty("--level", "0.6");
+      return;
+    }
+    let level = IDLE_LEVEL;
+    let raf = 0;
+    const tick = () => {
+      const last = activityRef.current;
+      const energy = last ? Math.max(0, 1 - (performance.now() - last) / decayMs) : 0;
+      const target = IDLE_LEVEL + (1 - IDLE_LEVEL) * energy;
+      level += (target - level) * (target > level ? 0.3 : 0.1);
+      el.style.setProperty("--level", level.toFixed(3));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [activityRef, decayMs]);
+
   return (
-    <div className={`voice-wave${speaking ? " voice-wave--speaking" : ""}`} aria-hidden="true">
+    <div ref={waveRef} className="voice-wave" aria-hidden="true">
       {Array.from({ length: BARS }, (_, i) => (
         <span key={i} className="voice-bar">
           <i
