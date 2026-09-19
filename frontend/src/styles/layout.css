@@ -6,7 +6,7 @@
 
    Desktop  > 1024px : sidebar 220px vertical, labels visibili
    Tablet  768–1024px: sidebar 60px icon-only
-   Mobile   < 768px  : bottom nav a barra squadrata full-width (56px)
+   Mobile   < 768px  : bottom nav a barra squadrata full-width (48px)
    ═══════════════════════════════════════════════════════════════ */
 
 /* === APP WRAPPER === */
@@ -302,8 +302,8 @@
     height: auto;
     align-self: stretch;
     /* Icona centrata nell'intero blocco (compresa la fascia --nav-reserve): senza etichette
-       non serve più un'"altezza del testo" da preservare; con icone da 24px il bordo basso
-       resta ~9px sopra l'indicatore Home. */
+       non serve più un'"altezza del testo" da preservare; con icone da 20px il bordo basso
+       resta ~12px sopra l'indicatore Home. */
     padding-bottom: 0;
     font-size: 0.5625rem; /* 9px */
     letter-spacing: 0.04em;
@@ -321,8 +321,8 @@
   .nav-item span { display: none; }
 
   .nav-item svg {
-    width: 24px !important;
-    height: 24px !important;
+    width: 20px !important;
+    height: 20px !important;
     stroke-width: 1.5;
     flex-shrink: 0;
     color: inherit;

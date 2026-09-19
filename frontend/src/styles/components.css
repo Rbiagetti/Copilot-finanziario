@@ -665,6 +665,14 @@ button, input, select, textarea { font-family: var(--font-mono); }
   .chat-input input {
     font-size: 16px !important;
   }
+
+  /* Il testo digitato deve restare 16px (sennò iOS zooma al focus), ma il placeholder è
+     un pseudo-elemento con font-size suo e non innesca lo zoom: qui può essere più piccolo,
+     altrimenti "es. pranzo 12 euro al bar" era il testo più grosso di tutta la UI. */
+  input::placeholder,
+  textarea::placeholder {
+    font-size: 13px;
+  }
 }
 
 @media (max-width: 767px) {
