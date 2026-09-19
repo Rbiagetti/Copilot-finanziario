@@ -675,8 +675,8 @@ button, input, select, textarea { font-family: var(--font-mono); }
     align-items: center !important;
     justify-content: center !important;
     /* Rispetta notch/dynamic island in alto e nav bar in basso */
-    padding: calc(env(safe-area-inset-top, 0px) + 1rem) 1rem
-             calc(var(--bottomnav-h, 64px) + env(safe-area-inset-bottom, 0px) + 1rem) !important;
+    padding: calc(var(--safe-top) + 1rem) 1rem
+             calc(var(--bottomnav-h, 64px) + var(--safe-bottom) + 1rem) !important;
     z-index: 9999 !important;
     background: rgba(0,0,0,0.8) !important;
     backdrop-filter: none !important;
@@ -689,9 +689,9 @@ button, input, select, textarea { font-family: var(--font-mono); }
        calcolo non si riaggiorna in modo affidabile e il pulsante Salva in fondo al form
        finisce nascosto sotto la tastiera senza modo di raggiungerlo. */
     max-height: calc(100svh
-      - env(safe-area-inset-top, 0px)
+      - var(--safe-top)
       - var(--bottomnav-h, 64px)
-      - env(safe-area-inset-bottom, 0px)
+      - var(--safe-bottom)
       - 2rem) !important;
     /* Non l'intero box: solo .edit-form scrolla, header e footer (pulsante Salva)
        restano sempre visibili — vedi .modal-box base per il display:flex column. */

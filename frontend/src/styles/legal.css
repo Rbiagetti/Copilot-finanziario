@@ -13,7 +13,7 @@
   min-height: 100dvh;
   display: flex;
   justify-content: center;
-  padding: max(2.5rem, env(safe-area-inset-top, 0px)) 1.5rem max(2.5rem, env(safe-area-inset-bottom, 0px));
+  padding: max(2.5rem, var(--safe-top)) 1.5rem max(2.5rem, var(--safe-bottom));
   background: transparent;
 }
 
