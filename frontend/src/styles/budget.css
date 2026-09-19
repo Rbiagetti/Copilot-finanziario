@@ -10,65 +10,68 @@
   align-items: flex-end;
 }
 .budget-form select, .budget-form input {
-  background: var(--glass-1);
+  background: var(--bg-input);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   padding: 0.6rem 0.85rem;
   color: var(--text);
   font-size: 0.875rem;
+  caret-color: #fff;
 }
+.budget-form select:focus, .budget-form input:focus { border-color: var(--glass-border-hi); outline: none; box-shadow: none; }
+.budget-form input::placeholder { color: var(--fg-dim); }
 .budget-form .btn-primary { width: auto; padding: 0.6rem 1.2rem; }
 
-.budget-list { display: flex; flex-direction: column; gap: 1rem; }
+.budget-list { display: flex; flex-direction: column; gap: 0.75rem; }
 
 .budget-card {
-  background: var(--surface-container);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-left-width: 2px;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
   padding: 1.25rem;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 .budget-card:hover { border-color: var(--glass-border-hi); }
-.budget-card.over { border-color: rgba(255,77,109,0.35); box-shadow: 0 0 20px rgba(255,77,109,0.08); }
-.budget-card.warning { border-color: rgba(245,166,35,0.35); }
+.budget-card.over { border-left-color: var(--danger); }
+.budget-card.warning { border-left-color: var(--warning); }
 
 .budget-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
-.budget-cat { font-weight: 600; flex: 1; }
-.budget-pct { font-weight: 700; font-size: 1.05rem; }
+.budget-cat { font-weight: 500; flex: 1; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.75rem; }
+.budget-pct { font-weight: 600; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.budget-card.over .budget-pct { color: var(--danger); }
+.budget-card.warning .budget-pct { color: var(--warning); }
 
 .budget-bar {
-  height: 6px; background: var(--glass-1);
-  border-radius: 3px; overflow: hidden; margin-bottom: 0.5rem;
+  height: 4px; background: var(--glass-2);
+  border-radius: 0; overflow: hidden; margin-bottom: 0.5rem;
 }
 .budget-fill {
-  height: 100%; border-radius: 3px;
-  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  height: 100%; border-radius: 0;
+  background: var(--accent);
   transition: width 0.6s var(--ease-out);
-  box-shadow: 0 0 10px var(--accent-glow);
+  box-shadow: none;
 }
-.budget-card.warning .budget-fill {
-  background: linear-gradient(90deg, #ffb77d, #b56a45);
-  box-shadow: 0 0 10px rgba(255, 183, 125, 0.28);
-}
-.budget-card.over .budget-fill {
-  background: linear-gradient(90deg, #ffb4ab, #e67216);
-  box-shadow: 0 0 10px rgba(255, 180, 171, 0.30);
-}
+.budget-card.warning .budget-fill { background: var(--warning); box-shadow: none; }
+.budget-card.over .budget-fill { background: var(--danger); box-shadow: none; }
 
-.budget-details { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); }
+.budget-details { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .budget-emoji {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   width: 30px; height: 30px;
-  border-radius: var(--radius-sm);
-  background: var(--glass-1);
-  color: var(--accent);
+  border-radius: 0;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-dim);
 }
 .budget-header .btn-icon { margin-left: auto; opacity: 0.4; transition: opacity var(--duration-fast); }
 .budget-card:hover .budget-header .btn-icon { opacity: 1; }
 
 .empty-budget { text-align: center; padding: 3rem; color: var(--text-muted); }
-.empty-hint { font-size: 0.78rem; margin-top: 0.5rem; opacity: 0.7; }
+.empty-hint { font-size: 0.78rem; margin-top: 0.5rem; color: var(--text-dim); }
 
 /* === BUDGET RESPONSIVE === */
 @media (max-width: 767px) {

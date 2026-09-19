@@ -5,6 +5,7 @@ import type { ChatResponse } from "../../api/client";
 import { Send, Bot, User, RefreshCw, Mic, MicOff } from "lucide-react";
 import { voiceService } from "../../utils/voiceService";
 import { useChartColors } from "../../hooks/useTheme";
+import { CATEGORY_COLOR } from "../../lib/categoryIcons";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Cell,
@@ -33,9 +34,10 @@ interface Message {
   reasoning_steps?: ReasoningStep[];
 }
 
-const COLORS = [
-  "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",
-  "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#64748b",
+// Sequenza di fallback (tinte di CATEGORY_COLOR) per barre che non corrispondono a una categoria
+const FALLBACK_COLORS = [
+  CATEGORY_COLOR.cibo, CATEGORY_COLOR.trasporti, CATEGORY_COLOR.casa,
+  CATEGORY_COLOR.svago, CATEGORY_COLOR.lavoro, CATEGORY_COLOR.formazione,
 ];
 
 // C-2: Escape HTML prima di applicare qualunque formatting — previene XSS
@@ -166,7 +168,7 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
 
   if (!chartData.data || chartData.data.length < 2) return null;
 
-  const tooltipStyle = { background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8 };
+  const tooltipStyle = { background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 0 };
   const tooltipLabelStyle = { color: cc.tooltipText };
   const tooltipItemStyle = { color: cc.tooltipItem };
   const manyItems = chartData.data.length > 6;
@@ -191,9 +193,9 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
             <Line
               type="monotone"
               dataKey="value"
-              stroke="#6366f1"
+              stroke="#ffffff"
               strokeWidth={2}
-              dot={chartData.data.length > 20 ? false : { fill: "#6366f1", r: 3 }}
+              dot={chartData.data.length > 20 ? false : { fill: "#ffffff", r: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -217,9 +219,12 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
           />
           <YAxis tick={{ fill: cc.tick, fontSize: 11 }} />
           <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} formatter={(v: any) => v !== undefined ? [`€${Number(v).toFixed(2)}`, "Totale"] : ["-", "Totale"]} />
-          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-            {chartData.data.map((_, i) => (
-              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+          <Bar dataKey="value" radius={[0, 0, 0, 0]}>
+            {chartData.data.map((d, i) => (
+              <Cell
+                key={i}
+                fill={CATEGORY_COLOR[d.name?.toString().toLowerCase()] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]}
+              />
             ))}
           </Bar>
         </BarChart>

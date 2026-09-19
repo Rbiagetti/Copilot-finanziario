@@ -42,8 +42,8 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <Wallet size={28} />
-        <span>FinCopilot</span>
+        <div className="logo-dots" aria-hidden="true"><i /><i /><i /></div>
+        <span>FINCOPILOT</span>
       </div>
       <nav className="sidebar-nav">
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
@@ -52,7 +52,7 @@ export default function Sidebar() {
             className={`nav-item ${currentView === key ? "active" : ""}`}
             onPointerDown={(e) => handleNavClick(e, key)}
           >
-            <Icon size={20} />
+            <Icon size={18} />
             <span>{label}</span>
           </button>
         ))}
@@ -66,7 +66,7 @@ export default function Sidebar() {
           aria-label="Disconnetti"
           style={{ width: "100%", justifyContent: "flex-start", color: "var(--text-dim)" }}
         >
-          <LogOut size={20} />
+          <LogOut size={18} />
           <span>{loggingOut ? "Uscita..." : "Disconnetti"}</span>
         </button>
       </div>

@@ -17,20 +17,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: "var(--surface-container-hi)",
+      background: "#000",
       border: "1px solid var(--glass-border-hi)",
-      borderRadius: 12,
+      borderRadius: 0,
       padding: "10px 14px",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
-      backdropFilter: "blur(12px)",
-      WebkitBackdropFilter: "blur(12px)",
       pointerEvents: "none",
       minWidth: 140,
     }}>
-      <p style={{ color: "var(--text)", fontWeight: 700, fontSize: "0.85rem", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid var(--glass-border)" }}>{label}</p>
+      <p style={{ color: "var(--text)", fontWeight: 600, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid var(--glass-border)" }}>{label}</p>
       {payload.map((item: any, i: number) => (
-        <p key={i} style={{ color: "var(--text-muted)", fontSize: "0.82rem", fontWeight: 500, margin: "3px 0" }}>
-          {item.name}: <span style={{ color: "var(--accent)", fontWeight: 700 }}>€{Number(item.value).toLocaleString("it-IT", { minimumFractionDigits: 2 })}</span>
+        <p key={i} style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 500, margin: "3px 0" }}>
+          {item.name}: <span style={{ color: "var(--text)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>€{Number(item.value).toLocaleString("it-IT", { minimumFractionDigits: 2 })}</span>
         </p>
       ))}
       {payload.length > 1 && (
@@ -233,35 +230,35 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ color: "var(--text-muted)" }}><Calendar size={20} /></div>
+          <div className="kpi-icon"><Calendar size={20} /></div>
           <div className="kpi-content">
             <span className="kpi-label">Spese mese scorso</span>
             <span className="kpi-value">€{stats.totalPrev.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</span>
           </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ color: "var(--accent)" }}><Wallet size={20} /></div>
+          <div className="kpi-icon"><Wallet size={20} /></div>
           <div className="kpi-content">
             <span className="kpi-label">Spesa totale</span>
             <span className="kpi-value">€{stats.totalAll.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</span>
           </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ color: "var(--accent)" }}><ListFilter size={20} /></div>
+          <div className="kpi-icon"><ListFilter size={20} /></div>
           <div className="kpi-content">
             <span className="kpi-label">Transazioni mese corrente</span>
             <span className="kpi-value">{stats.countCurrent}</span>
           </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ color: "var(--accent)" }}><TrendingUp size={20} /></div>
+          <div className="kpi-icon"><TrendingUp size={20} /></div>
           <div className="kpi-content">
             <span className="kpi-label">Transazioni totali</span>
             <span className="kpi-value">{stats.countTotal}</span>
           </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon" style={{ color: "var(--warning)" }}><BarChart2 size={20} /></div>
+          <div className="kpi-icon"><BarChart2 size={20} /></div>
           <div className="kpi-content">
             <span className="kpi-label">Spesa media al giorno</span>
             <span className="kpi-value">€{stats.avgPerDay.toFixed(2)}</span>
@@ -317,15 +314,21 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} vertical={false} />
               <XAxis dataKey="label" tick={{ fill: cc.tick, fontSize: 10 }} />
               <YAxis tick={{ fill: cc.tick, fontSize: 10 }} tickFormatter={v => `€${v}`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="recurring" stackId="1" name="Fissi" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
-              <Area type="monotone" dataKey="variable" stackId="1" name="Variabili" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.6} />
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: cc.neutral }} />
+              <Area type="monotone" dataKey="recurring" stackId="1" name="Fissi" stroke="#ffffff" fill="#ffffff" fillOpacity={0.1} strokeWidth={1.5} dot={false} />
+              <Area type="monotone" dataKey="variable" stackId="1" name="Variabili" stroke="#666666" fill="#666666" fillOpacity={0.35} strokeWidth={1.5} dot={false} />
               <Legend wrapperStyle={{ fontSize: "10px" }} iconSize={10} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
       </main>
+
+      {/* Footer di stato */}
+      <footer className="dashboard-status">
+        <span className="glyph-dot glyph-dot-green" aria-hidden="true" />
+        <span><span className="dashboard-status-count">{stats.countCurrent} transazioni</span> · mese corrente</span>
+      </footer>
     </div>
   );
 }
