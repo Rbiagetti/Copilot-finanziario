@@ -5,6 +5,7 @@ import { Toaster, ToastBar } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
 import TopBar from "./components/Layout/TopBar";
+import ConfirmHost from "./components/Layout/ConfirmHost";
 import LoginPage from "./components/Auth/LoginPage";
 import ResetPasswordPage from "./components/Auth/ResetPasswordPage";
 import { useAuthStore } from "./store/authStore";
@@ -172,6 +173,7 @@ function App() {
           );
         }}
       </Toaster>
+      <ConfirmHost />
       
       <Routes>
         <Route

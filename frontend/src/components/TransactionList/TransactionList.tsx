@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
 import { CategoryIcon, getCategoryColor } from "../../lib/categoryIcons";
+import { confirmAction } from "../../lib/confirmDialog";
 
 const MESI_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 
@@ -329,7 +330,12 @@ export default function TransactionList() {
   }, [sortedTxs, groupByDate]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Eliminare questa transazione?")) return;
+    if (!(await confirmAction({
+      title: "Elimina transazione",
+      message: "Vuoi eliminare questa transazione?",
+      confirmLabel: "Elimina",
+      danger: true,
+    }))) return;
     try {
       markTransactionsAsNew();
       await deleteTransaction(id);
@@ -423,7 +429,12 @@ export default function TransactionList() {
   const handleBulkDelete = async () => {
     const count = selectedIds.size;
     if (count === 0) return;
-    if (!confirm(`Eliminare ${count} transazion${count === 1 ? "e" : "i"}? L'azione non è reversibile.`)) return;
+    if (!(await confirmAction({
+      title: count === 1 ? "Elimina transazione" : `Elimina ${count} transazioni`,
+      message: `Eliminare ${count} transazion${count === 1 ? "e" : "i"}? L'azione non è reversibile.`,
+      confirmLabel: "Elimina",
+      danger: true,
+    }))) return;
     setBulkDeleting(true);
     try {
       markTransactionsAsNew();

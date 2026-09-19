@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { getCategoriesDetailed, createCategory, deleteCategory } from "../../api/client";
 import type { CustomCategory } from "../../api/client";
 import { CategoryIcon, getCategoryColor } from "../../lib/categoryIcons";
+import { confirmAction } from "../../lib/confirmDialog";
 import { useAppStore } from "../../store/appStore";
 
 export default function CategoryManager() {
@@ -45,10 +46,14 @@ export default function CategoryManager() {
   };
 
   const handleDelete = async (cat: CustomCategory) => {
-    if (!confirm(
-      `Eliminare "${cat.name}"? Non apparirà più tra le categorie disponibili per le nuove ` +
-      `transazioni. Le transazioni già registrate con questa categoria restano invariate.`
-    )) return;
+    if (!(await confirmAction({
+      title: "Elimina categoria",
+      message:
+        `Eliminare "${cat.name}"? Non apparirà più tra le categorie disponibili per le nuove ` +
+        `transazioni. Le transazioni già registrate con questa categoria restano invariate.`,
+      confirmLabel: "Elimina",
+      danger: true,
+    }))) return;
     setDeletingId(cat.id);
     try {
       await deleteCategory(cat.id);
