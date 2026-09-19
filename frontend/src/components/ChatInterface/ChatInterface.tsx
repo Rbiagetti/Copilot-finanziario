@@ -179,7 +179,7 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
       <div className="msg-chart-container">
         <h4 className="msg-chart-title">{chartData.title}</h4>
         <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={chartData.data} margin={{ bottom: manyItems ? 40 : 5 }}>
+          <LineChart accessibilityLayer={false} data={chartData.data} margin={{ bottom: manyItems ? 40 : 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
             <XAxis
               dataKey="name"
@@ -208,7 +208,7 @@ function ChatChart({ chartData }: { chartData: { type: string; data: { name: str
     <div className="msg-chart-container">
       <h4 className="msg-chart-title">{chartData.title}</h4>
       <ResponsiveContainer width="100%" height={manyItems ? 280 : 250}>
-        <BarChart data={chartData.data} margin={{ bottom: manyItems ? 50 : 5 }}>
+        <BarChart accessibilityLayer={false} data={chartData.data} margin={{ bottom: manyItems ? 50 : 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={cc.gridStroke} />
           <XAxis
             dataKey="name"
@@ -355,15 +355,23 @@ export default function ChatInterface() {
     if (!vv) return;
     const root = document.documentElement;
     const update = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // Solo mentre l'input della chat ha il focus: un cambio del visual viewport senza
+      // tastiera (es. iOS che sposta la vista dopo un tocco su un elemento focusabile) non
+      // deve spostare il pannello, altrimenti sembra che lo scroll si "blocchi".
+      const typing = !!document.activeElement?.closest?.(".chat-input");
+      const inset = typing ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
       root.style.setProperty("--kb-inset", `${inset}px`);
     };
     update();
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
+    document.addEventListener("focusin", update);
+    document.addEventListener("focusout", update);
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      document.removeEventListener("focusin", update);
+      document.removeEventListener("focusout", update);
       root.style.removeProperty("--kb-inset");
     };
   }, []);
