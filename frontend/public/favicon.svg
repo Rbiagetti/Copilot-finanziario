@@ -1,63 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffb27d"/>
-      <stop offset="0.55" stop-color="#ff8c42"/>
-      <stop offset="1" stop-color="#f26a1c"/>
-    </linearGradient>
-    <linearGradient id="bar1" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffd199"/>
-      <stop offset="1" stop-color="#ff9c4f"/>
-    </linearGradient>
-    <linearGradient id="bar2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffb27d"/>
-      <stop offset="1" stop-color="#ff8c42"/>
-    </linearGradient>
-    <linearGradient id="bar3" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ff8c42"/>
-      <stop offset="1" stop-color="#e76a1c"/>
-    </linearGradient>
-    <linearGradient id="coin" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffd56b"/>
-      <stop offset="1" stop-color="#f5a62b"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Rounded square backdrop -->
-  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
-
-  <!-- Receipt card with bar chart -->
-  <g transform="translate(160 128)">
-    <rect x="0" y="0" width="210" height="170" rx="14" fill="#fff5e8"/>
-    <!-- Euro sign -->
-    <text x="22" y="48" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="36" font-weight="800" fill="#c85a14">€</text>
-    <!-- Text lines -->
-    <rect x="60" y="28" width="110" height="8" rx="4" fill="#f6c49a"/>
-    <rect x="60" y="44" width="72" height="8" rx="4" fill="#f6c49a"/>
-    <!-- Bars -->
-    <rect x="30" y="92" width="26" height="58" rx="6" fill="url(#bar1)"/>
-    <rect x="72" y="74" width="26" height="76" rx="6" fill="url(#bar2)"/>
-    <rect x="114" y="56" width="26" height="94" rx="6" fill="url(#bar3)"/>
-    <rect x="156" y="38" width="26" height="112" rx="6" fill="#e76a1c"/>
-  </g>
-
-  <!-- Wallet body -->
-  <g>
-    <path d="M132 288 C132 270 146 256 164 256 L362 256 C380 256 394 270 394 288 L394 392 C394 410 380 424 362 424 L164 424 C146 424 132 410 132 392 Z"
-          fill="#c16a2a"/>
-    <!-- Wallet flap highlight -->
-    <path d="M132 296 C132 278 146 264 164 264 L362 264 C380 264 394 278 394 296 L394 312 L132 312 Z"
-          fill="#a85820" opacity="0.55"/>
-    <!-- Stitching -->
-    <rect x="146" y="326" width="234" height="2" rx="1" fill="#8a4417" opacity="0.35"/>
-    <!-- Clasp -->
-    <circle cx="220" cy="358" r="12" fill="#ffc36b"/>
-    <circle cx="220" cy="358" r="6" fill="#c85a14"/>
-  </g>
-
-  <!-- Gold coin with $ -->
-  <g transform="translate(340 340)">
-    <circle cx="40" cy="40" r="54" fill="url(#coin)" stroke="#e88c12" stroke-width="4"/>
-    <text x="40" y="56" text-anchor="middle" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="56" font-weight="800" fill="#9c5410">$</text>
-  </g>
+  <rect width="512" height="512" fill="#000000"/>
+  <circle cx="146" cy="256" r="30" fill="#ffffff" fill-opacity="0.35"/>
+  <circle cx="256" cy="256" r="30" fill="#ffffff" fill-opacity="0.65"/>
+  <circle cx="366" cy="256" r="30" fill="#ffffff"/>
 </svg>

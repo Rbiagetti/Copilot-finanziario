@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
-   FinCopilot — Design System v2 ("Graphite")
-   Mix Material 3 (Pixel) × Nothing Phone: base monocromatica scura,
-   un solo accento usato con parsimonia, forme moderate (niente pillole
-   di default), superfici piatte, tipografia tecnica/mono per i numeri.
+   FinCopilot — Design System v3 ("Second Brain")
+   Nero puro, Geist Mono ovunque, dot grid 24px, angoli squadrati,
+   niente ombre/blur/gradienti. Attivo = blocco bianco con testo nero.
    base.css: reset, tokens, body, typography, keyframes, scrollbar
    ═══════════════════════════════════════════════════════════════ */
 
@@ -11,105 +10,112 @@
 
 /* === DESIGN TOKENS === */
 :root {
-  /* Palette — graphite neutro (niente più base ambrata/glass) */
-  --navy-0: #111113;
-  --navy-1: #17171a;
-  --navy-2: #1e1e22;
-  --navy-3: #26262b;
+  /* Palette — nero puro */
+  --navy-0: #000000;
+  --navy-1: #000000;
+  --navy-2: #0a0a0a;
+  --navy-3: #111111;
 
-  --surface:              #17171a;
-  --surface-container:    #1e1e22;
-  --surface-container-hi: #27272c;
-  --surface-bright:       #323238;
-  --surface-variant:      #2c2c31;
+  --surface:              #0a0a0a;
+  --surface-container:    #0a0a0a;
+  --surface-container-hi: #111111;
+  --surface-bright:       #161616;
+  --surface-variant:      #111111;
 
-  --glass-0: rgba(255, 255, 255, 0.035);
-  --glass-1: rgba(255, 255, 255, 0.055);
-  --glass-2: rgba(255, 255, 255, 0.09);
-  --glass-3: rgba(255, 255, 255, 0.13);
-  --glass-border: rgba(255, 255, 255, 0.09);
-  --glass-border-hi: rgba(255, 255, 255, 0.18);
+  --glass-0: rgba(255, 255, 255, 0.02);
+  --glass-1: rgba(255, 255, 255, 0.04);
+  --glass-2: rgba(255, 255, 255, 0.07);
+  --glass-3: rgba(255, 255, 255, 0.10);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hi: rgba(255, 255, 255, 0.20);
 
-  /* Accento unico, sobrio: terracotta desaturato, usato solo per azioni/stati chiave */
-  --accent: #d9663f;
-  --accent-glow: rgba(217, 102, 63, 0.16);
-  --accent-soft: #e79273;
-  --accent-cyan: #9498a1;
-  --accent-cyan-glow: rgba(148, 152, 161, 0.14);
-  --accent-violet: #b56a45;
-  --accent-violet-glow: rgba(181, 106, 69, 0.14);
+  /* Accento = bianco (attivo = blocco bianco/testo nero) */
+  --accent: #ffffff;
+  --accent-glow: rgba(255, 255, 255, 0.10);
+  --accent-soft: #d4d4d4;
+  --accent-cyan: #666666;
+  --accent-cyan-glow: rgba(255, 255, 255, 0.06);
+  --accent-violet: #666666;
+  --accent-violet-glow: rgba(255, 255, 255, 0.06);
 
-  --success: #6ec684;
-  --success-glow: rgba(110, 198, 132, 0.18);
-  --warning: #d9a25f;
-  --warning-glow: rgba(217, 162, 95, 0.18);
-  --danger: #dd7972;
-  --danger-glow: rgba(221, 121, 114, 0.18);
+  --success: #34c759;
+  --success-glow: rgba(52, 199, 89, 0.16);
+  --warning: #ff9f0a;
+  --warning-glow: rgba(255, 159, 10, 0.16);
+  --danger: #ff3b30;
+  --danger-glow: rgba(255, 59, 48, 0.16);
 
-  --text: rgba(240, 240, 243, 0.96);
-  --text-muted: rgba(206, 206, 213, 0.72);
-  --text-dim: rgba(178, 178, 186, 0.62);
+  /* Testo su nero: 21:1 / 10:1 / 4.8:1 */
+  --text: #ffffff;
+  --text-muted: #b3b3b3;
+  --text-dim: #7a7a7a;
+  /* --fg-dim (3.1:1): SOLO placeholder e icone inattive.
+     --text-decor (1.6:1): SOLO bordi/separatori/pallini spenti, MAI come color: di testo. */
+  --fg-dim: #666666;
+  --text-decor: #333333;
+  --dot: rgba(255, 255, 255, 0.08);
+  --blue: #007aff;
 
-  --bg: var(--navy-1);
-  --bg-card: rgba(24, 24, 27, 0.92);
-  --bg-input: rgba(255, 255, 255, 0.04);
+  --bg: #000000;
+  --bg-card: #0a0a0a;
+  --bg-input: #111111;
   --border: var(--glass-border);
   --primary: var(--accent);
-  --primary-hover: #e79273;
+  --primary-hover: #d4d4d4;
 
   --sidebar-w: 220px;
-  /* Shape scale moderata (Material 3-ish): niente più border-radius:9999px di default */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-pill: 9999px; /* riservato a chip/fab/nav puntuali, non a tab/badge generici */
+  /* Shape scale squadrata */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-pill: 2px;
 
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: "Geist Mono", "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Prosa lunga (risposte AI, legal): ribaltabile su un sans con una riga */
+  --font-prose: var(--font-mono);
 
-  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1);
   --duration-fast: 180ms;
-  --duration-base: 280ms;
+  --duration-base: 220ms;
   --duration-slow: 420ms;
   --duration-theme: 520ms;
   --duration-micro: 140ms;
   --ease-spring-soft: cubic-bezier(0.22, 0.92, 0.24, 1);
   --ease-spring-snappy: cubic-bezier(0.2, 1.1, 0.2, 1);
 
-  --blur-xs: blur(8px);
-  --blur-sm: blur(16px);
-  --blur-md: blur(28px);
-  --blur-lg: blur(48px);
+  /* Niente blur nel design system: token mantenuti per compatibilità */
+  --blur-xs: blur(0px);
+  --blur-sm: blur(0px);
+  --blur-md: blur(0px);
+  --blur-lg: blur(0px);
 
   /* Layout heights */
-  --topbar-h: 56px;
-  --bottomnav-h: 72px; /* pill nav clearance: ~56px pill + 8px margin + 8px breathing */
+  --topbar-h: 48px;
+  --bottomnav-h: 56px; /* barra squadrata full-width ancorata al fondo */
 }
 
 /* === BODY & BACKGROUND === */
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
-  background: var(--navy-0);
-  background-attachment: fixed;
+  font-family: var(--font-mono);
+  background: #000;
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   scroll-behavior: smooth;
 }
 
-/* Glow di sfondo ridotto al minimo: un accenno, non un blob colorato diffuso */
+/* Dot grid 24px (stile Nothing Phone) */
 body::before {
   content: '';
   position: fixed;
-  width: 50vw; height: 38vh;
-  max-width: 640px; max-height: 460px;
-  background: radial-gradient(circle, rgba(217,102,63,0.045) 0%, transparent 72%);
-  top: -14%; right: -10%;
-  filter: blur(60px);
+  inset: 0;
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+  background-size: 24px 24px;
   pointer-events: none;
   z-index: 0;
 }
@@ -117,8 +123,7 @@ body::after { display: none; }
 
 html.theme-transitioning body::before,
 html.theme-transitioning body::after {
-  transition: opacity var(--duration-theme) var(--ease-spring-soft), filter var(--duration-theme) var(--ease-out);
-  filter: blur(8px);
+  transition: opacity var(--duration-theme) var(--ease-spring-soft);
   opacity: 0.65;
 }
 
@@ -134,23 +139,25 @@ html.theme-transitioning * {
 
 /* === TYPOGRAPHY === */
 h2 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   margin-bottom: 1.5rem;
   background: none !important;
   -webkit-text-fill-color: var(--text) !important;
   color: var(--text);
 }
 h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   margin-bottom: 1rem;
-  color: var(--text);
+  color: var(--text-dim);
 }
 h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  font-family: var(--font-mono);
 }
 .loading, .empty, .error {
   text-align: center;
@@ -159,20 +166,22 @@ h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
 }
 .capitalize { text-transform: capitalize; }
 
-/* Tipografia tecnica per i numeri (importi, KPI, statistiche): font monospazio,
-   tocco "Nothing/dot-matrix" che dà precisione e serietà ai dati finanziari. */
+/* Icone lucide sottili (una regola per tutte le 17 sorgenti) */
+.lucide { stroke-width: 1.25; }
+
+/* Numeri (importi, KPI, statistiche): stessa famiglia mono, distinti da peso + tabular-nums */
 .kpi-value, .tx-amount, .anomaly-val, .anomaly-card-amount,
 .tx-summary-total strong, .tx-date-total, .anomaly-stat-value {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* Etichetta tecnica (uppercase, tracking largo, mono) per header di sezione minori */
 .label-tech {
   font-family: var(--font-mono);
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.11em;
   font-size: 0.68rem;
   color: var(--text-dim);
   font-weight: 500;
@@ -182,9 +191,9 @@ h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes scaleUpFade {
-  0% { opacity: 0; transform: scale(0.96) translateY(20px); filter: blur(10px); }
-  /* transform:none e filter:none (non scale(1)/blur(0), visivamente identici ma NON
-     equivalenti per il browser): qualsiasi valore diverso da "none" — anche un blur(0) o
+  0% { opacity: 0; transform: translateY(8px); }
+  /* transform:none e filter:none al 100% (NON translateY(0)/scale(1)/blur(0), visivamente
+     identici ma NON equivalenti per il browser): qualsiasi valore diverso da "none" — anche un blur(0) o
      uno scale(1) — trasforma l'elemento in un "containing block" per i discendenti
      position:fixed. Con .animate-in usato su .transactions-page (che con fill-mode "both"
      mantiene lo stato finale dell'animazione dopo che è finita), questo rompeva il
@@ -228,29 +237,62 @@ h1, h2, h3, .kpi-value, .login-logo, .sidebar-logo, .msg-chart-title {
 
 .spin { animation: spin 1s linear infinite; }
 
+/* Glyph-style pulsing dot (semantica da Second Brain) */
+@keyframes glyph-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.glyph-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: glyph-pulse 2s ease-in-out infinite;
+}
+.glyph-dot-red   { background: var(--danger); }
+.glyph-dot-green { background: var(--success); }
+
+/* Dot grid come utility (per contenitori con sfondo proprio) */
+.dot-grid {
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* fade-in: stato finale con transform:none (translateY(0) creerebbe un containing
+   block per i discendenti position:fixed, vedi scaleUpFade) */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-in { animation: fade-in 0.3s ease forwards; }
+
 /* === SCROLLBAR GLOBAL === */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-2) transparent;
+  scrollbar-color: var(--text-decor) transparent;
 }
-*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar { width: 4px; height: 4px; }
 *::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: var(--glass-2); border-radius: 3px; }
+*::-webkit-scrollbar-thumb { background: var(--text-decor); border-radius: 0; }
 
 /* === GLOBAL UI STATE CLASSES === */
 
-/* Skeleton shimmer — base class for all placeholder loaders */
-.skeleton {
-  background: linear-gradient(90deg, var(--glass-1) 25%, var(--glass-2) 50%, var(--glass-1) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
-  border-radius: 6px;
+/* Skeleton — blocco piatto con pulse di opacità, base per tutti i placeholder */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
 }
-.skeleton-text  { height: 13px; border-radius: 6px; }
-.skeleton-title { height: 20px; border-radius: 8px; }
-.skeleton-card  { height: 80px; border-radius: var(--radius-md); }
-.skeleton-row   { height: 44px; border-radius: var(--radius-sm); }
-.skeleton-chart { height: 220px; border-radius: var(--radius-sm); }
+.skeleton {
+  background: #111;
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  border-radius: 0;
+}
+.skeleton-text  { height: 13px; border-radius: 0; }
+.skeleton-title { height: 20px; border-radius: 0; }
+.skeleton-card  { height: 80px; border-radius: 0; }
+.skeleton-row   { height: 44px; border-radius: 0; }
+.skeleton-chart { height: 220px; border-radius: 0; }
 
 /* is-loading: dims the element and blocks pointer events */
 .is-loading {

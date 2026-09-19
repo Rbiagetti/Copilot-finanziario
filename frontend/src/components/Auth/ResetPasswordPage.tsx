@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Wallet, KeyRound } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import toast from "react-hot-toast";
 import { supabase, updatePassword } from "../../lib/supabase";
 
@@ -62,8 +62,12 @@ export default function ResetPasswordPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <Wallet size={32} />
-          <span>FinCopilot</span>
+          <span style={{ display: "inline-flex", gap: 6 }} aria-hidden="true">
+            <span className="glyph-dot" />
+            <span className="glyph-dot" style={{ animationDelay: "0.3s" }} />
+            <span className="glyph-dot" style={{ animationDelay: "0.6s" }} />
+          </span>
+          <span style={{ fontSize: "1.1rem", fontWeight: 500, letterSpacing: "0.25em" }}>FINCOPILOT</span>
         </div>
         <p className="login-subtitle">Imposta una nuova password</p>
 

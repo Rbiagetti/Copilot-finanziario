@@ -1,4 +1,3 @@
-import { Wallet } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 
 const TITLES: Record<string, string> = {
@@ -15,9 +14,9 @@ export default function TopBar() {
     <header className="topbar">
       <div className="topbar-left">
         <div className="topbar-logo" aria-hidden="true">
-          <Wallet size={18} />
+          <div className="logo-dots"><i /><i /><i /></div>
         </div>
-        <span className="topbar-brand">FinCopilot</span>
+        <span className="topbar-brand">FINCOPILOT</span>
       </div>
       <div className="topbar-title">{TITLES[currentView] ?? ""}</div>
     </header>

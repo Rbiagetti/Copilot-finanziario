@@ -3,7 +3,7 @@ import { Tag, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { getCategoriesDetailed, createCategory, deleteCategory } from "../../api/client";
 import type { CustomCategory } from "../../api/client";
-import { CategoryIcon } from "../../lib/categoryIcons";
+import { CategoryIcon, getCategoryColor } from "../../lib/categoryIcons";
 import { useAppStore } from "../../store/appStore";
 
 export default function CategoryManager() {
@@ -94,7 +94,7 @@ export default function CategoryManager() {
             <span className="category-chip-group-label">Standard</span>
             <div className="category-chip-list">
               {standard.map((c) => (
-                <span key={c} className="category-chip category-chip--standard">
+                <span key={c} className="category-chip category-chip--standard" style={{ "--chip-color": getCategoryColor(c) } as React.CSSProperties}>
                   <CategoryIcon category={c} size={13} />
                   <span className="capitalize">{c}</span>
                 </span>
@@ -107,7 +107,7 @@ export default function CategoryManager() {
               <span className="category-chip-group-label">Personalizzate</span>
               <div className="category-chip-list">
                 {custom.map((c) => (
-                  <span key={c.id} className="category-chip category-chip--custom">
+                  <span key={c.id} className="category-chip category-chip--custom" style={{ "--chip-color": getCategoryColor(c.name) } as React.CSSProperties}>
                     <CategoryIcon category={c.name} size={13} />
                     <span className="capitalize">{c.name}</span>
                     <button

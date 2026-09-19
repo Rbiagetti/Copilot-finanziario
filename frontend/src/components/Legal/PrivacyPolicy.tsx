@@ -1,12 +1,19 @@
 import { Link } from "react-router-dom";
-import { Wallet, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export default function PrivacyPolicy() {
   return (
     <div className="legal-page">
       <div className="legal-card">
         <Link to="/login" className="legal-back"><ArrowLeft size={16} /> Torna al login</Link>
-        <div className="legal-logo"><Wallet size={26} /><span>FinCopilot</span></div>
+        <div className="legal-logo">
+          <span style={{ display: "inline-flex", gap: 5 }} aria-hidden="true">
+            <span className="glyph-dot" />
+            <span className="glyph-dot" style={{ animationDelay: "0.3s" }} />
+            <span className="glyph-dot" style={{ animationDelay: "0.6s" }} />
+          </span>
+          <span>FINCOPILOT</span>
+        </div>
         <h1>Informativa sulla privacy</h1>
         <p className="legal-updated">Ultimo aggiornamento: 9 settembre 2026</p>
 

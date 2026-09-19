@@ -5,9 +5,11 @@
 
 /* === TRANSACTION FORM === */
 .transaction-form {
-  background: var(--glass-1);
+  background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
   padding: 1.5rem;
   /* niente margin-bottom: .transactions-page è un flex column con "gap" proprio,
      un margine extra qui raddoppierebbe lo spazio verso la lista sottostante */
@@ -16,23 +18,25 @@
 .form-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
 .form-tab {
   display: flex; align-items: center; gap: 0.4rem;
-  padding: 0.45rem 1rem;
+  padding: 0.5rem 1rem;
   border: 1px solid var(--glass-border);
-  background: var(--glass-0);
-  color: var(--text-muted);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 0;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 10px;
   font-weight: 500;
-  transition: all var(--duration-fast) var(--ease-out);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 .form-tab:hover { background: var(--glass-1); color: var(--text); }
 .form-tab.active {
-  border-color: rgba(217,102,63,0.4);
-  background: rgba(217,102,63,0.15);
-  color: var(--accent);
+  background: #fff;
+  color: #000;
+  border-color: #fff;
   font-weight: 600;
-  box-shadow: 0 0 12px rgba(217,102,63,0.15);
+  box-shadow: none;
 }
 
 .smart-input { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -40,18 +44,20 @@
 .smart-row { display: flex; gap: 0.5rem; align-items: center; }
 .smart-row input {
   flex: 1;
-  background: var(--glass-1);
+  background: var(--bg-input);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: 0.75rem 1rem;
   color: var(--text);
+  caret-color: #fff;
   font-size: 0.9rem;
-  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+  transition: border-color var(--duration-fast);
 }
+.smart-row input::placeholder { color: var(--fg-dim); }
 .smart-row input:focus {
   outline: none;
-  border-color: rgba(217,102,63,0.5);
-  box-shadow: 0 0 0 3px rgba(217,102,63,0.1);
+  border-color: var(--glass-border-hi);
+  box-shadow: none;
 }
 
 .form-row { display: flex; gap: 1rem; }
@@ -61,19 +67,21 @@
   display: flex; align-items: center; gap: 0.3rem;
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--glass-border);
-  background: var(--glass-0);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 0.78rem;
+  background: transparent;
+  border-radius: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   cursor: pointer;
-  transition: all var(--duration-fast) var(--spring);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 .cat-btn svg { flex-shrink: 0; }
-.cat-btn:hover { border-color: rgba(217,102,63,0.35); color: var(--text); transform: scale(1.04); }
+.cat-btn:hover { border-color: var(--glass-border-hi); color: var(--text); }
 .cat-btn.active {
-  border-color: rgba(217,102,63,0.4);
-  background: rgba(217,102,63,0.15);
-  color: var(--accent);
+  background: #fff;
+  color: #000;
+  border-color: #fff;
   font-weight: 600;
 }
 
@@ -92,9 +100,11 @@
 /* === TRANSACTION LIST === */
 .transactions-page { display: flex; flex-direction: column; gap: 1.5rem; }
 .transactions-list {
-  background: var(--glass-1);
+  background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
   padding: 1.5rem;
 }
 .list-header {
@@ -102,42 +112,53 @@
   align-items: center; margin-bottom: 1rem;
 }
 .list-controls { display: flex; gap: 0.5rem; align-items: center; }
-.tx-table { display: flex; flex-direction: column; gap: 0.4rem; }
+.tx-table { display: flex; flex-direction: column; gap: 0; }
+/* Riga a linea sottile (non card): hairline in basso + bordo sinistro 2px colorato
+   per categoria (colore impostato inline da TxRow via getCategoryColor). */
 .tx-row {
   display: flex; align-items: center; gap: 1rem;
   padding: 0.7rem 0.85rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  transition: all var(--duration-fast) var(--ease-out);
-  background: var(--glass-0);
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--glass-border);
+  border-left: 2px solid transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+  background: transparent;
 }
-.tx-row:hover {
-  background: var(--glass-1);
-  border-color: var(--glass-border);
-  transform: translateX(2px);
-}
+.tx-row:hover { background: var(--glass-1); }
 .tx-emoji {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   width: 34px; height: 34px;
-  border-radius: var(--radius-sm);
-  background: var(--glass-1);
-  color: var(--accent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
 }
 .tx-info { flex: 1; display: flex; flex-direction: column; gap: 0.12rem; }
 .tx-info-top { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-.tx-category { font-weight: 600; text-transform: capitalize; font-size: 0.875rem; }
+.tx-category {
+  font-weight: 500; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--text);
+}
 .tx-desc { font-size: 0.78rem; color: var(--text-muted); }
-.tx-date { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
-.tx-amount { font-weight: 700; min-width: 80px; text-align: right; white-space: nowrap; letter-spacing: -0.02em; }
+.tx-date {
+  font-size: 10px; color: var(--text-dim); white-space: nowrap;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+.tx-amount {
+  font-weight: 600; min-width: 80px; text-align: right; white-space: nowrap;
+  letter-spacing: 0; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
 .tx-actions { display: flex; gap: 0.25rem; }
-.tx-recurring { border-color: rgba(217,102,63,0.2) !important; }
+.tx-recurring { background: var(--glass-0); }
 
 /* === SELEZIONE MULTIPLA === */
 .tx-row--selectable { cursor: pointer; }
 .tx-row--selected {
-  background: color-mix(in srgb, var(--accent) 10%, var(--glass-1)) !important;
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+  background: var(--glass-2) !important;
 }
 .tx-select-check {
   display: flex; align-items: center; justify-content: center;
@@ -147,16 +168,16 @@
   cursor: pointer;
   padding: 0;
 }
-.tx-row--selected .tx-select-check { color: var(--accent); }
+.tx-row--selected .tx-select-check { color: #fff; }
 
 .tx-bulk-bar {
   display: flex;
   align-items: center;
   gap: 0.85rem;
   flex-wrap: wrap;
-  background: var(--glass-1);
+  background: #000;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: 0.6rem 0.85rem;
   margin-bottom: 0.75rem;
 }
@@ -168,7 +189,7 @@
   cursor: pointer;
 }
 .tx-bulk-selectall:hover { color: var(--text); }
-.tx-bulk-count { font-size: 0.82rem; font-weight: 600; color: var(--accent); }
+.tx-bulk-count { font-size: 10px; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 0.1em; }
 .tx-bulk-actions { display: flex; gap: 0.5rem; margin-left: auto; }
 .tx-bulk-delete {
   width: auto;
@@ -187,9 +208,9 @@
 /* Skeleton loading rows — mimics tx-row layout without content */
 .tx-row--skeleton {
   pointer-events: none;
-  border-color: transparent !important;
+  border-left-color: transparent !important;
 }
-.tx-row--skeleton:hover { transform: none; background: var(--glass-0); }
+.tx-row--skeleton:hover { background: transparent; }
 .tx-skeleton-list { animation: fadeIn 0.2s ease-out; }
 
 /* === TX FILTERS === */
@@ -209,19 +230,20 @@
 .search-icon { position: absolute; left: 0.75rem; color: var(--text-muted); pointer-events: none; }
 .search-input {
   width: 100%;
-  background: var(--glass-1);
+  background: var(--bg-input);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: 0.6rem 2.5rem;
   color: var(--text);
+  caret-color: #fff;
   font-size: 0.875rem;
-  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+  transition: border-color var(--duration-fast);
 }
-.search-input::placeholder { color: var(--text-muted); }
+.search-input::placeholder { color: var(--fg-dim); }
 .search-input:focus {
   outline: none;
-  border-color: rgba(217,102,63,0.5);
-  box-shadow: 0 0 0 3px rgba(217,102,63,0.1);
+  border-color: var(--glass-border-hi);
+  box-shadow: none;
 }
 .search-clear {
   position: absolute; right: 0.75rem;
@@ -235,9 +257,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--glass-1);
+  background: var(--bg-input);
   border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 6px 10px;
 }
 .filter-select, .filter-date {
@@ -260,9 +282,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: var(--glass-1);
+  background: var(--bg-card);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: 0.7rem 0.85rem 0.6rem;
 }
 .tx-range-bar-head {
@@ -272,20 +294,23 @@
   color: var(--text-muted);
 }
 .tx-range-bar-value {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: -0.01em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 .tx-range-bar-reset {
   margin-left: auto;
   display: flex; align-items: center; gap: 0.2rem;
   background: none; border: none;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   cursor: pointer;
   padding: 0.15rem 0.3rem;
-  border-radius: 6px;
+  border-radius: 0;
   transition: color var(--duration-fast), background var(--duration-fast);
 }
 .tx-range-bar-reset:hover { color: var(--text); background: var(--glass-0); }
@@ -293,9 +318,10 @@
 .tx-range-bar-edges {
   display: flex;
   justify-content: space-between;
-  font-size: 0.68rem;
+  font-size: 10px;
   color: var(--text-dim);
-  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .range-slider {
@@ -309,7 +335,7 @@
   position: absolute;
   left: 0; right: 0;
   height: 6px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--glass-0);
   border: 1px solid var(--glass-border);
   top: 50%;
@@ -319,8 +345,8 @@
 .range-slider-fill {
   position: absolute;
   height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(217,102,63,0.75), var(--accent));
+  border-radius: 0;
+  background: #fff;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
@@ -333,34 +359,37 @@
   position: absolute;
   top: 50%;
   width: 22px; height: 22px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 3px solid var(--bg, #14151a);
-  box-shadow: 0 0 0 3px rgba(217,102,63,0.3), 0 2px 6px rgba(0,0,0,0.35);
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid #000;
+  box-shadow: none;
   cursor: grab;
   transform: translate(-50%, -50%);
-  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast);
+  transition: background var(--duration-fast) var(--ease-out);
   touch-action: none;
 }
-.range-thumb:hover { transform: translate(-50%, -50%) scale(1.15); }
+/* Hit-area estesa (~42px) senza cambiare l'aspetto: il pseudo-elemento fa parte del thumb,
+   quindi gli eventi pointer/tastiera arrivano comunque al div con i suoi handler. */
+.range-thumb::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.range-thumb:hover { background: var(--accent-soft); }
 .range-thumb:active {
   cursor: grabbing;
-  transform: translate(-50%, -50%) scale(1.25);
-  box-shadow: 0 0 0 5px rgba(217,102,63,0.35), 0 2px 8px rgba(0,0,0,0.4);
+  background: var(--accent-soft);
 }
 .range-thumb:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(217,102,63,0.3), 0 0 0 5px rgba(255,255,255,0.25);
+  outline: 1px solid #fff;
+  outline-offset: 3px;
 }
 
 .tx-summary {
   display: flex; justify-content: space-between;
-  font-size: 0.80rem; color: var(--text-muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);
   padding: 0.4rem 0.25rem;
-  border-top-style: solid;
-  border-top-width: 1px;
-  border-color: transparent;
-  border-image: linear-gradient(90deg, transparent, rgba(231,146,115,0.28), transparent) 1;
+  border-top: 1px solid var(--glass-border);
 }
 .tx-summary-total strong { color: var(--text); }
 
@@ -382,7 +411,7 @@
 }
 .tx-empty-cta {
   background: none; border: none;
-  color: var(--accent); font-size: 0.8rem;
+  color: var(--text); font-size: 0.8rem;
   font-weight: 600; cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -399,19 +428,22 @@
   justify-content: space-between;
   padding: 0.55rem 0.85rem 0.3rem;
   margin-top: 0.5rem;
+  background: #000;
+  border-bottom: 1px solid var(--glass-border);
 }
 .tx-date-header:first-child { margin-top: 0; }
 .tx-date-label {
-  font-size: 0.74rem;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 500;
   color: var(--text-muted);
-  text-transform: capitalize;
-  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 .tx-date-total {
-  font-size: 0.74rem;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
 }
 .tx-date-group + .tx-date-group .tx-date-header {
   border-top: 1px solid var(--glass-border);
@@ -420,7 +452,7 @@
 
 /* === TRANSACTIONS RESPONSIVE === */
 @media (max-width: 767px) {
-  .transactions-list { padding: 1rem; border-radius: var(--radius-md); }
+  .transactions-list { padding: 1rem; border-radius: 0; }
 
   /* Riga transazione → grid a 3 colonne/3 righe invece di flex-wrap:
      con flex-wrap le action-icons "cadevano" su una riga a sé stante andando
@@ -449,8 +481,9 @@
     padding-top: 0.45rem;
     margin-top: 0.1rem;
   }
-  .tx-category { font-size: 0.82rem; }
-  .tx-date, .tx-desc { font-size: 0.7rem; }
+  .tx-category { font-size: 11px; }
+  .tx-date { font-size: 10px; }
+  .tx-desc { font-size: 0.7rem; }
   .tx-actions .btn-icon { padding: 0.45rem; }
   .list-header { flex-wrap: wrap; gap: 0.5rem; }
   .list-controls { flex-wrap: wrap; gap: 0.4rem; }
@@ -461,11 +494,11 @@
     width: calc(100vw - 2rem);
     max-width: 320px;
   }
-  .transaction-form { padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.25rem; }
+  .transaction-form { padding: 1rem; border-radius: 0; margin-bottom: 1.25rem; }
   .form-tabs { gap: 0.3rem; flex-wrap: wrap; }
   .smart-hint { font-size: 0.72rem; }
   .category-grid { gap: 0.3rem; }
-  .cat-btn { padding: 0.35rem 0.55rem; font-size: 0.72rem; }
+  .cat-btn { padding: 0.35rem 0.55rem; font-size: 10px; }
   .msg-content { max-width: 90%; }
   .cat-rank-row { flex-wrap: wrap; }
   .cat-rank-bar { min-width: 60px; }

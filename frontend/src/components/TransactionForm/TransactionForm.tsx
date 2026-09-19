@@ -225,7 +225,7 @@ export default function TransactionForm({ onAdded }: Props) {
                   className={`cat-btn ${category === c ? "active" : ""}`}
                   onClick={() => setCategory(c)}
                 >
-                  <CategoryIcon category={c} size={19} />
+                  <CategoryIcon category={c} size={16} />
                   <span className="capitalize">{c}</span>
                 </button>
               ))}

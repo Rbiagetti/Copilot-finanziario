@@ -28,10 +28,10 @@ const LoadingFallback = () => {
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100vh", alignItems: "center", justifyContent: "center", gap: "1.25rem" }}>
       {!stuck ? (
-        <div className="spin" style={{ width: 32, height: 32, border: "3px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%" }} />
+        <div className="glyph-dot" role="status" aria-label="Caricamento" style={{ width: 8, height: 8 }} />
       ) : (
         <>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", textAlign: "center" }}>Il caricamento sta impiegando troppo.</p>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", lineHeight: 1.6, letterSpacing: "0.05em", textAlign: "center" }}>Il caricamento sta impiegando troppo.</p>
           <button
             className="btn-primary"
             style={{ padding: "0.6rem 1.5rem", width: "auto" }}
@@ -57,7 +57,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
     if (this.state.hasError) {
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "80vh", alignItems: "center", justifyContent: "center", gap: "1.25rem" }}>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", textAlign: "center", maxWidth: 320 }}>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", lineHeight: 1.6, letterSpacing: "0.05em", textAlign: "center", maxWidth: 320 }}>
             Qualcosa è andato storto in questa sezione.
           </p>
           <button
@@ -127,13 +127,13 @@ function App() {
         }}
         toastOptions={{
           style: {
-            background: "rgba(41,29,23,0.92)",
-            color: "#f5ded5",
-            border: "1px solid rgba(255,182,141,0.20)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            borderRadius: "18px",
-            fontFamily: "Inter, -apple-system, sans-serif",
+            background: "#0a0a0a",
+            color: "var(--text)",
+            border: "1px solid var(--glass-border)",
+            borderRadius: 0,
+            boxShadow: "none",
+            fontFamily: "var(--font-mono)",
+            fontSize: "12px",
           },
         }}
       />

@@ -110,7 +110,7 @@ export default function BudgetPanel() {
 
       {loading ? (
         <div className="loading">
-          <span className="spin" style={{ width: 24, height: 24, border: "2px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block" }} />
+          <span className="glyph-dot" />
         </div>
       ) : errorMsg ? (
         <div className="error" style={{ textAlign: "center", padding: "2rem", display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>

@@ -8,7 +8,7 @@ import { Trash2, RefreshCw, Search, X, Pencil, Download, Repeat, ListFilter, Che
 import toast from "react-hot-toast";
 import TransactionForm from "../TransactionForm/TransactionForm";
 import { useAppStore } from "../../store/appStore";
-import { CategoryIcon } from "../../lib/categoryIcons";
+import { CategoryIcon, getCategoryColor } from "../../lib/categoryIcons";
 
 const MESI_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 
@@ -52,6 +52,7 @@ const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle, selectMode, sele
   return (
     <div
       className={`tx-row ${tx.is_recurring ? "tx-recurring" : ""} ${selectMode ? "tx-row--selectable" : ""} ${selected ? "tx-row--selected" : ""}`}
+      style={{ borderLeftColor: getCategoryColor(tx.category) }}
       onClick={selectMode ? () => onToggleSelect(tx.id) : undefined}
     >
       {selectMode && (
@@ -64,7 +65,7 @@ const TxRow = memo(({ tx, toggling, onEdit, onDelete, onToggle, selectMode, sele
           {selected ? <CheckSquare size={18} /> : <Square size={18} />}
         </button>
       )}
-      <span className="tx-emoji"><CategoryIcon category={tx.category} size={17} /></span>
+      <span className="tx-emoji"><CategoryIcon category={tx.category} size={16} /></span>
       <div className="tx-info">
         <div className="tx-info-top">
           <span className="tx-category">{tx.category}</span>
@@ -688,7 +689,7 @@ export default function TransactionList() {
           <div className="tx-table tx-skeleton-list" aria-busy="true" aria-label="Caricamento transazioni">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="tx-row tx-row--skeleton">
-                <div className="skeleton skeleton-icon" style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0 }} />
+                <div className="skeleton skeleton-icon" style={{ width: 32, height: 32, borderRadius: 0, flexShrink: 0 }} />
                 <div className="tx-info" style={{ gap: "0.35rem" }}>
                   <div className="skeleton skeleton-text" style={{ width: "40%" }} />
                   <div className="skeleton skeleton-text" style={{ width: "65%", opacity: 0.6 }} />
@@ -697,7 +698,7 @@ export default function TransactionList() {
                 <div className="skeleton skeleton-text" style={{ width: 55 }} />
                 <div style={{ display: "flex", gap: "0.4rem" }}>
                   {[...Array(3)].map((_, j) => (
-                    <div key={j} className="skeleton" style={{ width: 28, height: 28, borderRadius: 8 }} />
+                    <div key={j} className="skeleton" style={{ width: 28, height: 28, borderRadius: 0 }} />
                   ))}
                 </div>
               </div>
