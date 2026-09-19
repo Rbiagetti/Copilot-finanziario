@@ -72,31 +72,23 @@
   height: 28px;
   min-width: 0;
 }
+.voice-wave { --level: 0.35; }
 .voice-bar {
   flex: 1;
   max-width: 4px;
   height: 100%;
   display: flex;
-  transform: scaleY(0.14);
+  transform: scaleY(var(--level));
   transform-origin: center;
-  transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 .voice-bar > i {
   display: block;
   width: 100%;
   height: 100%;
-  background: var(--fg-dim);
+  background: var(--text);
+  opacity: calc(0.4 + var(--level) * 0.6);
   transform-origin: center;
   animation: voice-bar-dance ease-in-out infinite alternate;
-  transition: background 0.5s ease;
-}
-.voice-wave--speaking .voice-bar {
-  transform: scaleY(1);
-  transition-duration: 0.18s;
-}
-.voice-wave--speaking .voice-bar > i {
-  background: var(--text);
-  transition-duration: 0.15s;
 }
 @keyframes voice-bar-dance {
   from { transform: scaleY(0.2); }

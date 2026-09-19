@@ -10,7 +10,6 @@ import VoiceWaveform from "./VoiceWaveform";
 // Silenzio dopo l'ultimo risultato vocale prima di chiudere la registrazione, e attesa
 // (con barra che si ritira) prima del salvataggio automatico se l'utente non tocca nulla.
 const VOICE_SILENCE_MS = 1200;
-const VOICE_SPEAKING_HOLD_MS = 450;
 const AUTOSAVE_MS = 2000;
 
 interface Props {
@@ -31,12 +30,11 @@ export default function TransactionForm({ onAdded }: Props) {
   // Necessario perché ogni auto-restart del service reinizia i result da 0.
   const confirmedTextRef = useRef("");
   const [submitting, setSubmitting] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
   const [autosaveLeft, setAutosaveLeft] = useState<number | null>(null);
   const nlTextRef = useRef("");
   const submitRef = useRef<() => void>(() => {});
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastVoiceActivityRef = useRef(0);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => { nlTextRef.current = nlText; }, [nlText]);
@@ -67,8 +65,6 @@ export default function TransactionForm({ onAdded }: Props) {
 
   const clearVoiceTimers = () => {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
-    if (speakingTimerRef.current) { clearTimeout(speakingTimerRef.current); speakingTimerRef.current = null; }
-    setSpeaking(false);
   };
 
   const cancelAutosave = () => {
@@ -101,9 +97,7 @@ export default function TransactionForm({ onAdded }: Props) {
   };
 
   const handleVoiceActivity = () => {
-    setSpeaking(true);
-    if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
-    speakingTimerRef.current = setTimeout(() => setSpeaking(false), VOICE_SPEAKING_HOLD_MS);
+    lastVoiceActivityRef.current = performance.now();
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(finishDictation, VOICE_SILENCE_MS);
   };
@@ -185,6 +179,8 @@ export default function TransactionForm({ onAdded }: Props) {
       setRecording(false);
       return;
     }
+
+    lastVoiceActivityRef.current = 0;
 
     // Inizia ad accumulare dal testo già presente nel campo
     confirmedTextRef.current = nlText.trimEnd() ? nlText.trimEnd() + " " : "";
@@ -271,9 +267,9 @@ export default function TransactionForm({ onAdded }: Props) {
             <div className="voice-panel fade-in">
               <span className="voice-panel-label">
                 <span className="glyph-dot glyph-dot-red" />
-                {speaking ? "Ascolto" : "In attesa"}
+                In ascolto
               </span>
-              <VoiceWaveform speaking={speaking} />
+              <VoiceWaveform activityRef={lastVoiceActivityRef} decayMs={VOICE_SILENCE_MS} />
             </div>
           )}
 
