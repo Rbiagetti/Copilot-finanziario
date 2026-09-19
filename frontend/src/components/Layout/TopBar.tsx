@@ -1,4 +1,5 @@
 import { useAppStore } from "../../store/appStore";
+import BrandMark from "./BrandMark";
 
 const TITLES: Record<string, string> = {
   dashboard: "Dashboard",
@@ -13,8 +14,8 @@ export default function TopBar() {
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <div className="topbar-logo" aria-hidden="true">
-          <div className="logo-dots"><i /><i /><i /></div>
+        <div className="topbar-logo">
+          <BrandMark size={26} />
         </div>
         <span className="topbar-brand">FINCOPILOT</span>
       </div>

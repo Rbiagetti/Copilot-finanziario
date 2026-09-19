@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import BrandMark from "../Layout/BrandMark";
 
 export default function PrivacyPolicy() {
   return (
@@ -7,11 +8,7 @@ export default function PrivacyPolicy() {
       <div className="legal-card">
         <Link to="/login" className="legal-back"><ArrowLeft size={16} /> Torna al login</Link>
         <div className="legal-logo">
-          <span style={{ display: "inline-flex", gap: 5 }} aria-hidden="true">
-            <span className="glyph-dot" />
-            <span className="glyph-dot" style={{ animationDelay: "0.3s" }} />
-            <span className="glyph-dot" style={{ animationDelay: "0.6s" }} />
-          </span>
+          <BrandMark size={28} />
           <span>FINCOPILOT</span>
         </div>
         <h1>Informativa sulla privacy</h1>

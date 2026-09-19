@@ -1,10 +1,11 @@
 import { useEffect, lazy, Suspense, useState, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { Toaster } from "react-hot-toast";
+import { Toaster, ToastBar } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
 import TopBar from "./components/Layout/TopBar";
+import ConfirmHost from "./components/Layout/ConfirmHost";
 import LoginPage from "./components/Auth/LoginPage";
 import ResetPasswordPage from "./components/Auth/ResetPasswordPage";
 import { useAuthStore } from "./store/authStore";
@@ -134,9 +135,45 @@ function App() {
             boxShadow: "none",
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
+            padding: "10px 14px",
+            maxWidth: "360px",
           },
         }}
-      />
+      >
+        {(t) => {
+          const accent =
+            t.type === "success" ? "var(--success)" : t.type === "error" ? "var(--danger)" : "var(--glass-border-hi)";
+          return (
+            <ToastBar
+              toast={t}
+              style={{
+                ...t.style,
+                borderLeft: `2px solid ${accent}`,
+                animation: t.visible
+                  ? "toast-in 0.2s var(--ease-out) forwards"
+                  : "toast-out 0.15s ease-in forwards",
+              }}
+            >
+              {({ message }) => (
+                <>
+                  {t.type === "loading" ? (
+                    <span className="glyph-dot" style={{ flexShrink: 0 }} />
+                  ) : t.type === "success" || t.type === "error" ? (
+                    <span
+                      aria-hidden="true"
+                      style={{ color: accent, fontSize: "13px", lineHeight: 1, flexShrink: 0 }}
+                    >
+                      {t.type === "success" ? "✓" : "✕"}
+                    </span>
+                  ) : null}
+                  <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{message}</div>
+                </>
+              )}
+            </ToastBar>
+          );
+        }}
+      </Toaster>
+      <ConfirmHost />
       
       <Routes>
         <Route

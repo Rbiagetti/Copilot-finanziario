@@ -17,23 +17,19 @@
   z-index: 1;
 }
 
-/* === LOGO: 3 pallini + wordmark === */
-.logo-dots {
+/* === LOGO: portafoglio in quadrato con bordo 1px + wordmark === */
+.brand-mark {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   flex-shrink: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border-hi);
+  border-radius: 0;
+  background: #000;
+  color: #fff;
 }
-.logo-dots i {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #fff;
-}
-.logo-dots i:nth-child(1) { opacity: 0.35; }
-.logo-dots i:nth-child(2) { opacity: 0.65; }
-.logo-dots i:nth-child(3) { opacity: 1; }
+.brand-mark svg { display: block; }
 
 /* ═══════════════════════════════════
    SIDEBAR — Base (Desktop > 1024px)

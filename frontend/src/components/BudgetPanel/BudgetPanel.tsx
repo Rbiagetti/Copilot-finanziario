@@ -4,6 +4,7 @@ import type { BudgetStatus } from "../../api/client";
 import { PlusCircle, AlertTriangle, CheckCircle, XCircle, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { CategoryIcon } from "../../lib/categoryIcons";
+import { confirmAction } from "../../lib/confirmDialog";
 import { useAppStore } from "../../store/appStore";
 
 interface BudgetStatusWithId extends BudgetStatus {
@@ -60,7 +61,12 @@ export default function BudgetPanel() {
   const handleDelete = async (b: BudgetStatusWithId) => {
     // M-3: check id prima di procedere — evita DELETE /budgets/undefined
     if (!b.id) { toast.error("ID budget non disponibile"); return; }
-    if (!confirm(`Eliminare il budget per ${b.category}?`)) return;
+    if (!(await confirmAction({
+      title: "Elimina budget",
+      message: `Eliminare il budget per ${b.category}?`,
+      confirmLabel: "Elimina",
+      danger: true,
+    }))) return;
     try {
       await deleteBudget(b.id);
       toast.success(`Budget ${b.category} eliminato`);

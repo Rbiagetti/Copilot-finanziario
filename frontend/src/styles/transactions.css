@@ -42,6 +42,94 @@
 .smart-input { display: flex; flex-direction: column; gap: 0.75rem; }
 .smart-hint { font-size: 0.78rem; color: var(--text-muted); }
 .smart-row { display: flex; gap: 0.5rem; align-items: center; }
+
+/* === VOCE: barre "equalizer" mentre si parla + countdown di salvataggio automatico === */
+.voice-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 36px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-input);
+}
+.voice-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.voice-wave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  height: 28px;
+  min-width: 0;
+}
+.voice-bar {
+  flex: 1;
+  max-width: 4px;
+  height: 100%;
+  display: flex;
+  transform: scaleY(0.14);
+  transform-origin: center;
+  transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.voice-bar > i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--fg-dim);
+  transform-origin: center;
+  animation: voice-bar-dance ease-in-out infinite alternate;
+  transition: background 0.5s ease;
+}
+.voice-wave--speaking .voice-bar {
+  transform: scaleY(1);
+  transition-duration: 0.18s;
+}
+.voice-wave--speaking .voice-bar > i {
+  background: var(--text);
+  transition-duration: 0.15s;
+}
+@keyframes voice-bar-dance {
+  from { transform: scaleY(0.2); }
+  to   { transform: scaleY(var(--peak, 1)); }
+}
+
+.autosave-track {
+  flex: 1;
+  height: 4px;
+  background: var(--glass-border);
+  min-width: 0;
+}
+.autosave-fill {
+  height: 100%;
+  background: var(--text);
+  transition: width 0.1s linear;
+}
+.autosave-cancel {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0.5rem 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-bar > i { animation: none; transform: scaleY(0.6); }
+  .autosave-fill { transition: none; }
+}
 .smart-row input {
   flex: 1;
   background: var(--bg-input);

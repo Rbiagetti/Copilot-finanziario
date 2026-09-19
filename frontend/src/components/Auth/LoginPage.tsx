@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BrandMark from "../Layout/BrandMark";
 import { Link } from "react-router-dom";
 import { signIn, signUp, signInWithGoogle, resetPasswordForEmail } from "../../lib/supabase";
 
@@ -74,11 +75,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <span style={{ display: "inline-flex", gap: 6 }} aria-hidden="true">
-            <span className="glyph-dot" />
-            <span className="glyph-dot" style={{ animationDelay: "0.3s" }} />
-            <span className="glyph-dot" style={{ animationDelay: "0.6s" }} />
-          </span>
+          <BrandMark size={34} />
           <span style={{ fontSize: "1.1rem", fontWeight: 500, letterSpacing: "0.25em" }}>FINCOPILOT</span>
         </div>
         <p className="login-subtitle">Il tuo copilota finanziario AI</p>
