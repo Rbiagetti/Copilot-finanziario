@@ -344,7 +344,7 @@
   min-height: 100dvh;
   display: flex; align-items: center;
   justify-content: center;
-  padding: max(1.5rem, env(safe-area-inset-top, 0px)) 1.5rem max(1.5rem, env(safe-area-inset-bottom, 0px));
+  padding: max(1.5rem, var(--safe-top)) 1.5rem max(1.5rem, var(--safe-bottom));
 }
 .login-card {
   background: var(--bg-card);

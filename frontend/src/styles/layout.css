@@ -146,11 +146,11 @@
   top: 0;
   left: var(--sidebar-w);
   right: 0;
-  height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  height: calc(var(--topbar-h) + var(--safe-top));
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: env(safe-area-inset-top, 0px) 1.25rem 0;
+  padding: var(--safe-top) 1.25rem 0;
   background: #000;
   border-bottom: 1px solid var(--glass-border);
   z-index: 40;
@@ -209,7 +209,7 @@
   margin-left: var(--sidebar-w);
   flex: 1;
   padding: 2rem 2.5rem;
-  padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 1rem);
+  padding-top: calc(var(--topbar-h) + var(--safe-top) + 1rem);
   max-width: 1240px;
 }
 
@@ -227,7 +227,7 @@
   .main-content {
     margin-left: 60px;
     padding: 1.5rem 1.25rem;
-    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 1rem);
+    padding-top: calc(var(--topbar-h) + var(--safe-top) + 1rem);
   }
   .topbar { left: 60px; }
 
@@ -257,10 +257,13 @@
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
     width: auto;
-    height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--bottomnav-h) + var(--safe-bottom));
     flex-direction: row;
     align-items: stretch;
-    padding: 0 0 env(safe-area-inset-bottom, 0px);
+    /* Niente padding sotto: i tab arrivano fino al bordo (il blocco bianco della tab attiva
+       copre anche l'area dell'indicatore Home); a destra/sinistra tengono fuori angoli e notch
+       quando il telefono è in orizzontale. */
+    padding: 0 var(--safe-right) 0 var(--safe-left);
     border-right: none;
     border: none;
     border-top: 1px solid var(--glass-border);
@@ -279,7 +282,7 @@
     align-items: stretch;
     padding: 0;
     gap: 0;
-    height: var(--bottomnav-h);
+    height: 100%;
     flex: 1;
   }
 
@@ -296,7 +299,12 @@
     transform: none;
     flex: 1 1 0;
     width: auto;
-    height: var(--bottomnav-h);
+    height: auto;
+    align-self: stretch;
+    /* padding-bottom = safe area: il tab si estende fino al bordo, ma icona ed etichetta
+       restano centrate nei 56px sopra l'indicatore Home (HIG: elementi toccabili fuori
+       dalla zona dell'indicatore e degli angoli arrotondati) */
+    padding-bottom: var(--safe-bottom);
     font-size: 0.5625rem; /* 9px */
     letter-spacing: 0.04em;
     background: transparent;
@@ -358,16 +366,18 @@
   .main-content {
     margin-left: 0;
     padding: 1rem 0.875rem;
-    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 0.75rem);
-    padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    padding-top: calc(var(--topbar-h) + var(--safe-top) + 0.75rem);
+    padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom));
+    padding-left: max(0.875rem, var(--safe-left));
+    padding-right: max(0.875rem, var(--safe-right));
     max-width: 100%;
   }
 
   /* Topbar a tutta larghezza */
   .topbar {
     left: 0;
-    padding-left: 0.875rem;
-    padding-right: 0.875rem;
+    padding-left: max(0.875rem, var(--safe-left));
+    padding-right: max(0.875rem, var(--safe-right));
     background: #000 !important;
   }
 
@@ -384,7 +394,9 @@
 @media (max-width: 375px) {
   .main-content {
     padding: 0.75rem 0.625rem;
-    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 0.5rem);
-    padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+    padding-top: calc(var(--topbar-h) + var(--safe-top) + 0.5rem);
+    padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom) + 0.75rem);
+    padding-left: max(0.625rem, var(--safe-left));
+    padding-right: max(0.625rem, var(--safe-right));
   }
 }

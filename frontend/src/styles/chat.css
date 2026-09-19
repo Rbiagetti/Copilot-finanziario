@@ -329,13 +329,13 @@
   /* Chat a schermo intero tra topbar e bottom nav */
   .chat-container {
     position: fixed !important;
-    top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+    top: calc(var(--topbar-h) + var(--safe-top));
     left: 0;
     right: 0;
     /* --kb-inset (impostata da ChatInterface via visualViewport) spinge l'intero pannello
        sopra la tastiera quando è aperta, invece di lasciarlo coperto: vedi commento in
        ChatInterface.tsx sul mismatch layout-viewport / visual-viewport. */
-    bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px) + var(--kb-inset, 0px));
+    bottom: calc(var(--bottomnav-h) + var(--safe-bottom) + var(--kb-inset, 0px));
     margin: 0 !important;
     height: auto !important;
     min-height: 0 !important;
