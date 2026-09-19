@@ -5,6 +5,13 @@ import toast from "react-hot-toast";
 import { useAppStore } from "../../store/appStore";
 import { voiceService } from "../../utils/voiceService";
 import { CategoryIcon } from "../../lib/categoryIcons";
+import VoiceWaveform from "./VoiceWaveform";
+
+// Silenzio dopo l'ultimo risultato vocale prima di chiudere la registrazione, e attesa
+// (con barra che si ritira) prima del salvataggio automatico se l'utente non tocca nulla.
+const VOICE_SILENCE_MS = 1200;
+const VOICE_SPEAKING_HOLD_MS = 600;
+const AUTOSAVE_MS = 2000;
 
 interface Props {
   onAdded?: () => void;
@@ -24,7 +31,16 @@ export default function TransactionForm({ onAdded }: Props) {
   // Necessario perché ogni auto-restart del service reinizia i result da 0.
   const confirmedTextRef = useRef("");
   const [submitting, setSubmitting] = useState(false);
-  
+  const [speaking, setSpeaking] = useState(false);
+  const [autosaveLeft, setAutosaveLeft] = useState<number | null>(null);
+  const nlTextRef = useRef("");
+  const submitRef = useRef<() => void>(() => {});
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => { nlTextRef.current = nlText; }, [nlText]);
+
   const { autoStartVoice, setAutoStartVoice, markTransactionsAsNew, categories, loadCategories } = useAppStore();
 
   useEffect(() => { loadCategories(); }, [loadCategories]);
@@ -44,8 +60,53 @@ export default function TransactionForm({ onAdded }: Props) {
   useEffect(() => {
     return () => {
       voiceService.stop();
+      clearVoiceTimers();
+      cancelAutosave();
     };
   }, []);
+
+  const clearVoiceTimers = () => {
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (speakingTimerRef.current) { clearTimeout(speakingTimerRef.current); speakingTimerRef.current = null; }
+    setSpeaking(false);
+  };
+
+  const cancelAutosave = () => {
+    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+    if (autosaveTickRef.current) { clearInterval(autosaveTickRef.current); autosaveTickRef.current = null; }
+    setAutosaveLeft(null);
+  };
+
+  // Dopo la dettatura: countdown con barra che si ritira, poi come premere "Salva".
+  // Qualsiasi interazione col campo (digitare, toccarlo, Annulla, riavviare il mic) lo cancella.
+  const armAutosave = () => {
+    cancelAutosave();
+    const deadline = Date.now() + AUTOSAVE_MS;
+    setAutosaveLeft(AUTOSAVE_MS);
+    autosaveTickRef.current = setInterval(() => {
+      setAutosaveLeft(Math.max(0, deadline - Date.now()));
+    }, 100);
+    autosaveTimerRef.current = setTimeout(() => {
+      cancelAutosave();
+      submitRef.current();
+    }, AUTOSAVE_MS);
+  };
+
+  // Silenzio rilevato: chiude il microfono e, se c'è testo, avvia il countdown di salvataggio.
+  const finishDictation = () => {
+    clearVoiceTimers();
+    voiceService.stop();
+    setRecording(false);
+    if (nlTextRef.current.trim()) armAutosave();
+  };
+
+  const handleVoiceActivity = () => {
+    setSpeaking(true);
+    if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
+    speakingTimerRef.current = setTimeout(() => setSpeaking(false), VOICE_SPEAKING_HOLD_MS);
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(finishDictation, VOICE_SILENCE_MS);
+  };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +141,8 @@ export default function TransactionForm({ onAdded }: Props) {
   };
 
   const handleSmartSubmit = async () => {
+    cancelAutosave();
+    clearVoiceTimers();
     if (!nlText.trim()) return;
     if (voiceService.isListening()) {
       voiceService.stop();
@@ -105,8 +168,19 @@ export default function TransactionForm({ onAdded }: Props) {
     }
   };
 
+  useEffect(() => { submitRef.current = handleSmartSubmit; });
+
+  useEffect(() => {
+    if (mode !== "smart") {
+      cancelAutosave();
+      clearVoiceTimers();
+    }
+  }, [mode]);
+
   const toggleVoice = () => {
+    cancelAutosave();
     if (voiceService.isListening()) {
+      clearVoiceTimers();
       voiceService.stop();
       setRecording(false);
       return;
@@ -117,6 +191,7 @@ export default function TransactionForm({ onAdded }: Props) {
 
     voiceService.start({
       onResult: (transcript, isFinal) => {
+        handleVoiceActivity();
         // Mostra: testo confermato precedente + transcript corrente (interim o final)
         setNlText(confirmedTextRef.current + transcript);
         if (isFinal) {
@@ -125,10 +200,12 @@ export default function TransactionForm({ onAdded }: Props) {
         }
       },
       onError: (err) => {
+        clearVoiceTimers();
         setRecording(false);
         toast.error(`Errore vocale: ${err}`);
       },
       onEnd: () => {
+        clearVoiceTimers();
         setRecording(false);
         confirmedTextRef.current = ""; // reset per la prossima sessione vocale
       }
@@ -165,7 +242,8 @@ export default function TransactionForm({ onAdded }: Props) {
             <input
               type="text"
               value={nlText}
-              onChange={(e) => setNlText(e.target.value)}
+              onChange={(e) => { cancelAutosave(); setNlText(e.target.value); }}
+              onFocus={cancelAutosave}
               onKeyDown={(e) => e.key === "Enter" && handleSmartSubmit()}
               placeholder="es. pranzo 12 euro al bar"
               disabled={submitting}
@@ -188,6 +266,33 @@ export default function TransactionForm({ onAdded }: Props) {
               {submitting ? "..." : "Salva"}
             </button>
           </div>
+
+          {recording && (
+            <div className="voice-panel fade-in">
+              <span className="voice-panel-label">
+                <span className="glyph-dot glyph-dot-red" />
+                {speaking ? "Ascolto" : "In attesa"}
+              </span>
+              <VoiceWaveform speaking={speaking} />
+            </div>
+          )}
+
+          {autosaveLeft !== null && (
+            <div className="voice-panel voice-panel--autosave fade-in">
+              <div className="autosave-track">
+                <div
+                  className="autosave-fill"
+                  style={{ width: `${(autosaveLeft / AUTOSAVE_MS) * 100}%` }}
+                />
+              </div>
+              <span className="voice-panel-label">
+                Salvo tra {Math.ceil(autosaveLeft / 1000)}s
+              </span>
+              <button type="button" className="autosave-cancel" onClick={cancelAutosave}>
+                Annulla
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <form onSubmit={handleManualSubmit}>

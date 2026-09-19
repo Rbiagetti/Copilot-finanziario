@@ -4,6 +4,7 @@ import { useAppStore } from "../../store/appStore";
 import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import toast from "react-hot-toast";
+import BrandMark from "./BrandMark";
 
 const NAV_ITEMS = [
   { key: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
@@ -42,7 +43,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-dots" aria-hidden="true"><i /><i /><i /></div>
+        <BrandMark size={28} />
         <span>FINCOPILOT</span>
       </div>
       <nav className="sidebar-nav">

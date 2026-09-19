@@ -42,6 +42,84 @@
 .smart-input { display: flex; flex-direction: column; gap: 0.75rem; }
 .smart-hint { font-size: 0.78rem; color: var(--text-muted); }
 .smart-row { display: flex; gap: 0.5rem; align-items: center; }
+
+/* === VOCE: barre "equalizer" mentre si parla + countdown di salvataggio automatico === */
+.voice-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 36px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-input);
+}
+.voice-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.voice-wave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  height: 28px;
+  min-width: 0;
+}
+.voice-bar {
+  flex: 1;
+  max-width: 4px;
+  height: 100%;
+  background: var(--fg-dim);
+  transform: scaleY(0.12);
+  transform-origin: center;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.voice-wave--speaking .voice-bar {
+  background: var(--text);
+  animation-name: voice-bar-dance;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes voice-bar-dance {
+  from { transform: scaleY(0.18); }
+  to   { transform: scaleY(1); }
+}
+
+.autosave-track {
+  flex: 1;
+  height: 4px;
+  background: var(--glass-border);
+  min-width: 0;
+}
+.autosave-fill {
+  height: 100%;
+  background: var(--text);
+  transition: width 0.1s linear;
+}
+.autosave-cancel {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0.5rem 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-wave--speaking .voice-bar { animation: none; transform: scaleY(0.6); }
+  .autosave-fill { transition: none; }
+}
 .smart-row input {
   flex: 1;
   background: var(--bg-input);
