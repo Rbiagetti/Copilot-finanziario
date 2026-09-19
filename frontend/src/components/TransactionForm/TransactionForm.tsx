@@ -10,7 +10,7 @@ import VoiceWaveform from "./VoiceWaveform";
 // Silenzio dopo l'ultimo risultato vocale prima di chiudere la registrazione, e attesa
 // (con barra che si ritira) prima del salvataggio automatico se l'utente non tocca nulla.
 const VOICE_SILENCE_MS = 1200;
-const VOICE_SPEAKING_HOLD_MS = 600;
+const VOICE_SPEAKING_HOLD_MS = 450;
 const AUTOSAVE_MS = 2000;
 
 interface Props {
