@@ -257,7 +257,7 @@
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
     width: auto;
-    height: calc(var(--bottomnav-h) + var(--safe-bottom));
+    height: var(--nav-total);
     flex-direction: row;
     align-items: stretch;
     /* Niente padding sotto: i tab arrivano fino al bordo (il blocco bianco della tab attiva
@@ -304,7 +304,7 @@
     /* padding-bottom = safe area: il tab si estende fino al bordo, ma icona ed etichetta
        restano centrate nei 56px sopra l'indicatore Home (HIG: elementi toccabili fuori
        dalla zona dell'indicatore e degli angoli arrotondati) */
-    padding-bottom: var(--safe-bottom);
+    padding-bottom: var(--nav-reserve);
     font-size: 0.5625rem; /* 9px */
     letter-spacing: 0.04em;
     background: transparent;
@@ -367,7 +367,7 @@
     margin-left: 0;
     padding: 1rem 0.875rem;
     padding-top: calc(var(--topbar-h) + var(--safe-top) + 0.75rem);
-    padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom));
+    padding-bottom: var(--nav-total);
     padding-left: max(0.875rem, var(--safe-left));
     padding-right: max(0.875rem, var(--safe-right));
     max-width: 100%;
@@ -395,7 +395,7 @@
   .main-content {
     padding: 0.75rem 0.625rem;
     padding-top: calc(var(--topbar-h) + var(--safe-top) + 0.5rem);
-    padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom) + 0.75rem);
+    padding-bottom: calc(var(--nav-total) + 0.75rem);
     padding-left: max(0.625rem, var(--safe-left));
     padding-right: max(0.625rem, var(--safe-right));
   }

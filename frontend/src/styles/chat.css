@@ -335,7 +335,7 @@
     /* --kb-inset (impostata da ChatInterface via visualViewport) spinge l'intero pannello
        sopra la tastiera quando è aperta, invece di lasciarlo coperto: vedi commento in
        ChatInterface.tsx sul mismatch layout-viewport / visual-viewport. */
-    bottom: calc(var(--bottomnav-h) + var(--safe-bottom) + var(--kb-inset, 0px));
+    bottom: calc(var(--nav-total) + var(--kb-inset, 0px));
     margin: 0 !important;
     height: auto !important;
     min-height: 0 !important;

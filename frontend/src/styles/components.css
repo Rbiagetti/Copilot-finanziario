@@ -676,7 +676,7 @@ button, input, select, textarea { font-family: var(--font-mono); }
     justify-content: center !important;
     /* Rispetta notch/dynamic island in alto e nav bar in basso */
     padding: calc(var(--safe-top) + 1rem) 1rem
-             calc(var(--bottomnav-h, 64px) + var(--safe-bottom) + 1rem) !important;
+             calc(var(--nav-total, 64px) + 1rem) !important;
     z-index: 9999 !important;
     background: rgba(0,0,0,0.8) !important;
     backdrop-filter: none !important;
@@ -690,8 +690,7 @@ button, input, select, textarea { font-family: var(--font-mono); }
        finisce nascosto sotto la tastiera senza modo di raggiungerlo. */
     max-height: calc(100svh
       - var(--safe-top)
-      - var(--bottomnav-h, 64px)
-      - var(--safe-bottom)
+      - var(--nav-total, 64px)
       - 2rem) !important;
     /* Non l'intero box: solo .edit-form scrolla, header e footer (pulsante Salva)
        restano sempre visibili — vedi .modal-box base per il display:flex column. */
