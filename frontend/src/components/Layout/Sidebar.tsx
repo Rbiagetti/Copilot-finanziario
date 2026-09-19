@@ -52,6 +52,8 @@ export default function Sidebar() {
             key={key}
             className={`nav-item ${currentView === key ? "active" : ""}`}
             onPointerDown={(e) => handleNavClick(e, key)}
+            aria-label={label}
+            aria-current={currentView === key ? "page" : undefined}
           >
             <Icon size={18} />
             <span>{label}</span>

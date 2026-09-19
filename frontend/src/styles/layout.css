@@ -301,10 +301,10 @@
     width: auto;
     height: auto;
     align-self: stretch;
-    /* padding-bottom = safe area: il tab si estende fino al bordo, ma icona ed etichetta
-       restano centrate nei 56px sopra l'indicatore Home (HIG: elementi toccabili fuori
-       dalla zona dell'indicatore e degli angoli arrotondati) */
-    padding-bottom: var(--nav-reserve);
+    /* Icona centrata nell'intero blocco (compresa la fascia --nav-reserve): senza etichette
+       non serve più un'"altezza del testo" da preservare; con icone da 24px il bordo basso
+       resta ~9px sopra l'indicatore Home. */
+    padding-bottom: 0;
     font-size: 0.5625rem; /* 9px */
     letter-spacing: 0.04em;
     background: transparent;
@@ -317,18 +317,13 @@
       color 180ms ease;
   }
 
-  .nav-item span {
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    line-height: 1;
-  }
+  /* Barra mobile: solo icone (i nomi restano per i lettori schermo via aria-label) */
+  .nav-item span { display: none; }
 
   .nav-item svg {
-    width: 18px !important;
-    height: 18px !important;
+    width: 24px !important;
+    height: 24px !important;
+    stroke-width: 1.5;
     flex-shrink: 0;
     color: inherit;
     transition: color var(--duration-fast);
