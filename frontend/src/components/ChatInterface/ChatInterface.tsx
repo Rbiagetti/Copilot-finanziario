@@ -135,6 +135,8 @@ class ChartErrorBoundary extends Component<BoundaryProps, BoundaryState> {
 
 // ── ChatTable ────────────────────────────────────────────────────────────────
 
+const DECORATED_LABEL = /^[─—–-]{2,}\s*(.+?)\s*[─—–-]{2,}$/;
+
 function ChatTable({ tableData }: { tableData: TableData }) {
   if (!tableData.rows || tableData.rows.length === 0) return null;
   return (
@@ -148,13 +150,36 @@ function ChatTable({ tableData }: { tableData: TableData }) {
           </tr>
         </thead>
         <tbody>
-          {tableData.rows.map((row, i) => (
-            <tr key={i}>
-              {row.map((cell, j) => (
-                <td key={j}>{cell}</td>
-              ))}
-            </tr>
-          ))}
+          {tableData.rows.map((row, i) => {
+            // Il backend marca titoli di sezione e totali con trattini decorativi nella prima
+            // cella (["─── Top 3 categorie ───", "", ""], ["── TOTALE ──", "", "", "", "€…"]):
+            // li ripuliamo e li rendiamo come intestazione a tutta larghezza / riga totale.
+            const match = DECORATED_LABEL.exec(String(row[0] ?? ""));
+            if (match) {
+              const rest = row.slice(1);
+              if (rest.every((c) => String(c ?? "").trim() === "")) {
+                return (
+                  <tr key={i} className="chat-table-section">
+                    <td colSpan={row.length}>{match[1]}</td>
+                  </tr>
+                );
+              }
+              return (
+                <tr key={i} className="chat-table-total">
+                  {[match[1], ...rest].map((cell, j) => (
+                    <td key={j}>{cell}</td>
+                  ))}
+                </tr>
+              );
+            }
+            return (
+              <tr key={i}>
+                {row.map((cell, j) => (
+                  <td key={j}>{cell}</td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
