@@ -256,6 +256,22 @@
   padding: 1rem;
   margin-top: 0.75rem;
 }
+/* Grafici in chat: su schermi touch sono solo illustrazione (i valori sono nella tabella e
+   nel testo). Con pointer-events:none il dito non "vede" il grafico: lo scroll parte sempre
+   dallo scroller della chat, il tocco non dà focus all'SVG e non compare il tooltip che
+   restava appeso. Niente selezione/callout su un tocco lungo (iOS selezionava le etichette
+   SVG e lo scroll restava incastrato finché non si toccava altrove). Su mouse resta il hover. */
+.msg-chart-container {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.msg-chart-container .recharts-surface:focus { outline: none; }
+@media (hover: none), (pointer: coarse) {
+  .msg-chart-container .recharts-wrapper { pointer-events: none; }
+}
+
 .msg-chart-title {
   font-size: 10px; font-weight: 500;
   color: var(--text-dim); margin-bottom: 0.5rem;
