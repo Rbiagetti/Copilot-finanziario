@@ -300,6 +300,30 @@
 .chat-table tr:hover td { background: var(--glass-1); }
 .chat-table td:last-child { text-align: right; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 
+/* Titoli di sezione (es. "Top 3 categorie") e riga totale: prima erano righe di dati con i
+   trattini del backend, che andavano a capo e sembravano un errore di formattazione. */
+.chat-table tr.chat-table-section td {
+  padding: 0.85rem 0.85rem 0.45rem;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  background: var(--glass-1);
+  border-bottom: 1px solid var(--glass-border);
+  white-space: normal;
+}
+.chat-table tr.chat-table-section:first-child td { padding-top: 0.6rem; }
+.chat-table tr.chat-table-total td {
+  border-top: 1px solid var(--glass-border-hi);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+.chat-table tr.chat-table-total td:last-child { letter-spacing: 0; font-size: 0.80rem; }
+
 /* === CHAT RESPONSIVE === */
 @media (max-width: 767px) {
   /* Chat a schermo intero tra topbar e bottom nav */
