@@ -13,6 +13,9 @@ from datetime import date, timedelta
 from backend.core.database import SessionLocal
 from backend.core.database import Transaction
 
+# Con SUPABASE_URL non configurata il backend usa questo utente (vedi backend/api/auth.py)
+DEV_USER_ID = "anonymous_dev_user"
+
 
 def _d(days_ago: int) -> str:
     return (date.today() - timedelta(days=days_ago)).isoformat()
@@ -161,6 +164,7 @@ def seed_backtest_db() -> int:
 
         objs = [
             Transaction(
+                user_id=DEV_USER_ID,
                 description=desc,
                 category=cat,
                 amount=amount,

@@ -1,106 +1,128 @@
+# FinCopilot
+
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Deploy](https://img.shields.io/badge/deploy-Render%20%2B%20Vercel-black)
 
-# FinCopilot — Copilota Finanziario AI
+**App di finanza personale con un assistente AI che risponde in italiano alle domande sulle tue spese.**
 
-Applicazione web per la gestione delle finanze personali con assistente AI conversazionale in italiano.
-Registra spese, monitora budget, analizza trend e interroga i tuoi dati in linguaggio naturale.
+Registri le spese scrivendole o dettandole ("caffè 3 euro"), imposti dei budget per categoria, importi l'estratto conto della banca e chiedi ai tuoi dati cose come *"quanto ho speso in cibo questo mese rispetto al mese scorso?"*, ottenendo risposta, tabella e grafico.
 
-> **Stato:** Beta privata — funzionante in produzione su Render + Vercel.
+**Demo live:** [copilot-finanziario-ten.vercel.app](https://copilot-finanziario-ten.vercel.app) (registrazione con email o Google; il backend gratuito su Render può impiegare qualche secondo a svegliarsi)
 
----
+![Dashboard](docs/screenshots/dashboard.png)
 
-## Cosa fa
-
-- **Dashboard** — KPI, grafici spese per categoria, trend mensile, confronto mese precedente, forecast fine mese, heatmap annuale
-- **Anomaly Detection** — 5 tipi di anomalia (importo anomalo, merchant nuovo, frequenza, duplicato sospetto, orario insolito) con dettaglio statistico
-- **AI Chat** — 12+ funzioni analitiche, routing deterministico + LLM, risposta in linguaggio naturale con thinking trace
-- **Budget** — impostazione e monitoraggio per categoria con alert visivi (ok / warning / over)
-- **Report mensile** — PDF generato automaticamente con narrativa AI e anomalie del mese
-- **Export CSV** — con filtri categoria, periodo e ricerca attivi
+> Gli screenshot usano dati di esempio generati per la demo, non dati reali.
 
 ---
 
-## Stack tecnico
+## Funzionalità
 
-| Layer | Tecnologia |
+### Dashboard
+KPI essenziali (spesa del mese corrente e precedente, numero di transazioni, spesa media giornaliera), ripartizione per categoria e andamento di costi fissi e variabili.
+
+### Chat AI
+Domande in linguaggio naturale sulle proprie spese. Il modello non scrive SQL libero: sceglie una tra le funzioni analitiche predefinite (spese per categoria, confronto tra mesi, trend, top transazioni, abbonamenti, stato dei budget, what-if...), che viene eseguita sul database dell'utente. Il risultato viene poi commentato in italiano, con tabella, grafico e domande di approfondimento.
+
+![Chat AI](docs/screenshots/chat.png)
+
+### Transazioni
+Inserimento da testo o voce, con parsing automatico di importo e categoria, oppure manuale. Ricerca, filtri per categoria e periodo, marcatura delle spese ricorrenti, eliminazione multipla ed export CSV.
+
+![Transazioni](docs/screenshots/transazioni.png)
+
+### Budget
+Un budget mensile per categoria, con stato a tre livelli: ok, in avvicinamento, sforato.
+
+![Budget](docs/screenshots/budget.png)
+
+### Import da estratto conto
+Caricamento di file CSV, Excel o PDF. L'app riconosce le colonne (euristica più AI), mostra un'anteprima che l'utente può correggere, evita i duplicati rispetto alle transazioni già presenti e categorizza automaticamente le righe che ne sono prive.
+
+### Altro
+Report mensile in PDF con commento generato dall'AI, categorie personalizzate, scelta del modello AI per utente, login con email o Google, tema scuro, installabile come PWA.
+
+---
+
+## Architettura
+
+```
+ React (Vite, Zustand, Recharts)          Vercel
+        │  JWT Supabase
+        ▼
+ FastAPI + SQLAlchemy                     Render
+   ├─ auth middleware (verifica JWT)
+   ├─ motore AI (router → funzione → interpretazione)  ──►  Groq API (Qwen)
+   └─ import engine (CSV / XLSX / PDF)
+        │
+        ▼
+ PostgreSQL + Auth                        Supabase   (SQLite in sviluppo)
+```
+
+Scelte principali:
+
+- **Multi-tenancy:** ogni tabella ha una colonna `user_id` (UUID Supabase) e ogni endpoint filtra per utente. Lo schema è versionato con Alembic.
+- **Chat AI con funzioni predefinite:** l'LLM sceglie la funzione e ne interpreta il risultato, ma non genera query. I parametri restituiti dal router vengono validati e limitati a intervalli sicuri, quindi un output malformato del modello non può produrre query arbitrarie. Le domande fuori tema sono intercettate da un pre-filtro senza chiamare l'LLM.
+- **Determinismo:** temperatura 0 e seed fisso sul router, output JSON forzato, limiti rigidi su lunghezza input, cronologia, righe e punti dei grafici.
+- **Import senza stato lato server:** `/import/preview` e `/import/commit` ricevono entrambe il file, così non serve conservare nulla tra le due chiamate.
+
+---
+
+## Stack
+
+| Layer | Tecnologie |
 |---|---|
-| Backend | FastAPI · SQLAlchemy · SQLite (dev) |
-| AI | Groq API · Llama 3.3 70B · prompt engineering custom |
-| Auth | Supabase (JWT) |
-| Frontend | React 19 · Vite · TypeScript |
-| Stato | Zustand |
-| Grafici | Recharts |
-| Deploy | Render.com (backend) · Vercel (frontend) |
+| Backend | Python 3.11, FastAPI, SQLAlchemy, Alembic, pandas, pdfplumber, ReportLab |
+| AI | Groq API (modelli Qwen) tramite client OpenAI-compatibile |
+| Database e auth | Supabase (PostgreSQL + Auth), SQLite in locale |
+| Frontend | React 19, TypeScript, Vite, Zustand, Recharts, React Router |
+| Deploy | Render (API), Vercel (frontend), GitHub Actions (health check) |
 
 ---
 
-## Prerequisiti
+## Avvio in locale
 
-- Python ≥ 3.11
-- Node ≥ 18
-- Account [Groq](https://console.groq.com) — gratuito, per la API key
-- Account [Supabase](https://supabase.com) — gratuito, per l'autenticazione
-
----
-
-## Avvio in 5 minuti
+Servono Python ≥ 3.11, Node ≥ 18, una [API key Groq](https://console.groq.com) e un progetto [Supabase](https://supabase.com), entrambi gratuiti.
 
 ```bash
-# 1. Clone
 git clone https://github.com/Rbiagetti/Copilot-finanziario.git
 cd Copilot-finanziario
 
-# 2. Backend
+# Backend
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env              # compila GROQ_API_KEY e credenziali Supabase
+cp .env.example .env              # inserisci GROQ_API_KEY e credenziali Supabase
 uvicorn backend.main:app --reload
-# → http://localhost:8000
-# → Docs API: http://localhost:8000/docs
+# API:  http://localhost:8000    Docs: http://localhost:8000/docs
 
-# 3. Frontend (nuovo terminale)
+# Frontend (in un altro terminale)
 cd frontend
-cp .env.example .env              # già preconfigurato per localhost
+cp .env.example .env
 npm install && npm run dev
-# → http://localhost:5173
+# App:  http://localhost:5173
 ```
 
----
+Le variabili d'ambiente sono descritte in `.env.example` (backend) e `frontend/.env.example` (frontend).
 
-## Variabili d'ambiente
+**Dati di esempio.** Con `SUPABASE_URL` vuoto il backend salta l'autenticazione e usa un utente di sviluppo. In quella modalità puoi caricare 90 transazioni realistiche con:
 
-Vedi `.env.example` (backend) e `frontend/.env.example` (frontend).
-Le variabili Supabase sono le stesse per entrambi.
+```bash
+python -m backend.tests.seed_test_data
+```
 
 ---
 
 ## Test
 
 ```bash
-# Test deterministici — no API key richiesta
-pytest backend/tests/test_ai_routing.py -v
+# Test deterministici: routing AI, validazione, import (nessuna API key richiesta)
+pytest backend/tests/test_ai_routing.py backend/tests/test_import_engine.py -v
 
-# Backtesting conversazionale — richiede GROQ_API_KEY nel .env
+# Backtest conversazionale della chat: richiede GROQ_API_KEY
 pytest backend/tests/test_chat_backtest.py -v -s
-# Report: backend/tests/backtest_report.html
-```
-
----
-
-## Reset del DB di sviluppo
-
-```bash
-rm -f data/fincopilot.db
-uvicorn backend.main:app --reload   # le tabelle vengono ricreate all'avvio
-
-# Carica 90 transazioni di test realistiche (3 mesi)
-python -m backend.tests.seed_test_data
 ```
 
 ---
@@ -108,51 +130,44 @@ python -m backend.tests.seed_test_data
 ## Struttura del progetto
 
 ```
-fincopilot/
 ├── backend/
 │   ├── api/
-│   │   ├── models/          # Pydantic schemas (request/response)
-│   │   └── routes/          # FastAPI routers: chat, transactions, analytics, budgets, ai
-│   ├── core/                # Logica di business: ai_engine, database, auth
-│   ├── tests/               # Test suite e seed data
-│   └── main.py              # Entry point FastAPI
-├── frontend/
-│   ├── src/
-│   │   ├── api/             # Client HTTP Axios + tipi TypeScript
-│   │   ├── components/      # Componenti React (una cartella per componente)
-│   │   ├── hooks/           # Custom hooks (useTheme, useFocusTrap)
-│   │   ├── lib/             # Client Supabase
-│   │   ├── store/           # Zustand global store
-│   │   ├── styles/          # CSS modulari per area
-│   │   └── utils/           # Utilities (voiceService, analyticsUtils)
-│   └── index.html
-├── data/                    # Solo schema SQL o seed statici — mai *.db
-├── docs/                    # Documentazione tecnica
-├── .env.example             # Template variabili d'ambiente backend
-├── requirements.txt
-└── render.yaml              # Config deploy Render.com
+│   │   ├── models/          # schemi Pydantic
+│   │   └── routes/          # router FastAPI (chat, transazioni, budget, import, report...)
+│   ├── core/
+│   │   ├── ai_engine.py     # router, funzioni analitiche, guardrail
+│   │   ├── import_engine.py # parsing CSV / XLSX / PDF e mapping colonne
+│   │   └── database.py      # modelli SQLAlchemy
+│   ├── tests/
+│   └── main.py
+├── frontend/src/
+│   ├── components/          # una cartella per area (Dashboard, Chat, Budget...)
+│   ├── store/               # stato globale (Zustand)
+│   ├── styles/              # CSS modulare
+│   └── api/                 # client HTTP
+├── alembic/                 # migrazioni
+├── docs/screenshots/
+└── render.yaml              # configurazione deploy Render
 ```
 
 ---
 
 ## Roadmap
 
-- [x] Dashboard con AI analytics e anomaly detection
-- [x] Chat AI con routing deterministico + LLM
-- [x] Report mensile PDF con narrativa AI
-- [x] Export CSV, budget per categoria
-- [x] Backtesting conversazionale (60 test case)
-- [ ] Import CSV bancario (BNCR, Fineco, N26)
-- [ ] Notifiche push budget superato
-- [ ] App mobile (PWA installabile)
+- [x] Chat AI con funzioni analitiche predefinite
+- [x] Budget per categoria
+- [x] Report mensile in PDF
+- [x] Import da estratto conto (CSV, Excel, PDF)
+- [x] Multi-utente con Supabase Auth
+- [x] PWA installabile
+- [ ] Notifiche quando un budget viene superato
+- [ ] Import con formati specifici per le principali banche italiane
 
 ---
 
 ## Licenza
 
-MIT — vedi [LICENSE](LICENSE)
-
----
+MIT, vedi [LICENSE](LICENSE).
 
 ## Autore
 
