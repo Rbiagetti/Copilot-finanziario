@@ -521,7 +521,14 @@ class TestWhatIfOutput:
         assert "chart_data" in result
         assert "table_data" in result
 
-    def test_empty_category_returns_insufficient_or_valid(self):
+    def test_empty_category_returns_insufficient_or_valid(self, tmp_path, monkeypatch):
+        # DB temporaneo con schema ma senza transazioni: il test non dipende dal DB locale
+        from sqlalchemy import create_engine
+        from backend.core.database import Base
+        empty_engine = create_engine(f"sqlite:///{tmp_path / 'empty.db'}")
+        Base.metadata.create_all(empty_engine)
+        monkeypatch.setattr("backend.core.ai_engine.engine", empty_engine)
+
         result = execute_prebuilt_function("what_if", {"category": "abbigliamento", "monthly_delta": -20})
         td = result.get("table_data")
         assert td is not None
