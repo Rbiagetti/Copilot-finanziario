@@ -39,7 +39,7 @@ export default function TransactionForm({ onAdded }: Props) {
   const autosaveTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => { nlTextRef.current = nlText; }, [nlText]);
 
-  const { autoStartVoice, setAutoStartVoice, markTransactionsAsNew, categories, loadCategories } = useAppStore();
+  const { autoStartVoice, setAutoStartVoice, categories, loadCategories } = useAppStore();
 
   useEffect(() => { loadCategories(); }, [loadCategories]);
 
@@ -116,7 +116,6 @@ export default function TransactionForm({ onAdded }: Props) {
     }
     setSubmitting(true);
     try {
-      markTransactionsAsNew();
       await createTransaction({
         amount: numAmount,
         category,
@@ -150,7 +149,6 @@ export default function TransactionForm({ onAdded }: Props) {
         toast.error("Importo non trovato. Prova a essere più specifico (es. 'caffè 1.50')");
         return;
       }
-      markTransactionsAsNew();
       toast.success(`€${tx.amount.toFixed(2)} salvato in ${tx.category} — "${tx.description}"`);
       setNlText("");
       onAdded?.();

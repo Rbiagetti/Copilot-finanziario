@@ -11,7 +11,7 @@ from backend.core.import_engine import (
     parse_upload, suggest_mapping, normalize_row, categorize_batch,
     split_expenses_and_income, ImportError_, TARGET_FIELDS, REQUIRED_FIELDS, PREVIEW_ROWS,
 )
-from backend.core.ai_engine import invalidate_anomaly_cache, activate_model_for_request
+from backend.core.ai_engine import activate_model_for_request
 from backend.api.auth import get_current_user
 from backend.api.routes.categories import get_active_category_names
 
@@ -130,7 +130,6 @@ async def commit_import(
         for idx, cat in zip(needs_category_idx, ai_categories):
             to_import[idx]["category"] = cat
 
-    touched_months: set[tuple[int, int]] = set()
     for n in to_import:
         tx = Transaction(
             user_id=current_user_id,
@@ -142,16 +141,8 @@ async def commit_import(
             source="import",
         )
         db.add(tx)
-        y, m = n["date"][:4], n["date"][5:7]
-        touched_months.add((int(y), int(m)))
 
     db.commit()
-
-    for year, month in touched_months:
-        try:
-            invalidate_anomaly_cache(current_user_id, year, month)
-        except Exception:
-            pass
 
     return {
         "imported": len(to_import),

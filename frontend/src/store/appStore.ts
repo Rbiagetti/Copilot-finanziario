@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ForecastData, Anomaly, FullHistoryTransaction } from "../api/client";
+import type { ForecastData, FullHistoryTransaction } from "../api/client";
 import { getCategoryNames } from "../api/client";
 
 type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
@@ -8,16 +8,6 @@ interface DashboardCache {
   rawHistory: FullHistoryTransaction[];
   forecast: ForecastData | null;
   loadedAt: number | null;
-}
-
-interface AnomalyState {
-  data: Anomaly[];
-  count: number;
-  by_type: Record<string, number>;
-  generated_at: string | null;
-  has_new_transactions: boolean;
-  loading: boolean;
-  refreshing: boolean;
 }
 
 // Fallback iniziale = solo le standard, finché non arriva la risposta reale dal backend
@@ -33,17 +23,12 @@ interface AppState {
   autoStartVoice: boolean;
   dashboardFilter: { category?: string; dateFrom?: string; dateTo?: string; tags?: string };
   dashboardCache: DashboardCache;
-  anomalies: AnomalyState;
   categories: string[];
   categoriesLoaded: boolean;
   setView: (view: View) => void;
   setAutoStartVoice: (val: boolean) => void;
   setDashboardFilter: (filter: Partial<AppState["dashboardFilter"]>) => void;
   setDashboardCache: (data: Omit<DashboardCache, "loadedAt">) => void;
-  setAnomalies: (response: { anomalies: Anomaly[]; count: number; by_type: Record<string, number>; generated_at: string | null }) => void;
-  setAnomaliesLoading: (val: boolean) => void;
-  setAnomaliesRefreshing: (val: boolean) => void;
-  markTransactionsAsNew: () => void;
   invalidateDashboardCache: () => void;
   loadCategories: () => Promise<void>;
   refreshCategories: () => Promise<void>;
@@ -67,15 +52,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   categories: STANDARD_CATEGORIES_FALLBACK,
   categoriesLoaded: false,
-  anomalies: {
-    data: [],
-    count: 0,
-    by_type: {},
-    generated_at: null,
-    has_new_transactions: false,
-    loading: false,
-    refreshing: false,
-  },
   setView: (view) => {
     localStorage.setItem("currentView", view);
     set({ currentView: view });
@@ -87,28 +63,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDashboardCache: (data) => set({
     dashboardCache: { ...data, loadedAt: Date.now() }
   }),
-  setAnomalies: (response) => {
-    set({
-      anomalies: {
-        data: response.anomalies,
-        count: response.count,
-        by_type: response.by_type,
-        generated_at: response.generated_at,
-        has_new_transactions: false,
-        loading: false,
-        refreshing: false,
-      },
-    });
-  },
-  setAnomaliesLoading: (val) => set((state) => ({
-    anomalies: { ...state.anomalies, loading: val }
-  })),
-  setAnomaliesRefreshing: (val) => set((state) => ({
-    anomalies: { ...state.anomalies, refreshing: val }
-  })),
-  markTransactionsAsNew: () => set((state) => ({
-    anomalies: { ...state.anomalies, has_new_transactions: true }
-  })),
   invalidateDashboardCache: () => set((state) => ({
     dashboardCache: { ...state.dashboardCache, loadedAt: null }
   })),
@@ -139,14 +93,5 @@ export const useAppStore = create<AppState>((set, get) => ({
     dashboardFilter: {},
     categories: STANDARD_CATEGORIES_FALLBACK,
     categoriesLoaded: false,
-    anomalies: {
-      data: [],
-      count: 0,
-      by_type: {},
-      generated_at: null,
-      has_new_transactions: false,
-      loading: false,
-      refreshing: false,
-    },
   }),
 }));

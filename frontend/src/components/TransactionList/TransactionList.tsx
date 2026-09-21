@@ -280,7 +280,7 @@ export default function TransactionList() {
   }, [searchInput]);
 
   // DRILLDOWN: Carica filtri dalla Dashboard
-  const { markTransactionsAsNew, dashboardFilter, setDashboardFilter, categories: CATEGORIES, loadCategories } = useAppStore();
+  const { dashboardFilter, setDashboardFilter, categories: CATEGORIES, loadCategories } = useAppStore();
   useEffect(() => { loadCategories(); }, [loadCategories]);
 
   // A-4: Al mount, consuma dashboardFilter se impostato dalla Dashboard
@@ -337,7 +337,6 @@ export default function TransactionList() {
       danger: true,
     }))) return;
     try {
-      markTransactionsAsNew();
       await deleteTransaction(id);
       toast.success("Transazione eliminata");
       load();
@@ -374,7 +373,6 @@ export default function TransactionList() {
     }
     setSaving(true);
     try {
-      markTransactionsAsNew();
       await updateTransaction(editState.tx.id, {
         amount: parseFloat(editState.amount),
         category: editState.category,
@@ -395,7 +393,6 @@ export default function TransactionList() {
     if (toggling === tx.id) return;
     setToggling(tx.id);
     try {
-      markTransactionsAsNew();
       await updateTransaction(tx.id, { is_recurring: !tx.is_recurring });
       load();
     } catch { toast.error("Errore nell'aggiornamento"); }
@@ -437,7 +434,6 @@ export default function TransactionList() {
     }))) return;
     setBulkDeleting(true);
     try {
-      markTransactionsAsNew();
       const { data } = await bulkDeleteTransactions(Array.from(selectedIds));
       toast.success(`${data.deleted} transazioni eliminate`);
       exitSelectMode();

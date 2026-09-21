@@ -13,7 +13,7 @@ from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import (
     TransactionCreate, TransactionResponse, TransactionUpdate, CATEGORIES
 )
-from backend.core.ai_engine import invalidate_anomaly_cache, get_model_for_user, client as _ai_client
+from backend.core.ai_engine import get_model_for_user, client as _ai_client
 from openai import NotFoundError
 from backend.api.auth import get_current_user
 from backend.api.routes.categories import get_active_category_names
@@ -46,15 +46,6 @@ async def create_transaction(
     db.add(tx)
     db.commit()
     db.refresh(tx)
-    
-    # Invalida cache anomalie per il mese della transazione
-    try:
-        from datetime import date as _date
-        tx_date = _date.fromisoformat(tx.date)
-        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
-    except Exception:
-        pass
-        
     return tx
 
 
@@ -222,21 +213,9 @@ async def bulk_delete_transactions(
         Transaction.id.in_(data.ids), Transaction.user_id == current_user_id
     ).all()
 
-    touched_months: set[tuple[int, int]] = set()
     for tx in txs:
-        try:
-            d = date.fromisoformat(tx.date)
-            touched_months.add((d.year, d.month))
-        except ValueError:
-            pass
         db.delete(tx)
     db.commit()
-
-    for year, month in touched_months:
-        try:
-            invalidate_anomaly_cache(current_user_id, year, month)
-        except Exception:
-            pass
 
     return {"deleted": len(txs)}
 
@@ -278,15 +257,6 @@ async def update_transaction(
         setattr(tx, field, value)
     db.commit()
     db.refresh(tx)
-    
-    # Invalida cache anomalie
-    try:
-        from datetime import date as _date
-        tx_date = _date.fromisoformat(tx.date)
-        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
-    except Exception:
-        pass
-        
     return tx
 
 
@@ -301,13 +271,6 @@ async def delete_transaction(
     ).first()
     if not tx:
         raise HTTPException(404, "Transazione non trovata")
-    # Salva info per invalidazione prima di eliminare
-    try:
-        tx_date = date.fromisoformat(tx.date)
-        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
-    except Exception:
-        pass
-        
     db.delete(tx)
     db.commit()
     return {"detail": "Transazione eliminata"}
@@ -406,13 +369,4 @@ async def parse_natural_language(
     db.add(tx)
     db.commit()
     db.refresh(tx)
-    
-    # Invalida cache anomalie
-    try:
-        from datetime import date as _date
-        tx_date = _date.fromisoformat(tx.date)
-        invalidate_anomaly_cache(current_user_id, tx_date.year, tx_date.month)
-    except Exception:
-        pass
-        
     return tx

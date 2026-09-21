@@ -24,7 +24,6 @@ export default function AiImporter() {
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const invalidateDashboardCache = useAppStore((s) => s.invalidateDashboardCache);
-  const markTransactionsAsNew = useAppStore((s) => s.markTransactionsAsNew);
 
   const reset = () => {
     setStep("idle");
@@ -72,7 +71,6 @@ export default function AiImporter() {
       if (data.imported > 0) {
         toast.success(`${data.imported} spese importate`);
         invalidateDashboardCache();
-        markTransactionsAsNew();
       }
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
