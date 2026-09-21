@@ -38,6 +38,16 @@ Un budget mensile per categoria, con stato a tre livelli: ok, in avvicinamento, 
 
 ![Budget](docs/screenshots/budget.png)
 
+### Mobile
+L'interfaccia è pensata anche per il telefono: barra di navigazione in basso, layout a colonna singola, installabile come PWA.
+
+<p align="center">
+  <img src="docs/screenshots/mobile-dashboard.png" alt="Dashboard su mobile" width="23%">
+  <img src="docs/screenshots/mobile-chat.png" alt="Chat AI su mobile" width="23%">
+  <img src="docs/screenshots/mobile-transazioni.png" alt="Transazioni su mobile" width="23%">
+  <img src="docs/screenshots/mobile-budget.png" alt="Budget su mobile" width="23%">
+</p>
+
 ### Import da estratto conto
 Caricamento di file CSV, Excel o PDF. L'app riconosce le colonne (euristica più AI), mostra un'anteprima che l'utente può correggere, evita i duplicati rispetto alle transazioni già presenti e categorizza automaticamente le righe che ne sono prive.
 
