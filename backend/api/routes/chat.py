@@ -27,7 +27,7 @@ async def chat(
 
     activate_model_for_request(db, current_user_id)
     try:
-        result = chat_with_ai(message, request.history)
+        result = chat_with_ai(message, request.history, user_id=current_user_id)
     except NotFoundError:
         raise HTTPException(422, MODEL_UNAVAILABLE_MSG)
     except Exception as e:

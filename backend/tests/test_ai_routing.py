@@ -39,6 +39,8 @@ from backend.core.ai_engine import (
 HAS_API_KEY = bool(os.getenv("GROQ_API_KEY", "").strip())
 requires_api = pytest.mark.skipif(not HAS_API_KEY, reason="GROQ_API_KEY non impostata")
 
+TEST_USER_ID = "test_user_ai_routing"
+
 # ─── B.1 Canonical question sets ─────────────────────────────────────────────
 
 # (question, expected_function_name, expected_key_params)
@@ -131,7 +133,7 @@ class TestOutOfScopeNoLLM:
     def test_zero_llm_calls(self, question):
         """chat_with_ai su query OOS non deve fare nessuna chiamata al client LLM."""
         with patch("backend.core.ai_engine.client") as mock_client:
-            chat_with_ai(question)
+            chat_with_ai(question, user_id=TEST_USER_ID)
             mock_client.chat.completions.create.assert_not_called()
 
     @pytest.mark.parametrize("question", IN_SCOPE_FUNCTION[:2])
@@ -171,7 +173,7 @@ class TestInputValidation:
         """chat_with_ai con 1500 char → risposta di lunghezza-troppo-lunga (no eccezione)."""
         long_q = "x" * 1500
         with patch("backend.core.ai_engine.client"):
-            result = chat_with_ai(long_q)
+            result = chat_with_ai(long_q, user_id=TEST_USER_ID)
         assert "answer" in result
         assert result["answer"]  # non vuota
 
@@ -211,14 +213,14 @@ class TestFunctionOutputShape:
     @pytest.mark.parametrize("fn_name", list(_PREBUILT_FUNCTIONS.keys()))
     def test_keys_always_present(self, fn_name):
         """Output deve sempre avere chart_data e table_data (anche se None)."""
-        out = execute_prebuilt_function(fn_name, {})
+        out = execute_prebuilt_function(fn_name, {}, user_id=TEST_USER_ID)
         assert "chart_data" in out, f"{fn_name}: manca chart_data"
         assert "table_data" in out, f"{fn_name}: manca table_data"
 
     @pytest.mark.parametrize("fn_name", list(_PREBUILT_FUNCTIONS.keys()))
     def test_chart_data_bounds(self, fn_name):
         """Se chart_data presente → data ≤ MAX_CHART_POINTS e type valido."""
-        out = execute_prebuilt_function(fn_name, {})
+        out = execute_prebuilt_function(fn_name, {}, user_id=TEST_USER_ID)
         cd = out.get("chart_data")
         if cd is not None:
             assert cd.get("type") in ("bar", "line", "pie"), (
@@ -232,7 +234,7 @@ class TestFunctionOutputShape:
     @pytest.mark.parametrize("fn_name", list(_PREBUILT_FUNCTIONS.keys()))
     def test_table_data_bounds(self, fn_name):
         """Se table_data presente → rows ≤ MAX_TABLE_ROWS e celle sono str."""
-        out = execute_prebuilt_function(fn_name, {})
+        out = execute_prebuilt_function(fn_name, {}, user_id=TEST_USER_ID)
         td = out.get("table_data")
         if td is not None:
             rows = td.get("rows", [])
@@ -247,17 +249,17 @@ class TestFunctionOutputShape:
 
     def test_top_transactions_extreme_n(self):
         """top_n=9999 deve essere clippato a MAX_TOP_N=50 senza eccezioni."""
-        out = execute_prebuilt_function("query_spending", {"top_n": 9999, "period_days": 30})
+        out = execute_prebuilt_function("query_spending", {"top_n": 9999, "period_days": 30}, user_id=TEST_USER_ID)
         assert "table_data" in out
 
     def test_period_days_extreme(self):
         """period_days=10000 deve essere clippato a MAX_PERIOD_DAYS=365."""
-        out = execute_prebuilt_function("query_spending", {"period_days": 10000})
+        out = execute_prebuilt_function("query_spending", {"period_days": 10000}, user_id=TEST_USER_ID)
         assert "chart_data" in out  # no eccezione
 
     def test_invalid_function_name(self):
         """Funzione inesistente → {chart_data: None, table_data: None} senza eccezione."""
-        out = execute_prebuilt_function("funzione_inesistente", {})
+        out = execute_prebuilt_function("funzione_inesistente", {}, user_id=TEST_USER_ID)
         assert out == {"chart_data": None, "table_data": None}
 
     def test_validate_output_strips_excess_chart_points(self):
@@ -500,24 +502,24 @@ class TestWhatIfValidation:
 
 class TestWhatIfOutput:
     def test_returns_table_and_chart(self):
-        result = execute_prebuilt_function("what_if", {"monthly_delta": -50, "horizon_months": 12})
+        result = execute_prebuilt_function("what_if", {"monthly_delta": -50, "horizon_months": 12}, user_id=TEST_USER_ID)
         assert "chart_data" in result
         assert "table_data" in result
 
     def test_table_has_three_rows(self):
-        result = execute_prebuilt_function("what_if", {"monthly_delta": -50, "horizon_months": 12})
+        result = execute_prebuilt_function("what_if", {"monthly_delta": -50, "horizon_months": 12}, user_id=TEST_USER_ID)
         td = result.get("table_data")
         if td is not None:
             # Either 3-row result or "Dati insufficienti" (1-row) — both valid
             assert len(td["rows"]) >= 1
 
     def test_percent_change_mode(self):
-        result = execute_prebuilt_function("what_if", {"category": "cibo", "percent_change": -15, "horizon_months": 6})
+        result = execute_prebuilt_function("what_if", {"category": "cibo", "percent_change": -15, "horizon_months": 6}, user_id=TEST_USER_ID)
         assert "chart_data" in result
         assert "table_data" in result
 
     def test_monthly_target_mode(self):
-        result = execute_prebuilt_function("what_if", {"category": "cibo", "monthly_target": 300})
+        result = execute_prebuilt_function("what_if", {"category": "cibo", "monthly_target": 300}, user_id=TEST_USER_ID)
         assert "chart_data" in result
         assert "table_data" in result
 
@@ -529,7 +531,7 @@ class TestWhatIfOutput:
         Base.metadata.create_all(empty_engine)
         monkeypatch.setattr("backend.core.ai_engine.engine", empty_engine)
 
-        result = execute_prebuilt_function("what_if", {"category": "abbigliamento", "monthly_delta": -20})
+        result = execute_prebuilt_function("what_if", {"category": "abbigliamento", "monthly_delta": -20}, user_id=TEST_USER_ID)
         td = result.get("table_data")
         assert td is not None
         assert len(td["rows"]) >= 1

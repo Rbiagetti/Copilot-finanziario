@@ -26,7 +26,7 @@ from backend.core.ai_engine import (
     get_llm_stats,
     _reset_llm_stats,
 )
-from backend.tests.seed_test_data import seed_backtest_db
+from backend.tests.seed_test_data import seed_backtest_db, DEV_USER_ID
 
 REPORT_PATH = Path(__file__).parent / "backtest_report.html"
 HAS_API_KEY = bool(os.getenv("GROQ_API_KEY", "").strip())
@@ -557,7 +557,7 @@ def _run_tc(tc: TC) -> TestResult:
         # max_llm_calls=0 tests: test pre-filter directly
         if tc.max_llm_calls == 0:
             _reset_llm_stats()
-            result = chat_with_ai(tc.message, tc.history)
+            result = chat_with_ai(tc.message, tc.history, user_id=DEV_USER_ID)
             calls_made = get_llm_stats()["total_calls"]
             r.actual_function = _extract_routing(result)
             r.actual_answer = result.get("answer", "")
@@ -571,7 +571,7 @@ def _run_tc(tc: TC) -> TestResult:
         else:
             # LLM test
             _reset_llm_stats()
-            result = chat_with_ai(tc.message, tc.history)
+            result = chat_with_ai(tc.message, tc.history, user_id=DEV_USER_ID)
             r.actual_function = _extract_routing(result)
             r.actual_answer = result.get("answer", "")
 
