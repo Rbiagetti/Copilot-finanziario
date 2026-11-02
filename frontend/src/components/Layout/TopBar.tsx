@@ -6,6 +6,7 @@ const TITLES: Record<string, string> = {
   transactions: "Transazioni",
   chat: "Chat AI",
   budget: "Budget",
+  wealth: "Patrimonio",
   settings: "Impostazioni",
 };
 

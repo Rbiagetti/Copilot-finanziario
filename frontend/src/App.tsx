@@ -1,6 +1,6 @@
 import { useEffect, lazy, Suspense, useState, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { useNavigate, useLocation, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useLocation, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Toaster, ToastBar } from "react-hot-toast";
 import { useAppStore } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
@@ -15,6 +15,7 @@ const Dashboard = lazy(() => import("./components/Dashboard/Dashboard"));
 const TransactionList = lazy(() => import("./components/TransactionList/TransactionList"));
 const ChatInterface = lazy(() => import("./components/ChatInterface/ChatInterface"));
 const BudgetPanel = lazy(() => import("./components/BudgetPanel/BudgetPanel"));
+const WealthPanel = lazy(() => import("./components/Wealth/WealthPanel"));
 const SettingsPanel = lazy(() => import("./components/Settings/SettingsPanel"));
 const PrivacyPolicy = lazy(() => import("./components/Legal/PrivacyPolicy"));
 const TermsPage = lazy(() => import("./components/Legal/TermsPage"));
@@ -75,7 +76,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
   }
 }
 
-type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
+type View = "dashboard" | "transactions" | "chat" | "budget" | "wealth" | "settings";
 
 function AppLayout() {
   const { isAuthenticated } = useAuthStore();
@@ -107,7 +108,7 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const segment = location.pathname.replace(/^\//, "") as View;
-    const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
+    const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "wealth", "settings"];
     if (validViews.includes(segment)) {
       setView(segment);
     }
@@ -196,6 +197,7 @@ function App() {
           <Route path="/transactions" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><TransactionList /></Suspense></ErrorBoundary>} />
           <Route path="/chat" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><ChatInterface /></Suspense></ErrorBoundary>} />
           <Route path="/budget" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><BudgetPanel /></Suspense></ErrorBoundary>} />
+          <Route path="/wealth" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><WealthPanel /></Suspense></ErrorBoundary>} />
           <Route path="/settings" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><SettingsPanel /></Suspense></ErrorBoundary>} />
         </Route>
 

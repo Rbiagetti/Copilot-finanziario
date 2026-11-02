@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ForecastData, FullHistoryTransaction } from "../api/client";
 import { getCategoryNames } from "../api/client";
 
-type View = "dashboard" | "transactions" | "chat" | "budget" | "settings";
+type View = "dashboard" | "transactions" | "chat" | "budget" | "wealth" | "settings";
 
 interface DashboardCache {
   rawHistory: FullHistoryTransaction[];
@@ -37,7 +37,7 @@ interface AppState {
 
 const getInitialView = (): View => {
   const saved = localStorage.getItem("currentView") as View;
-  const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "settings"];
+  const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "wealth", "settings"];
   return validViews.includes(saved) ? (saved === "chat" ? "dashboard" : saved) : "dashboard";
 };
 

@@ -338,4 +338,90 @@ export const updateBudget = (id: number, data: { category: string; amount: numbe
   api.put(`/budgets/${id}`, data);
 export const deleteBudget = (id: number) => api.delete(`/budgets/${id}`);
 
+// ─── Wealth Monitor ───────────────────────────────────────────────────────────
+
+export type WealthKind =
+  | "liquidita"
+  | "investimenti"
+  | "previdenza"
+  | "immobili"
+  | "altro";
+
+export interface WealthAccount {
+  id: number;
+  name: string;
+  kind: WealthKind;
+}
+
+export interface WealthSnapshotAccount {
+  account_id: number;
+  name: string;
+  kind: WealthKind;
+  balance: number | null;
+  balance_date: string | null;
+}
+
+export interface WealthSnapshotResponse {
+  date: string;
+  accounts: WealthSnapshotAccount[];
+}
+
+export interface WealthSeriesPoint {
+  date: string;
+  total: number;
+}
+
+export interface WealthCompositionRow {
+  kind: WealthKind;
+  total: number;
+  pct: number;
+}
+
+export interface WealthAccountOverview {
+  id: number;
+  name: string;
+  kind: WealthKind;
+  balance: number;
+  delta: number | null;
+  last_date: string | null;
+}
+
+export interface WealthOverview {
+  series: WealthSeriesPoint[];
+  current: WealthSeriesPoint | null;
+  previous: WealthSeriesPoint | null;
+  delta: number | null;
+  delta_pct: number | null;
+  composition: WealthCompositionRow[];
+  accounts: WealthAccountOverview[];
+}
+
+export interface WealthAccountHistory {
+  account: { id: number; name: string; kind: WealthKind };
+  history: { date: string; balance: number }[];
+}
+
+export const getWealthAccounts = () =>
+  api.get<WealthAccount[]>("/wealth/accounts");
+export const createWealthAccount = (data: { name: string; kind: WealthKind }) =>
+  api.post<WealthAccount>("/wealth/accounts", data);
+export const updateWealthAccount = (
+  id: number,
+  data: Partial<{ name: string; kind: WealthKind }>
+) => api.patch<WealthAccount>(`/wealth/accounts/${id}`, data);
+export const deleteWealthAccount = (id: number) =>
+  api.delete(`/wealth/accounts/${id}`);
+export const getWealthSnapshot = (date?: string) =>
+  api.get<WealthSnapshotResponse>("/wealth/snapshot", {
+    params: date ? { date } : {},
+  });
+export const saveWealthSnapshot = (
+  date: string,
+  entries: { account_id: number; balance: number }[]
+) => api.put<{ date: string; saved: number }>("/wealth/snapshot", { date, entries });
+export const getWealthOverview = (months = 12) =>
+  api.get<WealthOverview>("/wealth/overview", { params: { months } });
+export const getWealthAccountHistory = (id: number) =>
+  api.get<WealthAccountHistory>(`/wealth/accounts/${id}/history`);
+
 export default api;

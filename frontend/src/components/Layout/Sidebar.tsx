@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../../store/appStore";
-import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Wallet, List, Settings, LogOut, Landmark } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import toast from "react-hot-toast";
 import BrandMark from "./BrandMark";
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { key: "transactions" as const, label: "Transazioni", icon: List },
   { key: "chat" as const, label: "Chat AI", icon: MessageCircle },
   { key: "budget" as const, label: "Budget", icon: Wallet },
+  { key: "wealth" as const, label: "Patrimonio", icon: Landmark },
   { key: "settings" as const, label: "Impostazioni", icon: Settings },
 ];
 

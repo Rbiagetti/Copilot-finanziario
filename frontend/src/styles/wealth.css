@@ -1,0 +1,345 @@
+/* ═══════════════════════════════════════════════════════════════
+   FinCopilot — Wealth Monitor (patrimonio a snapshot)
+   ═══════════════════════════════════════════════════════════════ */
+
+.wealth-page { display: flex; flex-direction: column; gap: 1rem; }
+
+.wealth-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+.wealth-sub {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  margin-top: 0.35rem;
+}
+.wealth-update-btn { width: auto; padding: 0.6rem 1.1rem; }
+
+.wealth-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+.wealth-error .btn-primary { width: auto; padding: 0.6rem 1.5rem; }
+
+/* ── KPI ── */
+.wealth-kpi {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.wealth-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+}
+.wealth-kpi-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+.wealth-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.wealth-kpi-hint {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.wealth-kpi-value.up { color: var(--success); }
+.wealth-kpi-value.down { color: var(--danger); }
+
+/* ── Card generica ── */
+.wealth-card {
+  padding: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+}
+.wealth-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+.wealth-card-head h3 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+}
+.wealth-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.wealth-chart { width: 100%; }
+.wealth-chart-empty { padding: 1.5rem 0; text-align: center; display: block; }
+
+/* ── Composizione ── */
+.wealth-composition { display: flex; flex-direction: column; gap: 0.6rem; }
+.wealth-comp-row {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr 5.5rem 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+}
+.wealth-comp-label { color: var(--text-muted); }
+.wealth-comp-bar {
+  height: 4px;
+  background: var(--glass-2);
+  overflow: hidden;
+}
+.wealth-comp-bar div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s var(--ease-out);
+}
+.wealth-comp-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.wealth-comp-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* ── Form aggiornamento saldi ── */
+.wealth-form-card { border-left: 2px solid var(--accent); }
+
+.wealth-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.wealth-date-row input {
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color-scheme: dark;
+}
+.wealth-date-row input:focus {
+  border-color: var(--glass-border-hi);
+  outline: none;
+}
+
+.wealth-form-rows { display: flex; flex-direction: column; }
+.wealth-form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+.wealth-form-row:last-child { border-bottom: none; }
+.wealth-form-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.82rem;
+  min-width: 0;
+}
+.wealth-form-name small {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+.wealth-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  padding: 0.4rem 0.6rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+.wealth-input-wrap:focus-within { border-color: var(--glass-border-hi); }
+.wealth-input-wrap input {
+  width: 7rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.wealth-input-wrap input::-webkit-outer-spin-button,
+.wealth-input-wrap input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.wealth-input-wrap input::placeholder { color: var(--fg-dim); }
+
+.wealth-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.85rem;
+}
+.wealth-form-actions .btn-primary { width: auto; padding: 0.6rem 1.4rem; }
+
+/* ── Elenco conti ── */
+.wealth-account-list { display: flex; flex-direction: column; }
+.wealth-account-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+.wealth-account-row:last-child { border-bottom: none; }
+.wealth-account-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+  flex: 1;
+}
+.wealth-account-name {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wealth-kind {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+.wealth-account-numbers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.12rem;
+  font-variant-numeric: tabular-nums;
+}
+.wealth-account-balance { font-size: 0.85rem; }
+.wealth-account-delta { font-size: 0.66rem; color: var(--text-dim); }
+.wealth-account-delta.up { color: var(--success); }
+.wealth-account-delta.down { color: var(--danger); }
+.wealth-account-actions { display: flex; gap: 0.35rem; }
+
+.wealth-account-row--editing { flex-wrap: wrap; }
+.wealth-account-name-input {
+  flex: 1;
+  min-width: 8rem;
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  padding: 0.45rem 0.6rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.wealth-kind-select {
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  padding: 0.45rem 0.6rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+/* ── Aggiunta conto ── */
+.wealth-add-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--glass-border);
+}
+.wealth-add-form input,
+.wealth-add-form select {
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  padding: 0.55rem 0.7rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.wealth-add-form input::placeholder { color: var(--fg-dim); }
+.wealth-add-form input:focus,
+.wealth-add-form select:focus {
+  border-color: var(--glass-border-hi);
+  outline: none;
+}
+.wealth-add-form .btn-primary { width: auto; padding: 0.55rem 1.1rem; }
+
+/* ── Mobile ── */
+@media (max-width: 767px) {
+  .wealth-head { flex-direction: column; align-items: stretch; }
+  .wealth-update-btn { width: 100%; justify-content: center; }
+
+  .wealth-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wealth-kpi-card:first-child { grid-column: 1 / -1; }
+
+  .wealth-comp-row {
+    grid-template-columns: 6rem 1fr 4.75rem 2.5rem;
+    gap: 0.5rem;
+  }
+
+  .wealth-date-row { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+  .wealth-date-row input { width: 100%; }
+
+  .wealth-form-row { flex-wrap: wrap; gap: 0.5rem; }
+  .wealth-input-wrap { width: 100%; }
+  .wealth-input-wrap input { width: 100%; text-align: left; }
+  .wealth-form-actions .btn-primary { width: 100%; }
+
+  .wealth-add-form { grid-template-columns: 1fr; }
+  .wealth-add-form .btn-primary { width: 100%; justify-content: center; }
+
+  .wealth-account-row { flex-wrap: wrap; }
+  .wealth-account-actions { margin-left: auto; }
+}
+
+@media (max-width: 480px) {
+  .wealth-kpi-value { font-size: 1.2rem; }
+  .wealth-comp-row {
+    grid-template-columns: 1fr 4.5rem 2.5rem;
+  }
+  .wealth-comp-bar { display: none; }
+}
