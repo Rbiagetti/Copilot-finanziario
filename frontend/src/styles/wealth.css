@@ -259,7 +259,14 @@
 .wealth-account-delta.down { color: var(--danger); }
 .wealth-account-actions { display: flex; gap: 0.35rem; }
 
-.wealth-account-row--editing { flex-wrap: wrap; }
+.wealth-account-row--editing { gap: 0.5rem; }
+.wealth-edit-fields {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+.wealth-edit-actions { display: flex; gap: 0.35rem; }
 .wealth-account-name-input {
   flex: 1;
   min-width: 8rem;
@@ -334,6 +341,29 @@
 
   .wealth-account-row { flex-wrap: wrap; }
   .wealth-account-actions { margin-left: auto; }
+
+  /* iOS: un input/select con font calcolato <16px fa zoomare Safari al focus.
+     Questi campi sono inline in una riga compatta (testo ~13px): a 16px
+     sembrerebbero sproporzionati. Manteniamo quindi 16px come font calcolato
+     (nessuno zoom) e riduciamo la resa visiva del blocco a ~13px con zoom.
+     La larghezza compensa lo zoom, così il blocco occupa tutta la colonna. */
+  .wealth-account-row--editing {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .wealth-edit-fields {
+    flex-direction: column;
+    gap: 0.5rem;
+    zoom: 0.82;
+  }
+  /* Lo zoom riduce anche l'altezza: compenso col padding per restare sopra
+     i ~40px di tap target consigliati su iOS. */
+  .wealth-edit-fields .wealth-account-name-input,
+  .wealth-edit-fields .wealth-kind-select {
+    padding: 0.85rem 0.7rem;
+  }
+  .wealth-edit-actions { justify-content: flex-end; }
 }
 
 @media (max-width: 480px) {

@@ -515,41 +515,45 @@ export default function WealthPanel() {
                         key={account.id}
                         className="wealth-account-row wealth-account-row--editing"
                       >
-                        <input
-                          className="wealth-account-name-input"
-                          value={editName}
-                          maxLength={40}
-                          onChange={(event) => setEditName(event.target.value)}
-                        />
-                        <select
-                          className="wealth-kind-select"
-                          value={editKind}
-                          onChange={(event) =>
-                            setEditKind(event.target.value as WealthKind)
-                          }
-                        >
-                          {KINDS.map((kind) => (
-                            <option key={kind} value={kind}>
-                              {KIND_LABELS[kind]}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={saveEdit}
-                          aria-label="Salva"
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-icon"
-                          onClick={() => setEditingId(null)}
-                          aria-label="Annulla"
-                        >
-                          <X size={14} />
-                        </button>
+                        <div className="wealth-edit-fields">
+                          <input
+                            className="wealth-account-name-input"
+                            value={editName}
+                            maxLength={40}
+                            onChange={(event) => setEditName(event.target.value)}
+                          />
+                          <select
+                            className="wealth-kind-select"
+                            value={editKind}
+                            onChange={(event) =>
+                              setEditKind(event.target.value as WealthKind)
+                            }
+                          >
+                            {KINDS.map((kind) => (
+                              <option key={kind} value={kind}>
+                                {KIND_LABELS[kind]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="wealth-edit-actions">
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={saveEdit}
+                            aria-label="Salva"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon"
+                            onClick={() => setEditingId(null)}
+                            aria-label="Annulla"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
                     );
                   }
