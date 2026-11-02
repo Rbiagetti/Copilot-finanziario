@@ -328,8 +328,23 @@
     gap: 0.5rem;
   }
 
-  .wealth-date-row { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
-  .wealth-date-row input { width: 100%; }
+  .wealth-date-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+  }
+  /* iOS: il date picker nativo ha una larghezza minima propria che può sforare
+     il contenitore. min-width:0 + appearance:none lo fanno rientrare come gli
+     altri campi. */
+  .wealth-date-row input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
   .wealth-form-row { flex-wrap: wrap; gap: 0.5rem; }
   .wealth-input-wrap { width: 100%; }
@@ -345,8 +360,7 @@
   /* iOS: un input/select con font calcolato <16px fa zoomare Safari al focus.
      Questi campi sono inline in una riga compatta (testo ~13px): a 16px
      sembrerebbero sproporzionati. Manteniamo quindi 16px come font calcolato
-     (nessuno zoom) e riduciamo la resa visiva del blocco a ~13px con zoom.
-     La larghezza compensa lo zoom, così il blocco occupa tutta la colonna. */
+     (nessuno zoom) e riduciamo la resa visiva del blocco a ~13px con zoom. */
   .wealth-account-row--editing {
     flex-direction: column;
     align-items: stretch;
