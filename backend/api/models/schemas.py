@@ -108,3 +108,39 @@ class FullHistoryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ─── Wealth Monitor ───────────────────────────────────────────────────────────
+
+# Tipi di conto ammessi. Slug senza accenti, usati come valore persistito e come
+# chiave di composizione; le etichette italiane vivono solo nel frontend.
+WEALTH_KINDS = ["liquidita", "investimenti", "previdenza", "immobili", "altro"]
+
+
+class WealthAccountCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=40)
+    kind: str = "liquidita"
+
+
+class WealthAccountUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=40)
+    kind: Optional[str] = None
+
+
+class WealthAccountResponse(BaseModel):
+    id: int
+    name: str
+    kind: str
+
+    class Config:
+        from_attributes = True
+
+
+class WealthSnapshotEntry(BaseModel):
+    account_id: int
+    balance: float = Field(..., ge=0, le=100_000_000)
+
+
+class WealthSnapshotSave(BaseModel):
+    date: str
+    entries: List[WealthSnapshotEntry] = Field(..., min_length=1, max_length=100)

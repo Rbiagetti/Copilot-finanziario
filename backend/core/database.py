@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Text, DateTime, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Text, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 
@@ -73,6 +73,39 @@ class Category(Base):
     user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
     name = Column(String, nullable=False)  # normalizzato lowercase, coerente con Transaction.category
     active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class WealthAccount(Base):
+    """Conto del patrimonio (MPS, Trade Republic, contanti...). L'utente li crea,
+    rinomina e archivia liberamente: il nome è testo libero, `kind` è uno slug usato
+    solo per la composizione del patrimonio. Archiviazione = soft delete, stesso
+    pattern di Category/Budget: lo storico resta in DB ma non viene più conteggiato."""
+    __tablename__ = "wealth_accounts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False, default="liquidita")
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class WealthSnapshot(Base):
+    """Saldo di un conto a una certa data (ISO YYYY-MM-DD, coerente con Transaction.date).
+    Una "foto" del patrimonio è l'insieme degli snapshot salvati sulla stessa data. Il
+    vincolo univoco (account_id, snapshot_date) rende il salvataggio un upsert idempotente.
+    user_id è duplicato dall'account per filtrare senza join e per difesa in profondità."""
+    __tablename__ = "wealth_snapshots"
+    __table_args__ = (
+        UniqueConstraint("account_id", "snapshot_date", name="uq_wealth_snapshot_account_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(36), nullable=False, index=True)  # Supabase UUID
+    account_id = Column(Integer, ForeignKey("wealth_accounts.id"), nullable=False, index=True)
+    balance = Column(Float, nullable=False)
+    snapshot_date = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.now)
 
 
