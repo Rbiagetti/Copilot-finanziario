@@ -80,6 +80,7 @@ backend/
       report.py               # report mensile PDF (reportlab)
   core/
     ai_engine.py              # ⚠️ cuore del progetto, ~2.200 righe
+    categories.py             # fonte unica categorie standard + custom per utente
     import_engine.py          # parsing CSV/XLSX/PDF, mapping colonne, date
     database.py               # engine SQLAlchemy, modelli, init_db
                               # (Transaction, Budget, Category, WealthAccount,
@@ -135,6 +136,11 @@ Regole pratiche:
 - Ogni nuova funzione va registrata in `FUNCTION_CATALOG` con schema parametri,
   bound e descrizione: il router la vede solo da lì.
 - Ogni `_fn_*` deve accettare `user_id` come primo argomento e filtrare su di esso.
+- **Categorie:** la fonte unica è `backend/core/categories.py`. Le standard sono 11
+  (incluso `intrattenimento`); le personalizzate si uniscono per utente con
+  `get_active_category_names()`. La chat carica le categorie attive all'inizio di
+  `chat_with_ai()` e le passa al router + a un `ContextVar` per-request: non
+  reintrodurre liste hardcoded né variabili globali mutabili.
 - Determinismo: temperatura 0, seed fisso, JSON forzato. Non introdurre casualità.
 - Le risposte devono restare in italiano e includere tabelle/grafici quando utili.
 - Variabili di debug: `AI_DEBUG_ROUTING=1`, `AI_DISABLE_LLM=1` (risposta OOS
@@ -235,10 +241,11 @@ deterministico di regressione. Prima di un commit, eseguire i test `no_llm`.
 
 1. **Python sbagliato:** `python3` di sistema è 3.9; il progetto richiede 3.11.
    Usare `source venv/bin/activate` o `./venv/bin/python`.
-2. **Categorie duplicate:** `backend/api/models/schemas.py` ha 10 categorie,
-   `ai_engine.py` ne ha 11 (include `intrattenimento`). Il router chat usa il
-   proprio `frozenset` e **non vede le categorie personalizzate** dell'utente:
-   il filtro viene ignorato in silenzio. Non è un bug da fixare "al volo".
+2. **Categorie:** fonte unica in `backend/core/categories.py` (11 standard, incluso
+   `intrattenimento`). `schemas.py` e `ai_engine.py` importano da lì. La chat vede
+   anche le personalizzate via `ContextVar` per-request. Se aggiungi una categoria
+   standard, toccala **solo** in `core/categories.py` e aggiorna il fallback in
+   `frontend/src/store/appStore.ts`.
 3. **Date:** mai fidarsi del parsing implicito di `dateutil`. Formati italiani
    abbreviati (`gen`, `feb`) e ISO hanno già causato corruzione silenziosa dei dati.
 4. **Import stateless:** `/import/preview` e `/import/commit` ricevono entrambi il

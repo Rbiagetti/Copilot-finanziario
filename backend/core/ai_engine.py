@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from openai import OpenAI
 
 from backend.core.database import engine, UserSettings
+from backend.core.categories import STANDARD_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -111,12 +112,25 @@ MAX_TOP_N                   = 50
 MAX_CATEGORY_TREND_MONTHS   = 24
 MAX_MULTI_SUMMARY_CHARS     = 2500
 
-# Known categories — used to validate router-supplied category params.
-# Treated as a soft allowlist: unrecognised values are set to None.
-CATEGORIES: frozenset = frozenset({
-    "abbigliamento", "abbonamenti", "altro", "casa", "cibo",
-    "formazione", "intrattenimento", "lavoro", "salute", "svago", "trasporti",
-})
+# Categorie standard — fonte unica in backend/core/categories.py.
+# Le personalizzate dell'utente vengono aggiunte per-request in `_user_categories`
+# (ContextVar) e validate da `_is_known_category()`.
+CATEGORIES: frozenset = frozenset(STANDARD_CATEGORIES)
+
+# Categorie attive (standard + personalizzate) della richiesta corrente. ContextVar
+# e non variabile globale: FastAPI serve richieste concorrenti e due utenti non
+# devono vedersi le categorie personalizzate a vicenda.
+_user_categories: ContextVar[frozenset | None] = ContextVar(
+    "user_categories", default=None
+)
+
+
+def _allowed_categories() -> frozenset:
+    return _user_categories.get() or CATEGORIES
+
+
+def _is_known_category(value) -> bool:
+    return isinstance(value, str) and value in _allowed_categories()
 
 # MACRO_INTENTS rimossi — la selezione multi-funzione è ora delegata all'LLM router.
 
@@ -330,6 +344,28 @@ def _scalar(sql: str, params: dict = None):
         return row[0] if row else None
 
 
+def _load_allowed_categories(user_id: str) -> frozenset:
+    """Categorie standard + personalizzate attive dell'utente, lette dal DB.
+
+    Una query per richiesta di chat: le categorie cambiano raramente e il costo è
+    trascurabile rispetto alle chiamate LLM. In caso di errore (tabella assente in
+    un DB vecchio) si resta sulle sole standard, senza far fallire la chat.
+    """
+    try:
+        rows = _q(
+            "SELECT name FROM categories WHERE user_id = :user_id AND active = :active",
+            {"user_id": user_id, "active": True},
+        )
+        custom = {
+            str(row[0]).strip().lower()
+            for row in rows
+            if row[0] and str(row[0]).strip()
+        }
+    except Exception:
+        custom = set()
+    return frozenset(STANDARD_CATEGORIES) | custom
+
+
 def _dates(days_ago: int = 0) -> str:
     """Restituisce la data ISO di N giorni fa."""
     return (date.today() - timedelta(days=days_ago)).isoformat()
@@ -514,10 +550,10 @@ def _fn_query_spending(user_id: str, params: dict) -> dict:
         group_by = "category"
 
     category = params.get("category")
-    if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
+    if category is not None and not _is_known_category(category):
         category = None
     exclude_category = params.get("exclude_category")
-    if exclude_category is not None and (not isinstance(exclude_category, str) or exclude_category not in CATEGORIES):
+    if exclude_category is not None and not _is_known_category(exclude_category):
         exclude_category = None
 
     top_n = params.get("top_n")
@@ -909,7 +945,7 @@ def _fn_frequency_analysis(user_id: str, params: dict) -> dict:
     from datetime import datetime as _dt
 
     category = params.get("category")
-    if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
+    if category is not None and not _is_known_category(category):
         category = None
     period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
     cutoff = _dates(period_days)
@@ -1079,7 +1115,7 @@ def _fn_momentum(user_id: str, params: dict) -> dict:
     from datetime import datetime as _dt
 
     category = params.get("category")
-    if category is not None and (not isinstance(category, str) or category not in CATEGORIES):
+    if category is not None and not _is_known_category(category):
         category = None
     period_days = max(14, min(MAX_PERIOD_DAYS, int(params.get("period_days", 60))))
     n_weeks = max(2, period_days // 7)
@@ -1236,7 +1272,7 @@ def _fn_category_drill(user_id: str, params: dict) -> dict:
     import statistics as _stats
 
     category = params.get("category")
-    if not isinstance(category, str) or category not in CATEGORIES:
+    if not _is_known_category(category):
         category = "cibo"
     period_days = max(1, min(MAX_PERIOD_DAYS, int(params.get("period_days", 90))))
     cutoff = _dates(period_days)
@@ -1388,7 +1424,7 @@ def _fn_tag_analysis(user_id: str, params: dict) -> dict:
 def _fn_what_if(user_id: str, params: dict) -> dict:
     """What-if simulator: baseline mensile → scenario → risparmio/costo su orizzonte."""
     category = params.get("category")
-    if isinstance(category, str) and category not in CATEGORIES:
+    if isinstance(category, str) and not _is_known_category(category):
         category = None
     horizon_months = max(1, min(60, int(params.get("horizon_months", 12))))
     percent_change  = params.get("percent_change")
@@ -1552,6 +1588,12 @@ ESEMPI MONO-FUNZIONE (1 funzione):
 SINONIMI CATEGORIA (normalizza sempre):
 ristoranti/bar/pizza → cibo | uber/taxi/benzina/metro → trasporti | palestra/medico/farmacia → salute
 libri/corso/udemy → formazione | netflix/spotify/prime → abbonamenti | bici/moto/aereo → trasporti
+
+CATEGORIE DISPONIBILI PER QUESTO UTENTE (usa ESATTAMENTE uno di questi nomi in
+category/exclude_category):
+__ALLOWED_CATEGORIES__
+Se una categoria personalizzata compare qui sopra, ha priorità sui sinonimi statici:
+es. se esiste "palestra", "palestra" → "palestra" (NON "salute").
 
 REGOLA MERCHANT: se la domanda cita un brand/negozio SPECIFICO (nome proprio NON uguale a una
 categoria), usa query_spending con params.search = il nome in minuscolo.
@@ -1771,11 +1813,11 @@ def _sanitize_params(name: str, params: dict) -> dict:
             params["chart_type"] = "bar"
     if "category" in params and params["category"] is not None:
         cat = params["category"]
-        if not isinstance(cat, str) or cat not in CATEGORIES:
+        if not _is_known_category(cat):
             params["category"] = None
     if "exclude_category" in params and params["exclude_category"] is not None:
         excl = params["exclude_category"]
-        if not isinstance(excl, str) or excl not in CATEGORIES:
+        if not _is_known_category(excl):
             params["exclude_category"] = None
     if "query" in params and params["query"] is not None:
         q = re.sub(r"[^a-z0-9\s]", "", str(params["query"]).lower()).strip()
@@ -1938,19 +1980,27 @@ def _answer_in_perimeter(question: str, compact_context: str) -> dict:
     return _parse_ai_response(raw)
 
 
-def _render_function_selector_prompt() -> str:
-    """Inietta la data odierna nel prompt del router (placeholder testuali, non .format(),
-    perché il prompt contiene JSON letterale con parentesi graffe che .format() romperebbe)."""
+def _render_function_selector_prompt(allowed_categories=None) -> str:
+    """Inietta data odierna e categorie attive nel prompt del router (placeholder
+    testuali, non .format(), perché il prompt contiene JSON letterale con parentesi
+    graffe che .format() romperebbe)."""
     today = date.today()
+    categories = sorted(allowed_categories or CATEGORIES)
     return (
         FUNCTION_SELECTOR_PROMPT
         .replace("__TODAY_YEAR__", str(today.year))
         .replace("__TODAY__", today.isoformat())
+        .replace("__ALLOWED_CATEGORIES__", ", ".join(categories))
     )
 
 
-def _select_function(question: str, history) -> dict:
-    messages = [{"role": "system", "content": _render_function_selector_prompt()}]
+def _select_function(question: str, history, allowed_categories=None) -> dict:
+    messages = [
+        {
+            "role": "system",
+            "content": _render_function_selector_prompt(allowed_categories),
+        }
+    ]
     clean_history = _sanitize_history(history)
     # Pass only last 2 user turns for context
     for h in clean_history[-2:]:
@@ -2031,6 +2081,29 @@ def _interpret_multi_results(question: str, data_summary: str, n_blocks: int) ->
 # ─── MAIN ENTRY POINT ─────────────────────────────────────────────────────────
 
 def chat_with_ai(question: str, history=None, *, user_id: str) -> dict:
+    """Entry point della chat: carica le categorie dell'utente (standard + custom),
+    le rende disponibili al router e alle funzioni tramite ContextVar, poi esegue.
+
+    Il ContextVar è per-request: due utenti concorrenti non si vedono le categorie
+    personalizzate a vicenda.
+    """
+    allowed = _load_allowed_categories(user_id)
+    token = _user_categories.set(allowed)
+    try:
+        return _chat_with_ai_impl(
+            question, history, user_id=user_id, allowed_categories=allowed
+        )
+    finally:
+        _user_categories.reset(token)
+
+
+def _chat_with_ai_impl(
+    question: str,
+    history=None,
+    *,
+    user_id: str,
+    allowed_categories: frozenset | None = None,
+) -> dict:
     steps: list = []
 
     # ── Emergency kill-switch ─────────────────────────────────────────────────
@@ -2083,7 +2156,7 @@ def chat_with_ai(question: str, history=None, *, user_id: str) -> dict:
 
     # PASSO 3 — Router LLM: restituisce use_functions (lista 0..3)
     t = _time.time()
-    selector      = _select_function(question, history)
+    selector      = _select_function(question, history, allowed_categories)
     use_functions = selector.get("use_functions", [])
     in_perimeter  = selector.get("in_perimeter", True)
 

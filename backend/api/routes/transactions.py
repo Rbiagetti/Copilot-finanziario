@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from backend.core.database import get_db, Transaction
 from backend.api.models.schemas import (
-    TransactionCreate, TransactionResponse, TransactionUpdate, CATEGORIES
+    TransactionCreate, TransactionResponse, TransactionUpdate
 )
 from backend.core.ai_engine import get_model_for_user, client as _ai_client
 from openai import NotFoundError

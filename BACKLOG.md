@@ -167,14 +167,12 @@ Audit leggero (2026-08-24/25) su cosa manca rispetto a un'app di gestione spese
 | G-09 | Export/backup completo JSON (transazioni + categorie + budget) | 🟢 | S/M | ⏳ |
 | G-10 | Multi-valuta | 🟢 | L | ⏳ |
 
-**Nota tecnica G-02:** il router chat usa un `frozenset CATEGORIES` hardcoded in
-`ai_engine.py` e **non riconosce le categorie personalizzate**: chiedere in chat di
-una categoria custom non genera errori, ma il filtro viene ignorato in silenzio.
-Da affrontare in una sessione dedicata se diventa un problema reale.
-
-**Incoerenza da sanare:** `backend/api/models/schemas.py` elenca 10 categorie,
-`ai_engine.py` ne elenca 11 (include `intrattenimento`). Allineare quando si tocca
-l'area categorie.
+**✅ Categorie allineate (2026-11-02).** Fonte unica in `backend/core/categories.py`
+(11 standard, incluso `intrattenimento`); `schemas.py` e `ai_engine.py` importano da lì.
+Il router della chat carica le categorie attive dell'utente (standard + personalizzate)
+a inizio richiesta e le passa al prompt e a un `ContextVar` per-request: chiedere
+"quanto ho speso in palestra?" ora filtra davvero la categoria personalizzata.
+5 test di regressione in `test_ai_routing.py`.
 
 ---
 
@@ -208,6 +206,13 @@ per tipo di conto. Solo attività (nessuna passività), come deciso in fase di s
 ---
 
 ## ✅ Completato fuori backlog
+
+### 2026-11-02
+
+- **Categorie**: fonte unica in `backend/core/categories.py`, `intrattenimento`
+  standard ovunque, chat AI abilitata alle categorie personalizzate per utente.
+- **Fix mobile**: campi di modifica conto e campo data del patrimonio allineati
+  agli altri frame su iOS (zoom Safari e min-width del date picker).
 
 ### 2026-05-04
 

@@ -3,12 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import date, datetime
 
-
-CATEGORIES = [
-    "cibo", "trasporti", "casa", "salute",
-    "svago", "abbigliamento", "lavoro",
-    "abbonamenti", "formazione", "altro"
-]
+from backend.core.categories import STANDARD_CATEGORIES as CATEGORIES
 
 
 class TransactionCreate(BaseModel):

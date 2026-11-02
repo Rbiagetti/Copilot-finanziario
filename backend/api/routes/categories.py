@@ -4,22 +4,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.core.database import get_db, Category
-from backend.api.models.schemas import CATEGORIES
+from backend.core.categories import CATEGORIES, STANDARD_CATEGORIES, get_active_category_names
 from backend.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/categories", tags=["categories"])
 
 MAX_CUSTOM_CATEGORY_LEN = 30
-
-
-def get_active_category_names(db: Session, user_id: str) -> list[str]:
-    """Le 10 standard (fisse, mai toccate) + le personalizzate attive dell'utente.
-    Usata ovunque serve validare/proporre categorie: creazione/modifica transazioni,
-    AI Importer, quick-add in linguaggio naturale."""
-    custom = db.query(Category.name).filter(
-        Category.user_id == user_id, Category.active == True
-    ).all()
-    return CATEGORIES + [c[0] for c in custom]
 
 
 class CategoryCreate(BaseModel):
@@ -46,7 +36,7 @@ async def list_categories(
         Category.user_id == current_user_id, Category.active == True
     ).order_by(Category.created_at).all()
     return {
-        "standard": CATEGORIES,
+        "standard": STANDARD_CATEGORIES,
         "custom": [{"id": c.id, "name": c.name} for c in custom],
     }
 

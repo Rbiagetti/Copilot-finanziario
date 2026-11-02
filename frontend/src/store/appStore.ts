@@ -15,7 +15,8 @@ interface DashboardCache {
 // caricamento.
 const STANDARD_CATEGORIES_FALLBACK = [
   "cibo", "trasporti", "casa", "salute", "svago",
-  "abbigliamento", "lavoro", "abbonamenti", "formazione", "altro",
+  "abbigliamento", "lavoro", "abbonamenti", "formazione",
+  "intrattenimento", "altro",
 ];
 
 interface AppState {

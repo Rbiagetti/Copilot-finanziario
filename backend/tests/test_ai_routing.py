@@ -19,6 +19,10 @@ from backend.core.ai_engine import (
     _is_obviously_out_of_scope,
     _input_too_long,
     _sanitize_history,
+    _sanitize_params,
+    _load_allowed_categories,
+    _render_function_selector_prompt,
+    _user_categories,
     _validate_router_output,
     _validate_function_output,
     _select_function,
@@ -535,3 +539,99 @@ class TestWhatIfOutput:
         td = result.get("table_data")
         assert td is not None
         assert len(td["rows"]) >= 1
+
+
+# ─── Categorie: fonte unica e personalizzate ──────────────────────────────────
+
+class TestCategories:
+    def test_standard_categories_consistent_across_modules(self):
+        # Bug storico: schemas.py aveva 10 categorie, ai_engine.py 11
+        # (intrattenimento solo nel motore AI). Ora entrambi importano da
+        # backend/core/categories.py.
+        from backend.api.models.schemas import CATEGORIES as API_CATEGORIES
+
+        assert set(API_CATEGORIES) == set(CATEGORIES)
+        assert "intrattenimento" in API_CATEGORIES
+        assert len(set(API_CATEGORIES)) == len(API_CATEGORIES)
+
+    def test_sanitize_accepts_custom_category_for_current_user(self):
+        token = _user_categories.set(CATEGORIES | {"palestra"})
+        try:
+            params = _sanitize_params(
+                "query_spending",
+                {"category": "palestra", "exclude_category": "palestra"},
+            )
+            assert params["category"] == "palestra"
+            assert params["exclude_category"] == "palestra"
+
+            unknown = _sanitize_params("query_spending", {"category": "cripto"})
+            assert unknown["category"] is None
+        finally:
+            _user_categories.reset(token)
+
+    def test_router_prompt_lists_custom_categories(self):
+        prompt = _render_function_selector_prompt(CATEGORIES | {"palestra"})
+        assert "palestra" in prompt
+        assert "__ALLOWED_CATEGORIES__" not in prompt
+
+    def test_load_allowed_categories_merges_only_current_user(self, tmp_path, monkeypatch):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        from backend.core.database import Base, Category
+
+        db_engine = create_engine(f"sqlite:///{tmp_path / 'categories.db'}")
+        Base.metadata.create_all(db_engine)
+        session = sessionmaker(bind=db_engine)()
+        session.add_all(
+            [
+                Category(user_id="user-a", name="palestra"),
+                Category(user_id="user-b", name="vino"),
+            ]
+        )
+        session.commit()
+        session.close()
+
+        monkeypatch.setattr("backend.core.ai_engine.engine", db_engine)
+
+        allowed_a = _load_allowed_categories("user-a")
+        assert "palestra" in allowed_a
+        assert "vino" not in allowed_a
+        assert set(CATEGORIES).issubset(allowed_a)
+
+    def test_function_accepts_custom_category_end_to_end(self, tmp_path, monkeypatch):
+        from datetime import date
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        from backend.core.database import Base, Transaction
+
+        db_engine = create_engine(f"sqlite:///{tmp_path / 'custom_category.db'}")
+        Base.metadata.create_all(db_engine)
+        session = sessionmaker(bind=db_engine)()
+        session.add(
+            Transaction(
+                user_id=TEST_USER_ID,
+                amount=42.5,
+                category="palestra",
+                description="Abbonamento palestra",
+                date=date.today().isoformat(),
+            )
+        )
+        session.commit()
+        session.close()
+
+        monkeypatch.setattr("backend.core.ai_engine.engine", db_engine)
+
+        token = _user_categories.set(CATEGORIES | {"palestra"})
+        try:
+            result = execute_prebuilt_function(
+                "query_spending",
+                {"category": "palestra", "period_days": 30, "group_by": "category"},
+                user_id=TEST_USER_ID,
+            )
+        finally:
+            _user_categories.reset(token)
+
+        assert "palestra" in json.dumps(result)
