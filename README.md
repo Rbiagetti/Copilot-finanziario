@@ -128,11 +128,11 @@ python -m backend.tests.seed_test_data
 ## Test
 
 ```bash
-# Test deterministici: routing AI, validazione, importazione (nessuna chiave API richiesta)
-pytest backend/tests/test_ai_routing.py backend/tests/test_import_engine.py -v
+# Test deterministici: routing AI, importazione, patrimonio (nessuna chiave API richiesta)
+pytest backend/tests/test_ai_routing.py backend/tests/test_import_engine.py backend/tests/test_wealth.py backend/tests/test_wealth_http.py -v
 
-# Backtest conversazionale della chat (richiede GROQ_API_KEY)
-pytest backend/tests/test_chat_backtest.py -v -s
+# Backtest conversazionale della chat (esplicito: consuma token Groq)
+RUN_LLM_TESTS=1 pytest backend/tests/test_chat_backtest.py -v -s
 ```
 
 ---

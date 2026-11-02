@@ -3,7 +3,7 @@ Test harness per il motore AI: routing, pre-filtro OOS, guardrails input,
 shape degli output delle funzioni prebuilt.
 
 Categorie di test:
-  B.2  test_determinism        — richiede GROQ_API_KEY (skippa se assente)
+  B.2  test_determinism        — richiede RUN_LLM_TESTS=1 e GROQ_API_KEY
   B.3  test_out_of_scope_no_llm — monkeypatch, nessuna chiave necessaria
   B.4  test_input_validation    — nessuna chiave necessaria
   B.5  test_function_output_shape — nessuna chiave necessaria
@@ -40,8 +40,12 @@ from backend.core.ai_engine import (
     _build_multi_summary,
 )
 
-HAS_API_KEY = bool(os.getenv("GROQ_API_KEY", "").strip())
-requires_api = pytest.mark.skipif(not HAS_API_KEY, reason="GROQ_API_KEY non impostata")
+RUN_LLM_TESTS = os.getenv("RUN_LLM_TESTS", "0") == "1"
+HAS_API_KEY = RUN_LLM_TESTS and bool(os.getenv("GROQ_API_KEY", "").strip())
+requires_api = pytest.mark.skipif(
+    not HAS_API_KEY,
+    reason="test LLM disattivati: imposta RUN_LLM_TESTS=1 e GROQ_API_KEY",
+)
 
 TEST_USER_ID = "test_user_ai_routing"
 

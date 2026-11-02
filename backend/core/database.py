@@ -5,11 +5,27 @@ from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/fincopilot.db")
 
+# In locale si può forzare un DB di sviluppo senza toccare le credenziali di
+# produzione nel .env: se DEV_DATABASE_URL è impostata e non siamo su Render,
+# ha priorità su DATABASE_URL. Esempio: sqlite:///./data/fincopilot_dev.db
+if os.getenv("DEV_DATABASE_URL") and not os.getenv("RENDER"):
+    DATABASE_URL = os.getenv("DEV_DATABASE_URL")
+
 # psycopg2 vuole "postgresql://" ma Supabase/Render forniscono "postgres://"
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 _is_sqlite = DATABASE_URL.startswith("sqlite")
+
+# Avviso esplicito: il .env di sviluppo punta spesso al Postgres di produzione.
+# Non blocchiamo l'avvio (servono dati reali per alcune verifiche), ma rendiamo
+# impossibile farlo in silenzio.
+if not _is_sqlite and not os.getenv("RENDER"):
+    print(
+        "⚠️ [DB] DATABASE_URL punta a Postgres mentre l'app gira in locale: "
+        "i test manuali scrivono sul database reale. Imposta DEV_DATABASE_URL "
+        "(es. sqlite:///./data/fincopilot_dev.db) per isolarti."
+    )
 
 _pg_kwargs = {} if _is_sqlite else {
     # Testa ogni connessione prima di usarla — scarta quelle stale

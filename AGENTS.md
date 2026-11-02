@@ -37,12 +37,10 @@ npm install
 npm run dev                               # http://localhost:5173
 
 # Test deterministici (nessuna API key richiesta)
-# Nota: se GROQ_API_KEY è esportata nella shell, test_ai_routing esegue anche i test
-# che chiamano il modello. Per la sola parte deterministica:
-env -u GROQ_API_KEY pytest backend/tests/test_ai_routing.py backend/tests/test_import_engine.py backend/tests/test_wealth.py -v
+pytest backend/tests/test_ai_routing.py backend/tests/test_import_engine.py backend/tests/test_wealth.py backend/tests/test_wealth_http.py -v
 
-# Backtest conversazionale della chat (richiede GROQ_API_KEY, costa token)
-pytest backend/tests/test_chat_backtest.py -v -s
+# Backtest conversazionale della chat (esplicito: consuma token Groq)
+RUN_LLM_TESTS=1 pytest backend/tests/test_chat_backtest.py -v -s
 
 # Seed dati di esempio (90 transazioni)
 python -m backend.tests.seed_test_data
@@ -85,11 +83,11 @@ backend/
     database.py               # engine SQLAlchemy, modelli, init_db
                               # (Transaction, Budget, Category, WealthAccount,
                               #  WealthSnapshot, ChatHistory, UserSettings)
-    auth.py                   # helper JWT (duplicato parziale di api/auth.py)
   tests/
     test_ai_routing.py        # routing deterministico, no LLM
     test_import_engine.py     # regressioni parsing/date/import
     test_wealth.py            # conti, snapshot, overview, isolamento utenti
+    test_wealth_http.py       # smoke HTTP con TestClient (dependency override)
     test_chat_backtest.py     # 60 casi conversazionali (LLM reale)
     seed_test_data.py         # 90 transazioni realistiche
 
@@ -215,6 +213,7 @@ Modulo `backend/api/routes/wealth.py` + `frontend/src/components/Wealth/WealthPa
 | `test_ai_routing.py` | routing, validazione parametri, bound, funzioni | no |
 | `test_import_engine.py` | CSV/XLSX/PDF, date italiane/ISO, dedup, preamboli | no |
 | `test_wealth.py` | conti, snapshot/upsert, overview, isolamento utenti | no |
+| `test_wealth_http.py` | flusso HTTP con `TestClient` + dependency override | no |
 | `test_chat_backtest.py` | 60 domande reali, report HTML | sì |
 
 Regola: ogni modifica al motore AI o all'import va accompagnata da almeno un test
@@ -250,24 +249,26 @@ deterministico di regressione. Prima di un commit, eseguire i test `no_llm`.
    abbreviati (`gen`, `feb`) e ISO hanno già causato corruzione silenziosa dei dati.
 4. **Import stateless:** `/import/preview` e `/import/commit` ricevono entrambi il
    file; non introdurre stato server-side tra le due chiamate.
-5. **`rate_limit.py` non esiste più** (ne resta solo il `.pyc`): i limiti attuali
-   sono dentro `import_engine.py` (max 5 MB, max 1000 righe). Il limite
-   "3 import/giorno per utente" non è implementato.
+5. **`rate_limit.py` non esiste**: i limiti attuali sono dentro `import_engine.py`
+   (max 5 MB, max 1000 righe). Il limite "3 import/giorno per utente" non è
+   implementato.
 6. **Anomalie rimosse dall'UI** (commit `d18ac71`): non reintrodurle senza richiesta.
 7. **`.claude/settings.json`** contiene configurazione `ruflo`/agent-teams usata in
    passato da Claude Code: non è necessaria per lavorare e non va estesa.
 8. **Segreti:** `.env` è presente in locale ma gitignored. Non stamparne il contenuto
    nei log e non committarlo.
-9. **`TestClient` non funziona in questo venv:** starlette e `httpx==0.28.1` sono
-   incompatibili (`Client.__init__() got an unexpected keyword argument 'app'`).
-   I test chiamano le funzioni di route direttamente, con una sessione SQLite in
-   memoria (`test_wealth.py` è l'esempio da copiare per i nuovi moduli).
-10. **`GROQ_API_KEY` spesso esportata nella shell:** i test marcati `requires_api`
-    partono davvero e possono andare in timeout. Per la suite deterministica usare
-    `env -u GROQ_API_KEY pytest ...`.
+9. **`TestClient` richiede `httpx==0.27.2`** (pinnato in `requirements.txt`). Con
+   httpx 0.28 starlette 0.36 passa `app=` a `httpx.Client` e ogni test HTTP fallisce.
+   `test_wealth_http.py` è l'esempio di test HTTP con `dependency_overrides`.
+10. **Test LLM espliciti:** `GROQ_API_KEY` può essere esportata per l'app, quindi i
+    test LLM richiedono anche `RUN_LLM_TESTS=1`; senza, vengono skippati e la suite
+    resta deterministica.
 11. **Tabelle in dev/prod:** `init_db()` (`Base.metadata.create_all`) crea le tabelle
-    all'avvio, anche sul Postgres di Supabase puntato da `.env`. La migrazione Alembic
-    resta la fonte di verità per i deploy: aggiungerla sempre per le tabelle nuove.
+    all'avvio, anche sul Postgres di Supabase puntato da `.env`. Per lavorare in
+    locale senza toccare la produzione imposta
+    `DEV_DATABASE_URL=sqlite:///./data/fincopilot_dev.db`: ha priorità su
+    `DATABASE_URL` e all'avvio compare un avviso se stai usando Postgres in locale.
+    La migrazione Alembic resta la fonte di verità per i deploy.
 
 ---
 

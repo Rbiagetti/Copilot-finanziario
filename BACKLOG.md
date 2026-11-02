@@ -211,6 +211,9 @@ per tipo di conto. Solo attività (nessuna passività), come deciso in fase di s
 
 - **Categorie**: fonte unica in `backend/core/categories.py`, `intrattenimento`
   standard ovunque, chat AI abilitata alle categorie personalizzate per utente.
+- **Trappole note**: rimosso `backend/core/auth.py` (dead code) e i `.pyc` orfani;
+  test LLM dietro `RUN_LLM_TESTS=1`; pin `httpx==0.27.2` con test HTTP reale;
+  `DEV_DATABASE_URL` e avviso per non scrivere sul DB di produzione in locale.
 - **Fix mobile**: campi di modifica conto e campo data del patrimonio allineati
   agli altri frame su iOS (zoom Safari e min-width del date picker).
 
@@ -267,7 +270,13 @@ In ordine di rapporto valore/rischio:
 - `ai_engine.py` è un monolite da 2.237 righe: ogni nuova funzione aumenta il rischio
   di regressione. Se si tocca pesantemente, valutare estrazione in moduli
   (`router.py`, `functions/`, `interpret.py`) con test a copertura invariata.
-- Categorie duplicate tra `schemas.py` e `ai_engine.py` (10 vs 11).
-- `backend/core/auth.py` e `backend/api/auth.py` contengono logica JWT duplicata.
-- `rate_limit.py` rimosso ma restano i `.pyc`: pulire `__pycache__` quando si tocca
-  l'area import.
+
+**Note operative**
+
+- `TestClient` funziona solo con `httpx==0.27.2` (pinnato): non aggiornare httpx senza
+  verificare starlette/FastAPI.
+- In locale `DATABASE_URL` può puntare al Postgres di produzione: impostare
+  `DEV_DATABASE_URL=sqlite:///./data/fincopilot_dev.db` per isolarsi. All'avvio
+  compare un avviso esplicito se si sta usando Postgres fuori da Render.
+- I test LLM sono dietro `RUN_LLM_TESTS=1`, così la suite standard resta deterministica
+  anche con `GROQ_API_KEY` esportata.

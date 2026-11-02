@@ -6,7 +6,7 @@ Esecuzione:
   python backend/tests/test_chat_backtest.py          # runner standalone
 
 Test con max_llm_calls=0 girano SEMPRE (nessuna API key necessaria).
-Test LLM: skippati se GROQ_API_KEY non è impostata.
+Test LLM: skippati se RUN_LLM_TESTS non è 1 (oltre a GROQ_API_KEY).
 Il report HTML viene scritto in backend/tests/backtest_report.html.
 """
 from __future__ import annotations
@@ -29,8 +29,12 @@ from backend.core.ai_engine import (
 from backend.tests.seed_test_data import seed_backtest_db, DEV_USER_ID
 
 REPORT_PATH = Path(__file__).parent / "backtest_report.html"
-HAS_API_KEY = bool(os.getenv("GROQ_API_KEY", "").strip())
-requires_api = pytest.mark.skipif(not HAS_API_KEY, reason="GROQ_API_KEY non impostata")
+RUN_LLM_TESTS = os.getenv("RUN_LLM_TESTS", "0") == "1"
+HAS_API_KEY = RUN_LLM_TESTS and bool(os.getenv("GROQ_API_KEY", "").strip())
+requires_api = pytest.mark.skipif(
+    not HAS_API_KEY,
+    reason="test LLM disattivati: imposta RUN_LLM_TESTS=1 e GROQ_API_KEY",
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FIXTURE
