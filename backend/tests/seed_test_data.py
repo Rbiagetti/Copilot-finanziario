@@ -9,12 +9,14 @@ Distribuzione target:
 """
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
-from backend.core.database import SessionLocal
-from backend.core.database import Transaction
+from backend.core.database import SessionLocal, Transaction, engine, init_db
 
-# Con SUPABASE_URL non configurata il backend usa questo utente (vedi backend/api/auth.py)
-DEV_USER_ID = "anonymous_dev_user"
+# User_id a cui associare i dati demo. In locale con Supabase Auth attivo NON è
+# "anonymous_dev_user": serve lo UUID Supabase dell'account con cui fai login.
+# Esempio: SEED_USER_ID=<uuid> python -m backend.tests.seed_test_data
+DEV_USER_ID = os.getenv("SEED_USER_ID", "anonymous_dev_user")
 
 
 def _d(days_ago: int) -> str:
@@ -157,9 +159,22 @@ _ROWS: list[tuple] = [
 
 
 def seed_backtest_db() -> int:
-    """Cancella e reinserisce le transazioni di test. Ritorna il numero di righe inserite."""
+    """Cancella e reinserisce le transazioni di test. Ritorna il numero di righe inserite.
+
+    Sicurezza: rifiuta di scrivere su un DB non SQLite, a meno che non sia
+    esplicitamente richiesto con ALLOW_PROD_SEED=1. Evita di seedare per sbaglio
+    il Postgres di produzione.
+    """
+    if engine.url.get_backend_name() != "sqlite" and os.getenv("ALLOW_PROD_SEED") != "1":
+        raise SystemExit(
+            "Seed rifiutato: il database configurato non è SQLite. "
+            "Per seedare un DB remoto imposta ALLOW_PROD_SEED=1."
+        )
+
     with SessionLocal() as session:
-        deleted = session.query(Transaction).filter_by(source="backtest").delete()
+        session.query(Transaction).filter_by(
+            source="backtest", user_id=DEV_USER_ID
+        ).delete()
         session.commit()
 
         objs = [
@@ -183,5 +198,6 @@ def seed_backtest_db() -> int:
 
 
 if __name__ == "__main__":
+    init_db()  # crea le tabelle se il DB SQLite è nuovo
     n = seed_backtest_db()
     print(f"Seed completato: {n} transazioni inserite (source=backtest)")

@@ -43,7 +43,8 @@ pytest backend/tests/test_ai_routing.py backend/tests/test_import_engine.py back
 RUN_LLM_TESTS=1 pytest backend/tests/test_chat_backtest.py -v -s
 
 # Seed dati di esempio (90 transazioni)
-python -m backend.tests.seed_test_data
+# Con Supabase Auth attivo serve lo user_id Supabase dell'account con cui fai login:
+SEED_USER_ID=<uuid-supabase> python -m backend.tests.seed_test_data
 
 # Controlli frontend
 cd frontend && npm run lint && npm run build
@@ -268,6 +269,8 @@ deterministico di regressione. Prima di un commit, eseguire i test `no_llm`.
     locale senza toccare la produzione imposta
     `DEV_DATABASE_URL=sqlite:///./data/fincopilot_dev.db`: ha priorità su
     `DATABASE_URL` e all'avvio compare un avviso se stai usando Postgres in locale.
+    Se invece usi consapevolmente il DB di produzione in locale (es. unico utente),
+    imposta `ALLOW_PROD_DB_LOCAL=1` per silenziare l'avviso.
     La migrazione Alembic resta la fonte di verità per i deploy.
 
 ---

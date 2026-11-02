@@ -123,6 +123,20 @@ Le variabili d'ambiente sono descritte in `.env.example` (backend) e in `fronten
 python -m backend.tests.seed_test_data
 ```
 
+Se invece l'autenticazione Supabase è attiva (come in produzione), i dati demo vanno associati al tuo `user_id` Supabase, altrimenti non li vedrai dopo il login:
+
+```bash
+SEED_USER_ID=<uuid-supabase> python -m backend.tests.seed_test_data
+```
+
+Per lavorare in locale senza scrivere sul database di produzione, imposta in `.env`:
+
+```bash
+DEV_DATABASE_URL=sqlite:///./data/fincopilot_dev.db
+```
+
+Questa variabile ha priorità su `DATABASE_URL` quando l'app non gira su Render. Se invece usi consapevolmente il DB di produzione anche in locale, imposta `ALLOW_PROD_DB_LOCAL=1` per silenziare l'avviso all'avvio. Il comando di seed rifiuta di scrivere su un database non SQLite, a meno che non venga impostato esplicitamente `ALLOW_PROD_SEED=1`.
+
 ---
 
 ## Test

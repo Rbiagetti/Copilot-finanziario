@@ -20,11 +20,16 @@ _is_sqlite = DATABASE_URL.startswith("sqlite")
 # Avviso esplicito: il .env di sviluppo punta spesso al Postgres di produzione.
 # Non blocchiamo l'avvio (servono dati reali per alcune verifiche), ma rendiamo
 # impossibile farlo in silenzio.
-if not _is_sqlite and not os.getenv("RENDER"):
+if (
+    not _is_sqlite
+    and not os.getenv("RENDER")
+    and os.getenv("ALLOW_PROD_DB_LOCAL") != "1"
+):
     print(
         "⚠️ [DB] DATABASE_URL punta a Postgres mentre l'app gira in locale: "
         "i test manuali scrivono sul database reale. Imposta DEV_DATABASE_URL "
-        "(es. sqlite:///./data/fincopilot_dev.db) per isolarti."
+        "(es. sqlite:///./data/fincopilot_dev.db) per isolarti, oppure "
+        "ALLOW_PROD_DB_LOCAL=1 per confermare che è voluto."
     )
 
 _pg_kwargs = {} if _is_sqlite else {
