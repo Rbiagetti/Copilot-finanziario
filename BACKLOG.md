@@ -207,6 +207,13 @@ per tipo di conto. Solo attività (nessuna passività), come deciso in fase di s
 
 ## ✅ Completato fuori backlog
 
+### 2026-11-04
+
+- **PWA iPhone**: riaprendo l'app dalla home si tornava sempre sull'ultima URL
+  salvata (spesso Budget) invece dell'ultima sezione visitata. La view è ora
+  persistita e ripristinata al boot; gestiti URL vecchi e back/forward cache di
+  iOS, con `no-store` sull'HTML in `frontend/vercel.json`.
+
 ### 2026-11-02
 
 - **Categorie**: fonte unica in `backend/core/categories.py`, `intrattenimento`
