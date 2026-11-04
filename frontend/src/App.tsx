@@ -118,32 +118,44 @@ function App() {
     }
   }, [location.pathname, isAuthenticated, setView]);
 
-  // Riapertura da PWA installata: iOS/Android ricaricano start_url o un URL
-  // rimasto in cache, ignorando la cronologia interna. In modalità standalone
-  // riportiamo l'utente sull'ultima sezione visitata (es. esce da Patrimonio e
-  // rientra in Patrimonio). Fuori dalla PWA lasciamo intatto il deep link.
+  // Riapertura della PWA installata: iOS/Android possono ricaricare start_url, un
+  // URL rimasto in cache o una pagina in back/forward cache, ignorando le
+  // navigazioni SPA. Appena c'è una route valida riportiamo l'utente sull'ultima
+  // sezione visitata (es. esce da Patrimonio e rientra in Patrimonio).
+  // Le pagine pubbliche (login, reset password, privacy, termini) non vengono
+  // toccate: l'effect scatta solo quando il path è una view dell'app.
   const restoredViewRef = useRef(false);
   useEffect(() => {
     if (!isAuthenticated || restoredViewRef.current) return;
-    restoredViewRef.current = true;
-
-    const standalone =
-      typeof window.matchMedia === "function" &&
-      ["standalone", "fullscreen", "minimal-ui"].some((mode) =>
-        window.matchMedia(`(display-mode: ${mode})`).matches
-      );
-    const iosStandalone =
-      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-    if (!standalone && !iosStandalone) return;
 
     const segment = location.pathname.replace(/^\//, "") as View;
-    // "/" e le pagine pubbliche hanno già i loro redirect.
     if (!VALID_VIEWS.includes(segment)) return;
 
+    restoredViewRef.current = true;
     if (segment !== viewAtStartup) {
       navigate(`/${viewAtStartup}`, { replace: true });
     }
   }, [isAuthenticated, location.pathname, navigate]);
+
+  // iOS può ripristinare la PWA dalla back/forward cache con l'URL e lo stato JS
+  // di una vecchia pagina. In quel caso pageshow arriva con persisted=true:
+  // riallineiamo subito la route alla view salvata.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      const segment = window.location.pathname.replace(/^\//, "") as View;
+      if (!VALID_VIEWS.includes(segment)) return;
+      const lastView = getLastView();
+      if (segment !== lastView) {
+        navigate(`/${lastView}`, { replace: true });
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [isAuthenticated, navigate]);
 
 
   if (!supabaseConfigured) {
