@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, Component } from "react";
 import type { ReactNode } from "react";
 import { sendChat } from "../../api/client";
-import type { ChatResponse } from "../../api/client";
 import { Send, Bot, User, RefreshCw, Mic, MicOff } from "lucide-react";
 import { voiceService } from "../../utils/voiceService";
 import { useChartColors } from "../../hooks/useTheme";

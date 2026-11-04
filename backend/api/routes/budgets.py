@@ -6,6 +6,7 @@ from backend.core.database import get_db, Budget, Transaction
 from backend.api.models.schemas import BudgetCreate, BudgetResponse
 from backend.api.auth import get_current_user
 from datetime import date
+import calendar
 
 router = APIRouter(prefix="/api/v1/budgets", tags=["budgets"])
 
@@ -107,6 +108,11 @@ async def budget_status(
     ).all()
     today = date.today()
     first_of_month = today.replace(day=1)
+    # Le spese pianificate nello stesso mese (date future) contano: il limite è la
+    # fine del mese, non oggi. Così una transazione del mese prossimo non inquina.
+    last_of_month = today.replace(
+        day=calendar.monthrange(today.year, today.month)[1]
+    )
 
     result = []
     for b in budgets:
@@ -115,6 +121,7 @@ async def budget_status(
             .filter(
                 (Transaction.category == b.category) & (Transaction.user_id == current_user_id),
                 Transaction.date >= first_of_month.isoformat(),
+                Transaction.date <= last_of_month.isoformat(),
             )
             .scalar()
         )

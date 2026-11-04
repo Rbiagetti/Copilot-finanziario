@@ -378,7 +378,7 @@ export default function TransactionList() {
         category: editState.category,
         description: editState.description,
         date: editState.date,
-        time: editState.time || undefined,
+        time: editState.time || null,
         tags: editState.tags || undefined,
         is_recurring: editState.is_recurring,
       });

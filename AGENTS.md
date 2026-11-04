@@ -181,8 +181,14 @@ Modulo `backend/api/routes/wealth.py` + `frontend/src/components/Wealth/WealthPa
 - Ogni tabella ha `user_id` (UUID Supabase) e ogni query deve filtrarlo.
 - Lo schema è versionato con Alembic (`alembic/versions/`).
 - Il campo `date` è una **stringa ISO** (`YYYY-MM-DD`): i confronti sono lessicografici.
-  Quando si filtra un periodo, **escludere sempre il futuro** (`date <= today`):
-  in passato transazioni future hanno falsato "ultimi N giorni" e "questo mese".
+- **Le date future sono ammesse e volute:** l'utente registra anche spese pianificate
+  nello stesso mese. I totali mensili includono quindi l'intero mese (fino all'ultimo
+  giorno), non solo fino a oggi.
+- Le **finestre scorrevoli** ("ultimi N giorni") devono invece escludere il futuro
+  (`date <= today`). Non reintrodurre un filtro globale `date <= today`: romperebbe
+  le spese pianificate del mese (già successo in passato).
+- Ogni scrittura deve comunque validare il formato ISO della data e l'importo (> 0):
+  date malformate rompono i confronti lessicografici e i totali.
 - Transazioni: `amount, category, subcategory, description, date, time, account,
   tags, source, is_recurring, created_at, updated_at`.
 - `source="backtest"` identifica i dati di test: il seed li cancella e ricrea.

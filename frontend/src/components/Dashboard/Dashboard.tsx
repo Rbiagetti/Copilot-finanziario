@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, Legend
@@ -57,6 +58,7 @@ export default function Dashboard() {
   }, []);
 
   const { setView, setDashboardFilter, dashboardCache, setDashboardCache } = useAppStore();
+  const navigate = useNavigate();
   const cc = useChartColors();
 
   const loadAll = async (force = false) => {
@@ -113,6 +115,8 @@ export default function Dashboard() {
   const curMonth = now.getMonth();
   const prevMonthDate = new Date(curYear, curMonth - 1, 1);
 
+  // Tutto il mese corrente, incluse le date future: l'utente registra anche
+  // spese pianificate. Non aggiungere `date <= today` (vedi AGENTS.md).
   const currentMonthTxs = useMemo(() => rawHistory.filter(t => {
     const d = new Date(t.date);
     return d.getFullYear() === curYear && d.getMonth() === curMonth;
@@ -140,9 +144,16 @@ export default function Dashboard() {
 
   const categoriesThisMonth = useMemo(() => getCategoryData(currentMonthTxs), [currentMonthTxs]);
 
+  // La route è la fonte del contenuto: aggiornare solo lo store lasciava la
+  // Dashboard montata (drilldown e CTA non facevano nulla).
+  const goToTransactions = () => {
+    setView("transactions");
+    navigate("/transactions");
+  };
+
   const handleDrilldown = (cat?: string) => {
     setDashboardFilter({ category: cat });
-    setView("transactions");
+    goToTransactions();
   };
 
   if (loading) return (
@@ -191,7 +202,7 @@ export default function Dashboard() {
         <button
           className="btn-primary"
           style={{ width: "auto", padding: "0.7rem 1.75rem", marginTop: "0.5rem" }}
-          onClick={() => setView("transactions")}
+          onClick={goToTransactions}
         >
           <PlusCircle size={18} /> Aggiungi la prima spesa
         </button>

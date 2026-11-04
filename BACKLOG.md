@@ -213,6 +213,16 @@ per tipo di conto. Solo attività (nessuna passività), come deciso in fase di s
   salvata (spesso Budget) invece dell'ultima sezione visitata. La view è ora
   persistita e ripristinata al boot; gestiti URL vecchi e back/forward cache di
   iOS, con `no-store` sull'HTML in `frontend/vercel.json`.
+- **Bug corretti**: drilldown dalla Dashboard (categoria e CTA ora navigano davvero
+  a Transazioni); modifica dell'ora delle transazioni (il campo veniva ignorato);
+  validazione di date e importi in create/update/parse-natural. Il budget mensile
+  ora è limitato a fine mese: le spese pianificate **dentro il mese** restano
+  conteggiate, quelle del mese successivo no.
+- **Politica date**: le date future sono ammesse e volute (spese pianificate);
+  solo le finestre scorrevoli "ultimi N giorni" escludono il futuro. Documentato
+  in `AGENTS.md` per non reintrodurre un filtro globale `date <= today`.
+- **Test**: `backend/tests/test_transactions.py` (10 casi) su validazione,
+  modifica ora/isolamento utente e limiti mensili del budget; `tsc` ora pulito.
 
 ### 2026-11-02
 

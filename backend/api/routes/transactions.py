@@ -248,6 +248,10 @@ async def update_transaction(
         raise HTTPException(404, "Transazione non trovata")
 
     updates = data.model_dump(exclude_unset=True)
+    # `date` è NOT NULL: un null esplicito non deve cancellarla (la UI manda
+    # undefined quando il campo non è toccato, ma l'API può ricevere null).
+    if "date" in updates and updates["date"] is None:
+        updates.pop("date")
     if "category" in updates:
         allowed = get_active_category_names(db, current_user_id)
         normalized = (updates["category"] or "").strip().lower()
@@ -343,16 +347,25 @@ async def parse_natural_language(
     if parsed.get("amount", 0) <= 0:
         raise HTTPException(400, "Importo non trovato nel testo")
 
-    # Valida e normalizza la data parsata
+    # Valida e normalizza la data parsata. Le date future sono ammesse (spese
+    # pianificate nello stesso mese): qui si controlla solo il formato.
     tx_date = today.isoformat()
     if parsed.get("date"):
         try:
-            date.fromisoformat(parsed["date"])  # valida formato
-            tx_date = parsed["date"]
-        except ValueError:
+            tx_date = datetime.strptime(
+                str(parsed["date"]).strip(), "%Y-%m-%d"
+            ).date().isoformat()
+        except (ValueError, TypeError):
             pass  # fallback a oggi
 
-    tx_time = parsed.get("time") or now_time
+    tx_time = now_time
+    if parsed.get("time"):
+        try:
+            tx_time = datetime.strptime(
+                str(parsed["time"]).strip(), "%H:%M"
+            ).strftime("%H:%M")
+        except (ValueError, TypeError):
+            pass  # fallback all'ora corrente
 
     parsed_category = str(parsed.get("category") or "").strip().lower()
     tx_category = parsed_category if parsed_category in allowed_categories else "altro"

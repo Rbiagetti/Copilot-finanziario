@@ -1,9 +1,19 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
 from datetime import date, datetime
 
 from backend.core.categories import STANDARD_CATEGORIES as CATEGORIES
+
+
+def _normalize_iso_date(value: str) -> str:
+    """Normalizza una data ISO. Le date future sono ammesse: l'utente registra anche
+    spese pianificate nello stesso mese (comportamento voluto)."""
+    return datetime.strptime(value.strip(), "%Y-%m-%d").date().isoformat()
+
+
+def _normalize_time(value: str) -> str:
+    return datetime.strptime(value.strip(), "%H:%M").strftime("%H:%M")
 
 
 class TransactionCreate(BaseModel):
@@ -15,6 +25,26 @@ class TransactionCreate(BaseModel):
     account: str = "principale"
     tags: Optional[str] = None
     source: str = "manual"
+
+    @field_validator("date")
+    @classmethod
+    def _validate_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not str(value).strip():
+            return None
+        try:
+            return _normalize_iso_date(str(value))
+        except ValueError:
+            raise ValueError("Data non valida: usa il formato YYYY-MM-DD")
+
+    @field_validator("time")
+    @classmethod
+    def _validate_time(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not str(value).strip():
+            return None
+        try:
+            return _normalize_time(str(value))
+        except ValueError:
+            raise ValueError("Ora non valida: usa il formato HH:MM")
 
 
 class TransactionResponse(BaseModel):
@@ -35,12 +65,33 @@ class TransactionResponse(BaseModel):
 
 
 class TransactionUpdate(BaseModel):
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(None, gt=0)
     category: Optional[str] = None
     description: Optional[str] = None
     date: Optional[str] = None
+    time: Optional[str] = None
     tags: Optional[str] = None
     is_recurring: Optional[bool] = None
+
+    @field_validator("date")
+    @classmethod
+    def _validate_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        try:
+            return _normalize_iso_date(str(value))
+        except ValueError:
+            raise ValueError("Data non valida: usa il formato YYYY-MM-DD")
+
+    @field_validator("time")
+    @classmethod
+    def _validate_time(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not str(value).strip():
+            return None
+        try:
+            return _normalize_time(str(value))
+        except ValueError:
+            raise ValueError("Ora non valida: usa il formato HH:MM")
 
 
 class ChatRequest(BaseModel):

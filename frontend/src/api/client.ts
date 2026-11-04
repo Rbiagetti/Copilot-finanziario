@@ -206,7 +206,7 @@ export const getMonthlyHistory = (months = 6) => api.get<{ month: string; label:
 export const getBriefing = () => api.get<BriefingData>("/ai/briefing");
 export const getFullHistory = () => api.get<FullHistoryTransaction[]>("/analytics/full-history");
 
-export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; tags: string; is_recurring: boolean }>) =>
+export const updateTransaction = (id: number, data: Partial<{ amount: number; category: string; description: string; date: string; time: string | null; tags: string; is_recurring: boolean }>) =>
   api.put<Transaction>(`/transactions/${id}`, data);
 
 /** Standard (10 fisse) + personalizzate attive dell'utente, in un unico elenco piatto —
