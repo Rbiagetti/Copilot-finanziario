@@ -1,8 +1,9 @@
-import { useEffect, lazy, Suspense, useState, Component } from "react";
+import { useEffect, lazy, Suspense, useState, Component, useRef } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { useLocation, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useLocation, useNavigate, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Toaster, ToastBar } from "react-hot-toast";
-import { useAppStore } from "./store/appStore";
+import { useAppStore, getLastView, VALID_VIEWS } from "./store/appStore";
+import type { View } from "./store/appStore";
 import Sidebar from "./components/Layout/Sidebar";
 import TopBar from "./components/Layout/TopBar";
 import ConfirmHost from "./components/Layout/ConfirmHost";
@@ -76,7 +77,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, EBState> {
   }
 }
 
-type View = "dashboard" | "transactions" | "chat" | "budget" | "wealth" | "settings";
+// Ultima view al momento del caricamento della pagina, catturata prima che gli
+// effetti la sovrascrivano leggendo l'URL ripristinato da iOS. Serve a capire se
+// la PWA si è riaperta su un URL vecchio (es. /budget) e riportarla dove era.
+const viewAtStartup = getLastView();
 
 function AppLayout() {
   const { isAuthenticated } = useAuthStore();
@@ -101,6 +105,7 @@ function App() {
   const { setView } = useAppStore();
   const { isAuthenticated } = useAuthStore();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL;
 
@@ -108,11 +113,37 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const segment = location.pathname.replace(/^\//, "") as View;
-    const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "wealth", "settings"];
-    if (validViews.includes(segment)) {
+    if (VALID_VIEWS.includes(segment)) {
       setView(segment);
     }
   }, [location.pathname, isAuthenticated, setView]);
+
+  // Riapertura da PWA installata: iOS/Android ricaricano start_url o un URL
+  // rimasto in cache, ignorando la cronologia interna. In modalità standalone
+  // riportiamo l'utente sull'ultima sezione visitata (es. esce da Patrimonio e
+  // rientra in Patrimonio). Fuori dalla PWA lasciamo intatto il deep link.
+  const restoredViewRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || restoredViewRef.current) return;
+    restoredViewRef.current = true;
+
+    const standalone =
+      typeof window.matchMedia === "function" &&
+      ["standalone", "fullscreen", "minimal-ui"].some((mode) =>
+        window.matchMedia(`(display-mode: ${mode})`).matches
+      );
+    const iosStandalone =
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (!standalone && !iosStandalone) return;
+
+    const segment = location.pathname.replace(/^\//, "") as View;
+    // "/" e le pagine pubbliche hanno già i loro redirect.
+    if (!VALID_VIEWS.includes(segment)) return;
+
+    if (segment !== viewAtStartup) {
+      navigate(`/${viewAtStartup}`, { replace: true });
+    }
+  }, [isAuthenticated, location.pathname, navigate]);
 
 
   if (!supabaseConfigured) {
@@ -179,7 +210,7 @@ function App() {
       <Routes>
         <Route
           path="/login"
-          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage onLogin={() => {}} />}
+          element={isAuthenticated ? <Navigate to={`/${getLastView()}`} replace /> : <LoginPage onLogin={() => {}} />}
         />
         {/* Sempre accessibile, indipendentemente da isAuthenticated: il link di reset crea
             una sessione di recupero temporanea che renderebbe isAuthenticated true, ma non
@@ -192,7 +223,7 @@ function App() {
         <Route path="/terms" element={<Suspense fallback={<LoadingFallback />}><TermsPage /></Suspense>} />
 
         <Route element={<AppLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to={`/${getLastView()}`} replace />} />
           <Route path="/dashboard" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><Dashboard /></Suspense></ErrorBoundary>} />
           <Route path="/transactions" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><TransactionList /></Suspense></ErrorBoundary>} />
           <Route path="/chat" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><ChatInterface /></Suspense></ErrorBoundary>} />
@@ -201,8 +232,8 @@ function App() {
           <Route path="/settings" element={<ErrorBoundary><Suspense fallback={<LoadingFallback />}><SettingsPanel /></Suspense></ErrorBoundary>} />
         </Route>
 
-        {/* Catch-all: redirect to dashboard if logged in, otherwise login */}
-        <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+        {/* Catch-all: ultima sezione visitata se loggato, altrimenti login */}
+        <Route path="*" element={<Navigate to={isAuthenticated ? `/${getLastView()}` : "/login"} replace />} />
       </Routes>
     </div>
   );

@@ -201,6 +201,10 @@ Modulo `backend/api/routes/wealth.py` + `frontend/src/components/Wealth/WealthPa
 - CSS diviso per area in `frontend/src/styles/`; aggiungere regole nel file dell'area,
   non in `base.css`, e usare le variabili già definite.
 - Mobile-first: breakpoint 768px e 480px, barra di navigazione inferiore, safe area iOS.
+- **PWA:** la view corrente è salvata in `localStorage` (`currentView`) e
+  `getLastView()` la usa nei redirect. In modalità standalone l'app ripristina
+  l'ultima sezione anche se iOS ricarica un URL vecchio: non reintrodurre redirect
+  fissi a `/dashboard` per `/`, login e catch-all.
 - Le chiamate HTTP passano tutte da `src/api/client.ts` con token Bearer.
 - Il markdown della chat è renderizzato da un renderer custom in `ChatInterface.tsx`
   (non una libreria): se cambi il formato delle risposte backend, verifica anche quello.

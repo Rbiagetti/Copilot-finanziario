@@ -2,7 +2,13 @@ import { create } from "zustand";
 import type { ForecastData, FullHistoryTransaction } from "../api/client";
 import { getCategoryNames } from "../api/client";
 
-type View = "dashboard" | "transactions" | "chat" | "budget" | "wealth" | "settings";
+export type View = "dashboard" | "transactions" | "chat" | "budget" | "wealth" | "settings";
+
+export const VALID_VIEWS: View[] = [
+  "dashboard", "transactions", "chat", "budget", "wealth", "settings",
+];
+
+const VIEW_STORAGE_KEY = "currentView";
 
 interface DashboardCache {
   rawHistory: FullHistoryTransaction[];
@@ -36,14 +42,21 @@ interface AppState {
   reset: () => void;
 }
 
-const getInitialView = (): View => {
-  const saved = localStorage.getItem("currentView") as View;
-  const validViews: View[] = ["dashboard", "transactions", "chat", "budget", "wealth", "settings"];
-  return validViews.includes(saved) ? (saved === "chat" ? "dashboard" : saved) : "dashboard";
+// Ultima sezione visitata. Serve al redirect iniziale, soprattutto quando la PWA
+// viene riaperta dalla home: iOS ricarica start_url (o un URL vecchio) e senza
+// questo si tornerebbe sempre sulla dashboard invece dell'ultima schermata.
+export const getLastView = (): View => {
+  try {
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY) as View | null;
+    return saved && VALID_VIEWS.includes(saved) ? saved : "dashboard";
+  } catch {
+    // localStorage non disponibile (es. Safari in modalità privata)
+    return "dashboard";
+  }
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
-  currentView: getInitialView(),
+  currentView: getLastView(),
   autoStartVoice: false,
   dashboardFilter: {},
   dashboardCache: {
@@ -54,7 +67,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   categories: STANDARD_CATEGORIES_FALLBACK,
   categoriesLoaded: false,
   setView: (view) => {
-    localStorage.setItem("currentView", view);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, view);
+    } catch {
+      // ignora: la view resta corretta in memoria per questa sessione
+    }
     set({ currentView: view });
   },
   setAutoStartVoice: (val) => set({ autoStartVoice: val }),
