@@ -241,7 +241,11 @@ deterministico di regressione. Prima di un commit, eseguire i test `no_llm`.
 - **Frontend:** Vercel, build `npm run build`, env `VITE_API_URL`,
   `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 - **DB/Auth:** Supabase. Le tabelle hanno RLS attiva senza policy per il ruolo
-  pubblico: l'accesso avviene solo dal backend con service/DB URL.
+  pubblico: l'accesso avviene solo dal backend con service/DB URL. L'hardening
+  (`_harden_public_schema_rls` in `database.py`, chiamato da `init_db`) è
+  automatico ad ogni avvio: RLS su `public`, revoca dei grant ad
+  `anon`/`authenticated` e dei privilegi di default. Non creare tabelle fuori da
+  `Base.metadata` senza pensarci: il ruolo owner del backend non è soggetto a RLS.
 - GitHub Action `keep-alive.yml` pinga `/api/v1/health` ogni 5 minuti.
 - Dopo un push su `master`, il deploy parte automaticamente. Verificare sempre
   `/api/v1/health` e una chiamata reale prima di dichiarare "fatto".
@@ -283,6 +287,12 @@ deterministico di regressione. Prima di un commit, eseguire i test `no_llm`.
     Se invece usi consapevolmente il DB di produzione in locale (es. unico utente),
     imposta `ALLOW_PROD_DB_LOCAL=1` per silenziare l'avviso.
     La migrazione Alembic resta la fonte di verità per i deploy.
+12. **Alembic su Supabase:** `alembic/env.py` deve usare l'engine **sincrono**
+    (`psycopg2`). Se qualcuno reintroduce `async_engine_from_config`, ogni comando
+    fallisce con `The asyncio extension requires an async driver`, perché
+    `asyncpg` non è tra le dipendenze. Inoltre le revisioni applicate al DB
+    remoto devono esistere in `alembic/versions/`: una revisione orfana blocca
+    `upgrade` e `stamp` con `Can't locate revision identified by ...`.
 
 ---
 

@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, Text, DateTime, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import create_engine, text, Column, Integer, Float, String, Boolean, Text, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 
@@ -152,8 +152,81 @@ class UserSettings(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+# --- Hardening Supabase -------------------------------------------------------
+# `create_all` crea le tabelle senza Row Level Security e, su Supabase, Postgres
+# applica loro i privilegi di default per i ruoli `anon`/`authenticated` della
+# Data API: la tabella nasce quindi leggibile con la anon key pubblica e il
+# Security Advisor manda un avviso (successo con wealth_accounts/wealth_snapshots).
+# Il backend usa una connessione diretta con il ruolo owner, che non è soggetto
+# a RLS: non servono policy, basta chiudere l'accesso ai ruoli della Data API.
+
+_TABLES_WITHOUT_RLS_SQL = """
+    SELECT c.relname
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+"""
+
+_ENABLE_RLS_SQL = """
+    DO $$
+    DECLARE t record;
+    BEGIN
+        FOR t IN
+            SELECT c.relname
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind = 'r'
+        LOOP
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.relname);
+        END LOOP;
+    END $$;
+"""
+
+
+def _harden_public_schema_rls() -> None:
+    """Abilita RLS su tutte le tabelle pubbliche e chiude la Data API.
+
+    Idempotente e best-effort: gira a ogni avvio dopo `create_all`, così una
+    tabella nuova non può restare esposta nemmeno per pochi minuti. Se il
+    provider non lo permette, avvisa nei log ma non blocca l'avvio.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+    try:
+        with engine.begin() as conn:
+            roles = {row[0] for row in conn.execute(text("SELECT rolname FROM pg_roles"))}
+            without_rls = conn.execute(text(_TABLES_WITHOUT_RLS_SQL)).scalars().all()
+            if without_rls:
+                conn.execute(text(_ENABLE_RLS_SQL))
+            if {"anon", "authenticated"} <= roles:
+                # Difesa in profondità: senza grant, nemmeno una policy permissiva
+                # futura renderebbe le tabelle leggibili con la anon key.
+                conn.execute(text(
+                    "REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated"
+                ))
+                conn.execute(text(
+                    "REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated"
+                ))
+                conn.execute(text(
+                    "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+                    "REVOKE ALL ON TABLES FROM anon, authenticated"
+                ))
+                conn.execute(text(
+                    "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+                    "REVOKE ALL ON SEQUENCES FROM anon, authenticated"
+                ))
+        if without_rls:
+            print(
+                "[DB] RLS abilitata sulle tabelle pubbliche: "
+                + ", ".join(sorted(without_rls))
+            )
+    except Exception as exc:  # pragma: no cover - dipende dal provider Postgres
+        print(f"⚠️ [DB] Hardening RLS non applicato: {exc}")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _harden_public_schema_rls()
 
 
 def get_db():

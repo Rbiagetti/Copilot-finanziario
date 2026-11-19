@@ -207,6 +207,18 @@ per tipo di conto. Solo attività (nessuna passività), come deciso in fase di s
 
 ## ✅ Completato fuori backlog
 
+### 2026-11-19
+
+- **Sicurezza Supabase (RLS)**: le tabelle del Wealth Monitor erano nate senza
+  Row Level Security e leggibili con la anon key pubblica (avviso del Security
+  Advisor). `init_db()` ora esegue un hardening idempotente ad ogni avvio
+  (`_harden_public_schema_rls`): RLS su tutte le tabelle di `public`, revoca dei
+  grant ad `anon`/`authenticated` e dei privilegi di default, così una tabella
+  nuova non può restare esposta. Aggiunta la migrazione `a7c3f1e59b24` e
+  corretto `alembic/env.py`, che forzava un engine async con `asyncpg` (non
+  installato) rendendo impossibile ogni migrazione su Postgres. Allineata la
+  revisione salvata su Supabase, che puntava a `fc573fd38068` (inesistente).
+
 ### 2026-11-04
 
 - **PWA iPhone**: riaprendo l'app dalla home si tornava sempre sull'ultima URL

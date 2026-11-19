@@ -1,10 +1,8 @@
-import asyncio
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import create_engine, pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from backend.core.database import Base
@@ -67,36 +65,16 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
+    """Run migrations in 'online' mode.
 
-    database_url = config.get_main_option("sqlalchemy.url")
-
-    # For PostgreSQL (Supabase), use async
-    if database_url.startswith("postgresql"):
-        asyncio.run(run_async_migrations())
-    else:
-        # For SQLite, use sync
-        from sqlalchemy import create_engine
-        connectable = create_engine(database_url, poolclass=pool.StaticPool)
-        with connectable.begin() as connection:
-            do_run_migrations(connection)
-
-async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-
+    Usa il driver sincrono (psycopg2 per Postgres, sqlite3 in locale): il resto
+    dell'app fa lo stesso e non serve la dipendenza asyncpg.
     """
-
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-
-    await connectable.dispose()
+    database_url = config.get_main_option("sqlalchemy.url")
+    connectable = create_engine(database_url, poolclass=pool.NullPool)
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
+    connectable.dispose()
 
 
 if context.is_offline_mode():
